@@ -53,7 +53,45 @@ namespace Concurrency.Implementation
             TransactionContext context = await tc.NewTransaction();
             inputs.Insert(0, context);
             FunctionCall c1 = new FunctionCall(context, this.GetType(), startFunction, inputs);
-            Task<List<object>> t1 = this.Execute(c1);
+            Task<List<object>> t1 = this.InvokeFunction(c1);
+            await t1;
+
+            // Prepare Phase
+            List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
+            foreach (object obj in t1.Result)
+            {
+                ITransactionExecutionGrain grain = (ITransactionExecutionGrain) obj;
+                prepareResult.Add(grain.Prepare(context.transactionID));
+            }
+            await Task.WhenAll(prepareResult);
+            bool canCommit = true;
+            foreach(Task<Boolean> vote in prepareResult){
+                if(vote.Result == false)
+                {
+                    canCommit = false;
+                    break;
+                }
+            }
+
+            // Commit / Abort Phase
+            List<Task> commitResult = new List<Task>();
+            if (canCommit)
+            {
+                foreach (object obj in t1.Result)
+                {
+                    ITransactionExecutionGrain grain = (ITransactionExecutionGrain)obj;
+                    commitResult.Add(grain.Commit(context.transactionID));
+                }
+            }
+            else
+            {
+                foreach (object obj in t1.Result)
+                {
+                    ITransactionExecutionGrain grain = (ITransactionExecutionGrain)obj;
+                    commitResult.Add(grain.Abort(context.transactionID));
+                }
+            }
+            await Task.WhenAll(commitResult);
             return t1.Result;
         }
 
