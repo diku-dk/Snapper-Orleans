@@ -53,7 +53,7 @@ namespace Concurrency.Implementation
             TransactionContext context = await tc.NewTransaction();
             inputs.Insert(0, context);
             FunctionCall c1 = new FunctionCall(context, this.GetType(), startFunction, inputs);
-            Task<List<object>> t1 = this.InvokeFunction(c1);
+            Task<List<object>> t1 = this.Execute(c1);
             await t1;
 
             // Prepare Phase
@@ -141,7 +141,14 @@ namespace Concurrency.Implementation
          *Allow reentrance to enforce ordered execution
          */
         public async Task<List<object>> Execute(FunctionCall call)
-        {
+        {   
+            //Non-deterministic exection
+            if (call.context.isDeterministic == false)
+            {
+                return InvokeFunction(call).Result;
+            }
+
+
             int tid = call.context.transactionID;
             int bid = call.context.batchID;
             int nextTid;
@@ -223,6 +230,7 @@ namespace Concurrency.Implementation
             }
 
             return ret;
+            
         }
 
         public async Task<List<object>> InvokeFunction(FunctionCall call)

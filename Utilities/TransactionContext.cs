@@ -12,6 +12,8 @@ namespace Concurrency.Utilities
 
         public Status status;
 
+        public Boolean isDeterministic;
+
         /*
          * Transaction coordinator sets the batchID and transactionID, which are not allowed to be changed.
          */
@@ -20,12 +22,14 @@ namespace Concurrency.Utilities
             batchID = bid;
             transactionID = tid;
             status = Status.Submitted;
+            isDeterministic = true;
         }
 
         public TransactionContext(int tid)
         {
             transactionID = tid;
             status = Status.Submitted;
+            isDeterministic = false;
         }
 
         /*
