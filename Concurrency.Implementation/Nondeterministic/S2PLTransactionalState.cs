@@ -13,8 +13,7 @@ namespace Concurrency.Implementation.Nondeterministic
         private TState committedState;
         private TState activeState;
         private bool lockTaken = false;
-        private long lockTakenByTid;
-        private bool aborted = false;
+        private long lockTakenByTid;        
         private SemaphoreSlim stateLock = new SemaphoreSlim(1);
 
         private async Task<TState> AccessState(long tid)
@@ -38,8 +37,7 @@ namespace Concurrency.Implementation.Nondeterministic
                     else
                     {
                         //abort the transaction
-                        aborted = true;
-                        return activeState;
+                        throw new Exception("Abort the transaction");                        
                     }
                 }
             }

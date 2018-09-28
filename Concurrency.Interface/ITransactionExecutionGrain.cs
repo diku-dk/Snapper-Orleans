@@ -7,20 +7,20 @@ using System.Threading.Tasks;
 
 namespace Concurrency.Interface
 {
-    public interface ITransactionExecutionGrain : Orleans.IGrainWithIntegerKey
+    public interface ITransactionExecutionGrain : Orleans.IGrainWithIntegerKey, Orleans.IGrainWithGuidKey
     {
 
         /*
          * Client calls this function to submit a determinictic transaction to the transaction coordinator.
          */
         [AlwaysInterleave]
-        Task<List<object>> StartTransaction(Dictionary<ITransactionExecutionGrain, int> grainToAccessTimes, String startFunction, List<object> inputs);
+        Task<FunctionResult> StartTransaction(Dictionary<ITransactionExecutionGrain, int> grainToAccessTimes, String startFunction, FunctionInput inputs);
 
         /*  
          * Client calls this function to submit a non-determinictic transaction to the transaction coordinator.
          */
         [AlwaysInterleave]
-        Task<List<object>> StartTransaction(String startFunction, List<object> inputs);
+        Task<FunctionResult> StartTransaction(String startFunction, FunctionInput inputs);
 
         /*
          * Receive batch schedule from the coordinator.
@@ -32,8 +32,7 @@ namespace Concurrency.Interface
          * Called by other grains to execute a function.
          */
         [AlwaysInterleave]
-        Task<List<object>> Execute(FunctionCall call);
-
+        Task<FunctionResult> Execute(FunctionCall call);
 
         [AlwaysInterleave]
         Task<bool> Prepare(long tid);
@@ -43,6 +42,5 @@ namespace Concurrency.Interface
         Task Abort(long tid);
 
         Task ActivateGrain();
-
     }
 }
