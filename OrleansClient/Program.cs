@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using AccountTransfer.Grains;
 using System.Reflection;
 using Concurrency.Interface;
+using Concurrency.Utilities;
 
 namespace OrleansClient
 {
@@ -241,16 +242,17 @@ namespace OrleansClient
             Guid atmId0 = new Guid("ad3e2c63-2e4c-4bcb-b065-81b3768e2c98");
             IATMGrain atm0 = client.GetGrain<IATMGrain>(3);
 
-            Dictionary<ITransactionExecutionGrain, int> grainToAccessTimes = new Dictionary<ITransactionExecutionGrain, int>();
-            grainToAccessTimes.Add(fromAccount, 1);
-            grainToAccessTimes.Add(toAccount, 1);
-            grainToAccessTimes.Add(atm0, 1);
-
+            Dictionary<Guid, int> grainToAccessTimes = new Dictionary<Guid, int>();
+            grainToAccessTimes.Add(from, 1);
+            grainToAccessTimes.Add(to, 1);
+            grainToAccessTimes.Add(atmId0, 1);
+            List<object> inputArgs = new List<Object> {from, to, atmId0 , 100};
+            FunctionInput input = new FunctionInput(inputArgs);
             try
             {
-                Task t1 = atm0.StartTransaction(grainToAccessTimes, "Transfer", new List<object>() { fromAccount, toAccount, 100 });
-                Task t2 = atm0.StartTransaction(grainToAccessTimes, "Transfer", new List<object>() { fromAccount, toAccount, 100 });
-                Task t3 = atm0.StartTransaction(grainToAccessTimes, "Transfer", new List<object>() { fromAccount, toAccount, 100 });
+                Task t1 = atm0.StartTransaction(grainToAccessTimes, "Transfer", input);
+                Task t2 = atm0.StartTransaction(grainToAccessTimes, "Transfer", input);
+                Task t3 = atm0.StartTransaction(grainToAccessTimes, "Transfer", input);
 
                 await Task.WhenAll(t1, t2, t3);
             }

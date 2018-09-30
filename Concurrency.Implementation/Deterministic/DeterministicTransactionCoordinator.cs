@@ -18,7 +18,7 @@ namespace Concurrency.Implementation.Deterministic
         private TimeSpan batchInterval = TimeSpan.FromMilliseconds(1000);
 
         private Dictionary<int, TransactionContext> transactionContextMap;
-        private Dictionary<int, Dictionary<ITransactionExecutionGrain, BatchSchedule>> batchSchedulePerGrain;
+        private Dictionary<int, Dictionary<Guid, BatchSchedule>> batchSchedulePerGrain;
         private Dictionary<int, List<int>> batchTransactionList;
 
         //For each actor, coordinator stores the ID of the last uncommitted batch.
@@ -38,7 +38,7 @@ namespace Concurrency.Implementation.Deterministic
             curBatchID = 0;
             curTransactionID = 0;
             transactionContextMap = new Dictionary<int, TransactionContext>();
-            batchSchedulePerGrain = new Dictionary<int, Dictionary<ITransactionExecutionGrain, BatchSchedule>>();
+            batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, BatchSchedule>>();
             //actorLastBatch = new Dictionary<IDTransactionGrain, int>();
             batchTransactionList = new Dictionary<int, List<int>>();
             expectedAcksPerBatch = new Dictionary<int, int>();
@@ -55,7 +55,7 @@ namespace Concurrency.Implementation.Deterministic
          * 2. Append the new transaction to transaction table.
          * 3. Add the new transaction to the schedule of the current batch.
          */
-        public Task<TransactionContext> NewTransaction(Dictionary<ITransactionExecutionGrain, int> grainToAccessTimes)
+        public Task<TransactionContext> NewTransaction(Dictionary<Guid, int> grainToAccessTimes)
         {
             int bid = this.curBatchID;
             int tid = this.curTransactionID++;
@@ -66,14 +66,14 @@ namespace Concurrency.Implementation.Deterministic
             //update batch schedule
             if (batchSchedulePerGrain.ContainsKey(bid) == false)
             {
-                batchSchedulePerGrain.Add(bid, new Dictionary<ITransactionExecutionGrain, BatchSchedule>());
+                batchSchedulePerGrain.Add(bid, new Dictionary<Guid, BatchSchedule>());
                 batchTransactionList.Add(bid, new List<int>());
             }
 
             batchTransactionList[bid].Add(tid);
 
-            Dictionary<ITransactionExecutionGrain, BatchSchedule> curScheduleMap = batchSchedulePerGrain[bid];
-            foreach (KeyValuePair<ITransactionExecutionGrain, int> item in grainToAccessTimes)
+            Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[bid];
+            foreach (KeyValuePair<Guid, int> item in grainToAccessTimes)
             {
                 //if (actorLastBatch.ContainsKey(item.Key))
                 //    lastBid = actorLastBatch[item.Key];
@@ -109,15 +109,15 @@ namespace Concurrency.Implementation.Deterministic
                 return;
 
 
-            Dictionary<ITransactionExecutionGrain, BatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
+            Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
             expectedAcksPerBatch.Add(curBatchID, curScheduleMap.Count);
 
             if (batchStatusMap.ContainsKey(curBatchID) == false)
                 batchStatusMap.Add(curBatchID, new TaskCompletionSource<Boolean>());
 
-            foreach (KeyValuePair<ITransactionExecutionGrain, BatchSchedule> item in curScheduleMap)
+            foreach (KeyValuePair<Guid, BatchSchedule> item in curScheduleMap)
             {
-                ITransactionExecutionGrain dest = item.Key;
+                ITransactionExecutionGrain dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key);
                 BatchSchedule schedule = item.Value;
                 Task emit = dest.ReceiveBatchSchedule(schedule);
 
@@ -135,10 +135,10 @@ namespace Concurrency.Implementation.Deterministic
         }
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-        public async Task AckBatchCompletion(int bid, ITransactionExecutionGrain executor)
+        public async Task AckBatchCompletion(int bid, Guid executor_id)
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
         {
-            if (expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor))
+            if (expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id))
             {
                 expectedAcksPerBatch[bid]--;
                 if (expectedAcksPerBatch[bid] == 0)
@@ -167,7 +167,7 @@ namespace Concurrency.Implementation.Deterministic
             }
             else
             {
-                Console.WriteLine($"Coordinator: ack information from {executor} for batch {bid} is not correct. ");
+                Console.WriteLine($"Coordinator: ack information from {executor_id} for batch {bid} is not correct. ");
             }
             return;
         }

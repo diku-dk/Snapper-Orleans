@@ -16,6 +16,10 @@ namespace Concurrency.Implementation.Nondeterministic
         private long lockTakenByTid;        
         private SemaphoreSlim stateLock = new SemaphoreSlim(1);
 
+        public S2PLTransactionalState(TState s)
+        {
+            committedState = s;
+        }
         private async Task<TState> AccessState(long tid)
         {
             if (lockTaken)

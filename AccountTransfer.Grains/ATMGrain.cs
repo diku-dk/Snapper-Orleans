@@ -11,7 +11,7 @@ using Concurrency.Implementation;
 namespace AccountTransfer.Grains
 {
 
-    public class ATMGrain : TransactionExecutionGrain, IATMGrain
+    public class ATMGrain : TransactionExecutionGrain<Balance>, IATMGrain
     {
         TransactionContext context;
         TaskCompletionSource<String> promise = new TaskCompletionSource<String>();
@@ -68,27 +68,30 @@ namespace AccountTransfer.Grains
             return i;
         }
 
-        public async Task<List<object>> Transfer(List<object> inputs)
+        public async Task<FunctionResult> Transfer(FunctionInput input)
         {
 
-            TransactionContext context = (TransactionContext)inputs[0];
+            TransactionContext context = input.context;
+            List<object> inputs = input.inputObjects;
 
-            IDTransactionGrain fromAccount = (IDTransactionGrain)inputs[1];
-            IDTransactionGrain toAccount = (IDTransactionGrain)inputs[2];
+            IAccountGrain fromAccount = this.GrainFactory.GetGrain<IAccountGrain>((Guid) (inputs[0]));
+            IAccountGrain toAccount = this.GrainFactory.GetGrain<IAccountGrain>((Guid)(inputs[1]));
 
-            int amountToTransfer = (int)inputs[3];
+            int amountToTransfer = (int)inputs[2];
             List<object> args = new List<object>();
             args.Add(amountToTransfer);
 
-            FunctionCall c1 = new FunctionCall(context, typeof(AccountGrain), "Withdraw", args);
-            FunctionCall c2 = new FunctionCall(context, typeof(AccountGrain), "Deposit", args);
+            FunctionInput input_1 = new FunctionInput(input, args);
+            FunctionInput input_2 = new FunctionInput(input, args);
+            FunctionCall c1 = new FunctionCall(typeof(AccountGrain), "Withdraw", input_1);
+            FunctionCall c2 = new FunctionCall(typeof(AccountGrain), "Deposit", input_2);
 
-            List<object> ret = new List<object>();
-            Task<List<object>> t1 =  fromAccount.Execute(c1);
-            Task<List<object>> t2 =  toAccount.Execute(c2);
+
+            Task<FunctionResult> t1 = fromAccount.Execute(c1);
+            Task<FunctionResult> t2 = fromAccount.Execute(c2);
             await Task.WhenAll(t1, t2);
-            
-            return ret;
+
+            return new FunctionResult();
         }
 
         

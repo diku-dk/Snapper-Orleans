@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
 using Concurrency.Interface;
+using Concurrency.Interface.Nondeterministic;
 using Concurrency.Utilities;
 using Orleans;
 
 namespace Concurrency.Implementation
 {
-    public abstract class TransactionExecutionGrain : Grain, ITransactionExecutionGrain
+    public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain
     {
         public IDeterministicTransactionCoordinator tc;
         private int lastBatchId;
@@ -16,6 +17,16 @@ namespace Concurrency.Implementation
         private Queue<BatchSchedule> batchQueue;
         private Dictionary<int, List<TaskCompletionSource<Boolean>>> promiseMap;
         private Guid myPrimaryKey;
+        protected ITransactionalState<TState> state;
+
+        public TransactionExecutionGrain(ITransactionalState<TState> state){
+            this.state = state;
+        }
+
+        public TransactionExecutionGrain()
+        {
+
+        }
         public override Task OnActivateAsync()
         {
             tc = this.GrainFactory.GetGrain<IDeterministicTransactionCoordinator>(0);
@@ -38,11 +49,11 @@ namespace Concurrency.Implementation
          * 
          */
 
-        public async Task<FunctionResult> StartTransaction(Dictionary<ITransactionExecutionGrain, int> grainToAccessTimes, String startFunction, FunctionInput inputs)
+        public async Task<FunctionResult> StartTransaction(Dictionary<Guid, int> grainToAccessTimes, String startFunction, FunctionInput inputs)
         {
             TransactionContext context = await tc.NewTransaction(grainToAccessTimes);
             inputs.context = context;
-            FunctionCall c1 = new FunctionCall(context, this.GetType(), startFunction, inputs);
+            FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
             Task<FunctionResult> t1 = this.Execute(c1);
             Task t2 = tc.checkBatchCompletion(context);
             await Task.WhenAll(t1, t2);
@@ -53,7 +64,8 @@ namespace Concurrency.Implementation
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
             TransactionContext context = await tc.NewTransaction();
-            FunctionCall c1 = new FunctionCall(context, this.GetType(), startFunction, functionCallInput);
+            functionCallInput.context = context;
+            FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
             Task<FunctionResult> t1 = this.Execute(c1);
             await t1;
 
@@ -145,7 +157,9 @@ namespace Concurrency.Implementation
             //Non-deterministic exection
             if (call.funcInput.context.isDeterministic == false)
             {
-                return InvokeFunction(call).Result;
+                FunctionResult invokeRet = await InvokeFunction(call);
+                invokeRet.grainsInNestedFunctions.Add(myPrimaryKey);
+                return invokeRet;
             }
 
             int tid = call.funcInput.context.transactionID;
@@ -213,7 +227,7 @@ namespace Concurrency.Implementation
                 batchScheduleMap.Remove(bid);
 
                 //TODO: remove state about the completed batch state?
-                Task ack = tc.AckBatchCompletion(bid, this.AsReference<ITransactionExecutionGrain>());
+                Task ack = tc.AckBatchCompletion(bid, this.myPrimaryKey);
 
                 //The schedule for this batch {$bid} has been completely executed. Check if any promise for next batch can be set.
                 if (batchQueue.Count != 0)
@@ -233,27 +247,27 @@ namespace Concurrency.Implementation
 
         public async Task<FunctionResult> InvokeFunction(FunctionCall call)
         {
-            List<object> functionCallInputs = call.funcInput.inputObjects;                        
+            FunctionInput functionCallInput = call.funcInput;                        
             MethodInfo mi = call.type.GetMethod(call.func);
-            Task<FunctionResult> t = (Task<FunctionResult>)mi.Invoke(this, new object[] { functionCallInputs });
+            Task<FunctionResult> t = (Task<FunctionResult>)mi.Invoke(this, new object[] { functionCallInput });
             await t;
-            t.Result.grainsInNestedFunctions.Add(myPrimaryKey);
+            
             return t.Result;
         }
 
         public Task Abort(long tid)
         {
-            throw new NotImplementedException();
+            return this.state.Abort(tid);
         }
 
         public Task Commit(long tid)
         {
-            throw new NotImplementedException();
+            return this.state.Commit(tid);
         }
 
         public Task<bool> Prepare(long tid)
         {
-            throw new NotImplementedException();
+            return this.state.Prepare(tid);
         }
 
         public Task ActivateGrain()

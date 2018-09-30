@@ -28,7 +28,7 @@ namespace Concurrency.Interface
         /// </summary>
         /// 
         [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction(Dictionary<ITransactionExecutionGrain, int> grainToAccessTimes);
+        Task<TransactionContext> NewTransaction(Dictionary<Guid, int> grainToAccessTimes);
 
         /// <summary>
         /// Return contetx for a non-determinictic transaction
@@ -41,7 +41,7 @@ namespace Concurrency.Interface
         /// Actors call this function to notify coordinator that a transaction has been completed locally. 
         /// </summary>
         [AlwaysInterleave]
-        Task AckBatchCompletion(int bid, ITransactionExecutionGrain executor);
+        Task AckBatchCompletion(int bid, Guid executor_id);
 
         [AlwaysInterleave]
         Task<Boolean> checkBatchCompletion(TransactionContext context);

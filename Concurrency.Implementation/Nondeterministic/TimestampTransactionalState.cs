@@ -32,6 +32,19 @@ namespace Concurrency.Implementation.Nondeterministic
             transactionMap = new Dictionary<long, Node<TransactionStateInfo>>();
         }
 
+        public TimestampTransactionalState(TState s)
+        {
+            commitedState = s;
+            readTs = -1;
+            writeTs = -1;
+            commitTransactionId = -1;
+
+            transactionList = new DLinkedList<TransactionStateInfo>();
+            transactionMap = new Dictionary<long, Node<TransactionStateInfo>>();
+        }
+
+
+
         public Task<TState> Read(long tid)
         {
             long rts, wts;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Concurrency.Interface;
+using Concurrency.Utilities;
 using Orleans;
 using Orleans.Concurrency;
 
@@ -17,5 +18,7 @@ namespace AccountTransfer.Interfaces
 
         [AlwaysInterleave]
         Task setpromise(int i);
+
+        Task<FunctionResult> Transfer(FunctionInput input);
     }
 }

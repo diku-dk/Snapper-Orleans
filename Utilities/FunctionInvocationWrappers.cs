@@ -10,6 +10,18 @@ namespace Concurrency.Utilities
     {
         public List<object> inputObjects;
         public TransactionContext context;
+
+        public FunctionInput(FunctionInput input, List<object> data)
+        {
+            context = input.context;
+            inputObjects = data;
+        }
+        public FunctionInput(List<object> data)
+        {
+            inputObjects = data;
+        }
+
+
     }
 
     [Serializable]
@@ -18,30 +30,34 @@ namespace Concurrency.Utilities
         public Object resultObject;
         public ISet<Guid> grainsInNestedFunctions;
 
-        public FunctionResult(Object resultObject)
+        public FunctionResult(Object resultObject, FunctionResult ret)
+        {
+            this.resultObject = resultObject;
+            this.grainsInNestedFunctions = ret.grainsInNestedFunctions;
+        }
+
+        public FunctionResult(Object resultObject=null)
         {
             this.resultObject = resultObject;
             this.grainsInNestedFunctions = new HashSet<Guid>();
         }
+
     }
 
     [Serializable]
     public class FunctionCall
     {
-        //public TransactionContext context;
         public FunctionInput funcInput;
-        //public int curPos;
-        //public TaskCompletionSource<List<object>> promise;
         public Type type;
         public string func;
 
-        public FunctionCall(TransactionContext context, Type t, String func, FunctionInput funcInput)
+        public FunctionCall(Type t, String func, FunctionInput funcInput)
         {
-            //this.context = context;
+        
             this.type = t;
             this.func = func;
             this.funcInput = funcInput;
-            //this.curPos = 0;
+    
         }
     }
 
