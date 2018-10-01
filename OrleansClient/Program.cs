@@ -91,74 +91,36 @@ namespace OrleansClient
 
         }
 
-        private static async void TestThroughputLatency(IClusterClient client)
+        private static async Task TestTransaction(IClusterClient client)
         {
-            //initialize 100 ATM and 10000 accounts
-            Dictionary<int, IATMGrain> atmMap = new Dictionary<int, IATMGrain>();
-            Dictionary<int, IAccountGrain> accountMap = new Dictionary<int, IAccountGrain>();
 
-            //DateTime ts1 = DateTime.Now;
+            IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(1);
+            IAccountGrain toAccount = client.GetGrain<IAccountGrain>(2);
+            IATMGrain atm = client.GetGrain<IATMGrain>(3);
 
-            //ATM id ranges from 1 to 100;
-            //for (int i = 1; i <= 100; i++)
-            //{
-            //    IATMGrain atm = client.GetGrain<IATMGrain>(i);
-            //    await atm.ActivateGrain();
-            //    atmMap.Add(i, atm);
-            //}
+            Guid fromId = fromAccount.GetPrimaryKey();
+            Guid toId = toAccount.GetPrimaryKey();
+            Guid atmId = atm.GetPrimaryKey();
 
-            //Account id ranges from 101 to 10100
-            //for (int i = 101; i <= 10100; i++)
-            //{
-            //    IAccountGrain account = client.GetGrain<IAccountGrain>(i);
-            //    await account.ActivateGrain();
-            //    accountMap.Add(i, account);
-            //}
-
-            //DateTime ts2 = DateTime.Now;
-            //Console.WriteLine($"\n\n Initialization time: {ts2 - ts1}.\n\n");
-
-            List<List<int>> grainsPerTx = new List<List<int>>();
-            Random rand = new Random();
-            int N = 10000;
-
-            for(int i=0; i<N; i++)
+            Dictionary<Guid, int> grainToAccessTimes = new Dictionary<Guid, int>();
+            grainToAccessTimes.Add(fromId, 1);
+            grainToAccessTimes.Add(toId, 1);
+            grainToAccessTimes.Add(atmId, 1);
+            List<object> args = new List<Object> { fromId, toId, atmId, 100 };
+            FunctionInput input = new FunctionInput(args);
+            try
             {
-                grainsPerTx.Add(getGrains(rand));
+                Task t1 = atm.StartTransaction(grainToAccessTimes, "Transfer", input);
+                Task t2 = atm.StartTransaction(grainToAccessTimes, "Transfer", input);
+                Task t3 = atm.StartTransaction(grainToAccessTimes, "Transfer", input);
+
+                await Task.WhenAll(t1, t2, t3);
             }
-
-            DateTime ts3 = DateTime.Now;
-            List <Task> Txs= new List<Task>();
-
-
-            for (int i = 0; i < N; i++)
+            catch (Exception e)
             {
-                List<int> grains = grainsPerTx[i];
-                IATMGrain atm = client.GetGrain<IATMGrain>(grains[0]);
-                IAccountGrain from = client.GetGrain<IAccountGrain>(grains[1]);
-                IAccountGrain to = client.GetGrain<IAccountGrain>(grains[2]);
-                //IATMGrain atm = atmMap[grains[0]]; 
-                //IAccountGrain from = accountMap[grains[1]];
-                //IAccountGrain to = accountMap[grains[2]];
-
-                Dictionary<ITransactionExecutionGrain, int> grainToAccessTimes = new Dictionary<ITransactionExecutionGrain, int>();
-                grainToAccessTimes.Add(from, 1);
-                grainToAccessTimes.Add(to, 1);
-                grainToAccessTimes.Add(atm, 1);
-
-                Txs.Add(atm.StartTransaction(grainToAccessTimes, "Transfer", new List<object>() { from, to, 100 }));
-
-                if (i % 1000 == 0)
-                {
-                    System.Threading.Thread.Sleep(1000);
-                }
+                Console.WriteLine($"\n\n {e.ToString()}\n\n");
             }
-
-            await Task.WhenAll(Txs);
-            DateTime ts4 = DateTime.Now;
-
-            Console.WriteLine($"\n\n Processed {N} transactions using: {ts4 - ts3}.\n\n");
-
+            Console.WriteLine($"\n\n {fromAccount.GetBalance().Result}  , {toAccount.GetBalance().Result}\n\n");
         }
 
         private static List<int> getGrains(Random rand)
@@ -209,9 +171,7 @@ namespace OrleansClient
 
                 await Task.WhenAll(Txs);
             }
-#pragma warning disable CS0168 // Variable is declared but never used
-            catch(Exception e){
-#pragma warning restore CS0168 // Variable is declared but never used
+            catch(Exception ){
                 n++;
             }
 
@@ -228,39 +188,6 @@ namespace OrleansClient
         }
 
 
-        private static async Task TestTransaction(IClusterClient client)
-        {
-            Guid from = new Guid("ad3e2c63-2e4c-4bcb-b065-81b3768e2c72");
-            Guid to = new Guid("28d414fa-4164-4a76-99b1-ab1d0c5edf2f");
 
-            //IATMGrain atm = client.GetGrain<IATMGrain>(atmId);
-            IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(1);
-            IAccountGrain toAccount = client.GetGrain<IAccountGrain>(2);
-
-
-
-            Guid atmId0 = new Guid("ad3e2c63-2e4c-4bcb-b065-81b3768e2c98");
-            IATMGrain atm0 = client.GetGrain<IATMGrain>(3);
-
-            Dictionary<Guid, int> grainToAccessTimes = new Dictionary<Guid, int>();
-            grainToAccessTimes.Add(from, 1);
-            grainToAccessTimes.Add(to, 1);
-            grainToAccessTimes.Add(atmId0, 1);
-            List<object> inputArgs = new List<Object> {from, to, atmId0 , 100};
-            FunctionInput input = new FunctionInput(inputArgs);
-            try
-            {
-                Task t1 = atm0.StartTransaction(grainToAccessTimes, "Transfer", input);
-                Task t2 = atm0.StartTransaction(grainToAccessTimes, "Transfer", input);
-                Task t3 = atm0.StartTransaction(grainToAccessTimes, "Transfer", input);
-
-                await Task.WhenAll(t1, t2, t3);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"\n\n {e.ToString()}\n\n");
-            }
-            Console.WriteLine($"\n\n {fromAccount.GetBalance().Result}  , {toAccount.GetBalance().Result}\n\n");
-        }
     }
 }

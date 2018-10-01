@@ -159,10 +159,7 @@ namespace Concurrency.Implementation.Nondeterministic
             return Task.FromResult<TState>(copy);
         }
 
-
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
         async Task<bool> ITransactionalState<TState>.Prepare(long tid)
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
         {
             if (transactionMap[tid].data.status.Equals(Status.Aborted))
                 return false;
@@ -177,6 +174,14 @@ namespace Concurrency.Implementation.Nondeterministic
                     //wait until its dependent transaction is committed or aborted.
                     if (depTxInfo.ExecutionPromise.Task.IsCompleted)
                     {
+                        if (depTxInfo.status.Equals(Status.Committed))
+                            return true;
+                        else if (depTxInfo.status.Equals(Status.Aborted))
+                            return false;
+                    }
+                    else
+                    {
+                        await depTxInfo.ExecutionPromise.Task;
                         if (depTxInfo.status.Equals(Status.Committed))
                             return true;
                         else if (depTxInfo.status.Equals(Status.Aborted))

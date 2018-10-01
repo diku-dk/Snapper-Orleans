@@ -14,11 +14,9 @@ namespace AccountTransfer.Grains
 {
 
     [Serializable]
-
-    public class Balance
+    public class OrleansBalance
 
     {
-
         public uint Value { get; set; } = 1000;
         public uint Count { get; set; } = 0;
 
@@ -30,16 +28,14 @@ namespace AccountTransfer.Grains
 
     {
 
-        private readonly ITransactionalState<Balance> balance;
+        private readonly ITransactionalState<OrleansBalance> balance;
 
 
 
-        public OrleansAccount([TransactionalState("balance")] ITransactionalState<Balance> balance)
+        public OrleansAccount([TransactionalState("balance")] ITransactionalState<OrleansBalance> balance)
 
-        {
-
+        { 
             this.balance = balance ?? throw new ArgumentNullException(nameof(balance));
-
         }
 
 

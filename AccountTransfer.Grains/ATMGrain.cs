@@ -91,7 +91,7 @@ namespace AccountTransfer.Grains
             Task<FunctionResult> t2 = fromAccount.Execute(c2);
             await Task.WhenAll(t1, t2);
 
-            return new FunctionResult();
+            return new FunctionResult(t1.Result, t2.Result);
         }
 
         

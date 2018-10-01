@@ -44,13 +44,17 @@ namespace OrleansClient
                 IAccountGrain from = client.GetGrain<IAccountGrain>(grains[1]);
                 IAccountGrain to = client.GetGrain<IAccountGrain>(grains[2]);
 
-                Dictionary<ITransactionExecutionGrain, int> grainToAccessTimes = new Dictionary<ITransactionExecutionGrain, int>();
-                grainToAccessTimes.Add(from, 1);
-                grainToAccessTimes.Add(to, 1);
-                grainToAccessTimes.Add(atm, 1);
+                Dictionary<Guid, int> grainToAccessTimes = new Dictionary<Guid, int>();
+                Guid fromId = from.GetPrimaryKey();
+                Guid toId = to.GetPrimaryKey();
+                Guid atmId = atm.GetPrimaryKey();
 
+                grainToAccessTimes.Add(fromId, 1);
+                grainToAccessTimes.Add(toId, 1);
+                grainToAccessTimes.Add(atmId, 1);
+                List<object> input = new List<object> { fromId, toId, 100 };
                 DateTime ts1 = DateTime.Now;
-                await atm.StartTransaction(grainToAccessTimes, "Transfer", new List<object>() { from, to, 100 });
+                await atm.StartTransaction(grainToAccessTimes, "Transfer", new Concurrency.Utilities.FunctionInput(input));
                 DateTime ts2 = DateTime.Now;
 
                 sumLatency += (ts2 - ts1);

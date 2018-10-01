@@ -100,13 +100,11 @@ namespace Concurrency.Implementation.Deterministic
             //Console.WriteLine($"Coordinator: received Transaction {tid}");
             return Task.FromResult(context);
         }
-
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-        async Task EmitBatch(object var)
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+        
+        Task EmitBatch(object var)
         {
             if (batchSchedulePerGrain.ContainsKey(curBatchID) == false)
-                return;
+                return Task.CompletedTask;
 
 
             Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
@@ -131,12 +129,10 @@ namespace Concurrency.Implementation.Deterministic
             //await Task.WhenAll(emitTasks);
             //Console.WriteLine($"Coordinator: sent schedule for batch {curBatchID} to {curScheduleMap.Count} grains.");
             curBatchID++;
-            return;
+            return Task.CompletedTask;
         }
-
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-        public async Task AckBatchCompletion(int bid, Guid executor_id)
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+        
+        public  Task AckBatchCompletion(int bid, Guid executor_id)
         {
             if (expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id))
             {
@@ -169,7 +165,7 @@ namespace Concurrency.Implementation.Deterministic
             {
                 Console.WriteLine($"Coordinator: ack information from {executor_id} for batch {bid} is not correct. ");
             }
-            return;
+            return Task.CompletedTask;
         }
 
 

@@ -66,12 +66,17 @@ namespace Concurrency.Implementation
             TransactionContext context = await tc.NewTransaction();
             functionCallInput.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
+
             Task<FunctionResult> t1 = this.Execute(c1);
             await t1;
+            ISet<Guid> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
+            Object transactionResult = t1.Result.resultObject;
+            bool hasException = t1.Result.hasException();
+
 
             // Prepare Phase
             List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
-            foreach (var grainGuid in t1.Result.grainsInNestedFunctions)
+            foreach (var grainGuid in grainIDsInTransaction)
             {
                 prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grainGuid).Prepare(context.transactionID));
             }
@@ -91,20 +96,23 @@ namespace Concurrency.Implementation
             List<Task> abortResult = new List<Task>();
             if (canCommit)
             {
-                foreach (var grainGuid in t1.Result.grainsInNestedFunctions)
+                foreach (var grainGuid in grainIDsInTransaction)
                 {                    
                     commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grainGuid).Commit(context.transactionID));
                 }
             }
             else
             {
-                foreach (var grainGuid in t1.Result.grainsInNestedFunctions)
+                foreach (var grainGuid in grainIDsInTransaction)
                 {                    
                     commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grainGuid).Abort(context.transactionID));
                 }
             }
             await Task.WhenAll(commitResult);
-            return t1.Result;
+
+            FunctionResult ret = new FunctionResult(transactionResult);
+            ret.setException(hasException);
+            return new FunctionResult(transactionResult);
         }
 
         /**
@@ -113,10 +121,8 @@ namespace Concurrency.Implementation
          * 2. Check if there is function call that should be executed now, and execute it if yes.
          *
          */
-
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-        public async Task ReceiveBatchSchedule(BatchSchedule schedule)
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+         
+        public Task ReceiveBatchSchedule(BatchSchedule schedule)
         {
             //Console.WriteLine($"\n\n{this.GetType()}: Received schedule for batch {schedule.batchID}.\n\n");
             if (batchScheduleMap.ContainsKey(schedule.batchID))
@@ -146,7 +152,7 @@ namespace Concurrency.Implementation
                 }
             }
 
-            return;
+            return Task.CompletedTask;
         }
 
         /**
@@ -251,9 +257,9 @@ namespace Concurrency.Implementation
             MethodInfo mi = call.type.GetMethod(call.func);
             Task<FunctionResult> t = (Task<FunctionResult>)mi.Invoke(this, new object[] { functionCallInput });
             await t;
-            
             return t.Result;
         }
+
 
         public Task Abort(long tid)
         {

@@ -29,17 +29,50 @@ namespace Concurrency.Utilities
     {
         public Object resultObject;
         public ISet<Guid> grainsInNestedFunctions;
+        public Boolean exception = false;
 
-        public FunctionResult(Object resultObject, FunctionResult ret)
+        public FunctionResult(Object resultObject, FunctionResult r)
         {
             this.resultObject = resultObject;
-            this.grainsInNestedFunctions = ret.grainsInNestedFunctions;
+            this.grainsInNestedFunctions = new HashSet<Guid>();
+            this.grainsInNestedFunctions.UnionWith(r.grainsInNestedFunctions);
+            this.exception = r.exception;
         }
 
         public FunctionResult(Object resultObject=null)
         {
             this.resultObject = resultObject;
             this.grainsInNestedFunctions = new HashSet<Guid>();
+        }
+
+        public FunctionResult(FunctionResult r1, FunctionResult r2)
+        {
+            exception = r1.exception | r2.exception;
+            grainsInNestedFunctions = new HashSet<Guid>();
+            grainsInNestedFunctions.UnionWith(r1.grainsInNestedFunctions);
+            grainsInNestedFunctions.UnionWith(r2.grainsInNestedFunctions);  
+
+        }
+
+        public void mergeWithFunctionResult(FunctionResult r)
+        {
+            this.exception |= r.exception;
+            this.grainsInNestedFunctions.UnionWith(r.grainsInNestedFunctions);
+        }
+
+        public void setResult(Object result)
+        {
+            resultObject = result;
+        }
+
+        public void setException(Boolean b)
+        {
+            exception = b;
+        }
+
+        public Boolean hasException()
+        {
+            return exception;
         }
 
     }

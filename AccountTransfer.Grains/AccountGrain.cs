@@ -9,6 +9,7 @@ using Concurrency.Implementation;
 using Concurrency.Utilities;
 using Concurrency.Interface.Nondeterministic;
 using Concurrency.Implementation.Nondeterministic;
+using Concurrency.Implementation.Deterministic;
 
 namespace AccountTransfer.Grains
 {
@@ -36,8 +37,9 @@ namespace AccountTransfer.Grains
 
     public class AccountGrain : TransactionExecutionGrain<Balance>, IAccountGrain
     {
-        public AccountGrain(int type)
+        public AccountGrain()
         {
+            int type = 2;
             Balance balance = new Balance();
             Concurrency.Interface.Nondeterministic.ITransactionalState<Balance> tmp;
             if (type == 0)
@@ -47,26 +49,32 @@ namespace AccountTransfer.Grains
             }
             else if (type == 1)
             {
-                tmp = new TimestampTransactionalState<Balance>(balance);
+                tmp = new S2PLTransactionalState<Balance>(balance);
                 state = tmp;
             }
             else if (type == 2)
             {
-                //for deterministic transaction;
-            }
-
-            
+                tmp = new DeterministicTransactionalState<Balance>(balance);
+                state = tmp;
+            }      
         }
 
         public async Task<FunctionResult> Deposit(FunctionInput fin)
         {
             TransactionContext context = fin.context;
             List<object> inputs = fin.inputObjects;
-
-            Balance balance = await state.ReadWrite(context.transactionID);
-            int amount = (int)inputs[0];
-            balance.value += amount;
             FunctionResult ret = new FunctionResult();
+            try
+            {
+                Balance balance = await state.ReadWrite(context.transactionID);
+                int amount = (int)inputs[0];
+                balance.value += amount;
+            }
+            catch(Exception)
+            {
+                ret.setException(true);
+            }
+            
             return ret;
         }
 
@@ -74,11 +82,17 @@ namespace AccountTransfer.Grains
         {
             TransactionContext context = fin.context;
             List<object> inputs = fin.inputObjects;
-
-            Balance balance = await state.ReadWrite(context.transactionID);
-            int amount = (int)inputs[0];
-            balance.value -= amount;
             FunctionResult ret = new FunctionResult();
+            try
+            {
+                Balance balance = await state.ReadWrite(context.transactionID);
+                int amount = (int)inputs[0];
+                balance.value -= amount;
+            }
+            catch (Exception)
+            {
+                ret.setException(true);
+            }
             return ret;
         }
 
