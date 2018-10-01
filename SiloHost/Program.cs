@@ -55,7 +55,7 @@ namespace OrleansSiloHost
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(OrleansAccount).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(DeterministicTransactionCoordinator).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(NondeterministicTransactionCoordinator).Assembly).WithReferences())
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Debug))
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
                 .AddMemoryGrainStorageAsDefault()
                 .UseInClusterTransactionManager()
                 .UseInMemoryTransactionLog()

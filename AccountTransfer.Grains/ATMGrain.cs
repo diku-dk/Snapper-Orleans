@@ -13,7 +13,7 @@ namespace AccountTransfer.Grains
 
     public class ATMGrain : TransactionExecutionGrain<Balance>, IATMGrain
     {
-        TransactionContext context;
+        
         TaskCompletionSource<String> promise = new TaskCompletionSource<String>();
         private  Dictionary<int, TaskCompletionSource<String>> promiseMap = new Dictionary<int, TaskCompletionSource<String>>();
 
@@ -94,6 +94,43 @@ namespace AccountTransfer.Grains
             return new FunctionResult(t1.Result, t2.Result);
         }
 
-        
+        public async Task<FunctionResult> TransferOneToMulti(FunctionInput input)
+        {
+            TransactionContext context = input.context;
+            List<object> inputs = input.inputObjects;
+
+            IAccountGrain fromAccount = this.GrainFactory.GetGrain<IAccountGrain>((Guid)(inputs[0]));
+            int sum = (int)inputs[1];
+
+            List<IAccountGrain> destinationAccountList = new List<IAccountGrain>();
+            List<int> transferAmount = new List<int>();
+
+            int numerOfDestination = (inputs.Count - 2) / 2;
+            for(int i= 2; i< 2 + numerOfDestination; i++)
+            {
+                destinationAccountList.Add(this.GrainFactory.GetGrain<IAccountGrain>((Guid)(inputs[i])));
+                transferAmount.Add((int)inputs[i + numerOfDestination]);
+            }
+
+            List<Task<FunctionResult>> taskList = new List<Task<FunctionResult>>();
+            List<object> args = new List<object>{sum};
+            taskList.Add(fromAccount.Execute(new FunctionCall(typeof(AccountGrain), "Withdraw", new FunctionInput(input, args))));
+            for(int i=0; i< destinationAccountList.Count; i++)
+            {
+                args = new List<object> { transferAmount[i] };
+                taskList.Add(destinationAccountList[i].Execute(new FunctionCall(typeof(AccountGrain), "Deposit", new FunctionInput(input, args))));
+            }
+
+            await Task.WhenAll(taskList);
+
+            FunctionResult result = new FunctionResult();
+            foreach(Task<FunctionResult> task in taskList)
+            {
+                result.mergeWithFunctionResult(task.Result);
+            }
+
+
+            return result;
+        }
     }
 }

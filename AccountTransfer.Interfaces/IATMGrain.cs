@@ -20,5 +20,7 @@ namespace AccountTransfer.Interfaces
         Task setpromise(int i);
 
         Task<FunctionResult> Transfer(FunctionInput input);
+
+        Task<FunctionResult> TransferOneToMulti(FunctionInput input);
     }
 }
