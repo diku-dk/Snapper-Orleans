@@ -7,8 +7,8 @@ using Orleans.Hosting.Development;
 using Orleans.Configuration;
 using System.Net;
 using AccountTransfer.Grains;
-using Concurrency.Implementation.Nondeterministic;
 using Concurrency.Implementation.Deterministic;
+using Concurrency.Implementation.Nondeterministic;
 
 namespace OrleansSiloHost
 {
@@ -49,12 +49,12 @@ namespace OrleansSiloHost
                     
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
+                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(DeterministicTransactionCoordinator).Assembly).WithReferences())
+                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(NondeterministicTransactionCoordinator).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(ATMGrain).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(OrleansATM).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(OrleansAccount).Assembly).WithReferences())
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(DeterministicTransactionCoordinator).Assembly).WithReferences())
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(NondeterministicTransactionCoordinator).Assembly).WithReferences())
                 .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
                 .AddMemoryGrainStorageAsDefault()
                 .UseInClusterTransactionManager()

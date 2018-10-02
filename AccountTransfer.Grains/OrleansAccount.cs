@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-[assembly: GenerateSerializer(typeof(AccountTransfer.Grains.Balance))]
+[assembly: GenerateSerializer(typeof(AccountTransfer.Grains.OrleansBalance))]
 
 namespace AccountTransfer.Grains
 

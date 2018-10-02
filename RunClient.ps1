@@ -1,2 +1,2 @@
-﻿Start-Process "dotnet" -ArgumentList "run --project src/OrleansClient --no-build"
+﻿Start-Process "dotnet" -ArgumentList "run --project OrleansClient --no-build"
 Start-Sleep 5

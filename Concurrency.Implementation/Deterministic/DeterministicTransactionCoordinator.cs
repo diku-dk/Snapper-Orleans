@@ -3,12 +3,10 @@ using Concurrency.Utilities;
 using Orleans;
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Concurrency.Implementation.Deterministic
 {
-    [Serializable]
     public class DeterministicTransactionCoordinator : Grain, IDeterministicTransactionCoordinator
     {
 
