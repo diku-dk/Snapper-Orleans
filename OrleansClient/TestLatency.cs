@@ -64,48 +64,7 @@ namespace OrleansClient
 
             Console.WriteLine($"\n\n Average Latency: {sumLatency/N}.\n\n");
 
-        }
-
-        public async Task DoTestOrleans(IClusterClient client)
-        {
-
-            //initialize 10 ATM and 100 accounts
-            Dictionary<int, IATMGrain> atmMap = new Dictionary<int, IATMGrain>();
-            Dictionary<int, IAccountGrain> accountMap = new Dictionary<int, IAccountGrain>();
-
-            await initializeGrains(client);
-
-            int N = 100;
-            List<List<int>> grainsPerTx = new List<List<int>>();
-            Random rand = new Random();
-            for (int i = 0; i < N; i++)
-            {
-                grainsPerTx.Add(getGrains(rand));
-            }
-
-            TimeSpan sumLatency = TimeSpan.FromMilliseconds(0);
-            for (int i = 0; i < N; i++)
-            {
-                List<int> grains = grainsPerTx[i];
-
-                IOrleansATM atm = client.GetGrain<IOrleansATM>(grains[0]);
-                IOrleansAccount from = client.GetGrain<IOrleansAccount>(grains[1]);
-                IOrleansAccount to = client.GetGrain<IOrleansAccount>(grains[2]);
-
-                await Task.WhenAll(atm.ActivateGrain(), from.ActivateGrain(), to.ActivateGrain());
-
-                DateTime ts1 = DateTime.Now;
-                await atm.Transfer(grains[1], grains[2], 100);
-                DateTime ts2 = DateTime.Now;
-
-                sumLatency += (ts2 - ts1);
-                Console.WriteLine($"\n Transaction: {i} latency: {ts2 - ts1}.\n");
-
-            }
-
-            Console.WriteLine($"\n\n Average Latency: {sumLatency / N}.\n\n");
-
-        }
+        }       
 
 
         private  List<int> getGrains(Random rand)
@@ -149,6 +108,6 @@ namespace OrleansClient
             return;
         }
 
-
+    
     }
 }

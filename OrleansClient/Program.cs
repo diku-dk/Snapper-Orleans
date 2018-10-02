@@ -140,7 +140,7 @@ namespace OrleansClient
             return ret;
         }
 
-        private static async void TestOrleansThroughputLatency(IClusterClient client)
+        /*private static async void TestOrleansThroughputLatency(IClusterClient client)
         {
 
             List<List<int>> grainsPerTx = new List<List<int>>();
@@ -185,7 +185,7 @@ namespace OrleansClient
             }
             Console.WriteLine($"\n\n Processed {N} transactions using: {ts4 - ts3}. errors {n}, completed transactions: {m}.\n\n");
 
-        }
+        }*/
 
 
 

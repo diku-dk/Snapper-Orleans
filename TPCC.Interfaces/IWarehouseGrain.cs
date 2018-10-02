@@ -62,7 +62,7 @@ namespace TPCC.Interfaces
 
     public interface IWarehouseGrain : ITransactionExecutionGrain, IGrainWithIntegerKey
     {
-        Task<float> NewOrder(UInt32 wareHouseId, UInt32 districtId, UInt32 customerId, Dictionary<UInt32, Dictionary<UInt32, UInt16>> ordersPerWarehousePerItem);
+        /*Task<float> NewOrder(UInt32 wareHouseId, UInt32 districtId, UInt32 customerId, Dictionary<UInt32, Dictionary<UInt32, UInt16>> ordersPerWarehousePerItem);
 
         Task<StockUpdateResult> StockUpdate(UInt32 warehouseId, UInt32 districtId, Dictionary<UInt32, UInt16> ordersPerItem);
 
@@ -71,5 +71,6 @@ namespace TPCC.Interfaces
         Task<UInt32> CustomerPayment(PaymentInfo paymentInformation);
 
         Task<UInt32> FindCustomerId(UInt32 districtId, String customerLastName);        
+        */
     }
 }

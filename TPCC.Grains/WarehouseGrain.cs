@@ -10,11 +10,10 @@ using Concurrency.Implementation;
 namespace TPCC.Grains
 {
     
-    public class WarehouseGrain : TransactionExecutionGrain, IWarehouseGrain
-    {
-        WarehouseData state;
+    public class WarehouseGrain : TransactionExecutionGrain<WarehouseData>, IWarehouseGrain
+    {        
 
-        async Task<float> IWarehouseGrain.NewOrder(UInt32 warehouseId, UInt32 districtId, UInt32 customerId, Dictionary<UInt32, Dictionary<UInt32, UInt16>> ordersPerWarehousePerItem)
+       /* async Task<float> IWarehouseGrain.NewOrder(UInt32 warehouseId, UInt32 districtId, UInt32 customerId, Dictionary<UInt32, Dictionary<UInt32, UInt16>> ordersPerWarehousePerItem)
         {    
 
             int orderLineCount = 0; bool allLocal = true;
@@ -28,7 +27,7 @@ namespace TPCC.Grains
                 }
                 stockUpdates.Add(Task.Run(() => this.GrainFactory.GetGrain<IWarehouseGrain>(warehouseId).StockUpdate(warehouseId, districtId, orderEntry.Value)));                    
             }
-
+            var state = 
             //Get customer information
             var customerKey = new Tuple<UInt32, UInt32>(districtId, customerId);
             var customer = state.customerRecords[customerKey];
@@ -69,6 +68,7 @@ namespace TPCC.Grains
 
         Task<StockUpdateResult> IWarehouseGrain.StockUpdate(UInt32 warehouseId, UInt32 districtId, Dictionary<UInt32, UInt16> ordersPerItem)
         {
+            var state = state.read
             var result = new StockUpdateResult();
             foreach (var itemOrdered in ordersPerItem)
             {
@@ -169,5 +169,6 @@ namespace TPCC.Grains
             var customersWithSameLastName = state.customerNameRecords[new Tuple<UInt32, String>(districtId, customerLastName)];
             return Task.FromResult(customersWithSameLastName[customersWithSameLastName.Count / 2].Item2);
         }
+        */
     }
 }

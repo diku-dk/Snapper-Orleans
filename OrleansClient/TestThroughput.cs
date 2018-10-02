@@ -22,6 +22,7 @@ namespace OrleansClient
         // n2 = number of accounts;
         //  N = number of transactions
         int n1, n2, N;
+        
         public TestThroughput(int n1, int n2)
         {
             this.n1 = n1;
@@ -73,82 +74,7 @@ namespace OrleansClient
             DateTime ts2 = DateTime.Now;
             Console.WriteLine($"\n\n Execution Time: {ts2 - ts1}.\n\n");
 
-        }
-
-        public async Task DoTestOrleans(IClusterClient client, int nTx)
-        {
-
-            this.N = nTx;
-
-            List<List<int>> grainsPerTx = new List<List<int>>();
-            //getGrainsNoContention(grainsPerTx);
-
-            Random rand = new Random();
-            for (int i = 0; i < N; i++)
-            {
-                
-                //grainsPerTx.Add(getGrains(n1, n2, rand));
-                grainsPerTx.Add(new List<int>() {i+1, 11, 12 });
-
-            }
-
-            Console.WriteLine($"\n\n Start running Transactions ....\n\n");
-            List<Task> tasks = new List<Task>();
-            DateTime ts1 = DateTime.Now;
-            try
-            {
-                for (int i = 0; i < N; i++)
-                {
-                    List<int> grains = grainsPerTx[i];
-                    IOrleansATM atm = client.GetGrain<IOrleansATM>(grains[0]);
-                    tasks.Add(atm.Transfer(grains[1], grains[2], 100));
-                }
-
-                await Task.WhenAll(tasks);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"Execution: {e.Message.ToString()}");
-                return;
-            }
-
-
-            DateTime ts2 = DateTime.Now;
-
-            int n = 0;
-            foreach (Task t in tasks)
-            {
-                if (t.IsCompletedSuccessfully)
-                    n++;
-            }
-            Console.WriteLine($"\n\n Execution Time: {ts2 - ts1}. {n} transactions done.\n\n");
-
-            //uint count = 0;
-            //for (int i = 0; i < N; i++)
-            //{
-            //        List<int> grains = grainsPerTx[i];
-            //        try
-            //        {
-            //            count += client.GetGrain<IOrleansAccount>(grains[1]).GetCount().Result;
-            //        }catch (Exception e)
-            //        {
-            //            Console.WriteLine($"Account {grains[1]}: {e.Message}");
-            //        }
-
-            //         try
-            //        {
-            //            count += client.GetGrain<IOrleansAccount>(grains[2]).GetCount().Result;
-            //        }
-            //        catch (Exception e)
-            //        {
-            //            Console.WriteLine($"Account {grains[2]}: {e.Message}");
-            //        }
-            //}
-
-
-            //Console.WriteLine($"\n\n Verified: {count / 2} transactions done.\n\n");
-
-        }
+        }      
 
 
         private List<int> getGrains(int n1, int n2, Random rand)
@@ -199,32 +125,7 @@ namespace OrleansClient
             Console.WriteLine($"\n\n Initialization time: {ts2 - ts1}.\n\n");
 
             return;
-        }
-
-        public async Task initializeGrainOrleans(IClusterClient client)
-        {
-            DateTime ts1 = DateTime.Now;
-
-            //ATM id ranges from 1 to 10;
-            for (int i = 1; i <= n1; i++)
-            {
-                IOrleansATM atm = client.GetGrain<IOrleansATM>(i);
-                await atm.ActivateGrain();
-            }
-
-            //Account id ranges from 11 to 110
-            for (int i = n1 + 1; i <= n1 + n2; i++)
-            {
-                IOrleansAccount account = client.GetGrain<IOrleansAccount>(i);
-                await account.ActivateGrain();
-            }
-
-            DateTime ts2 = DateTime.Now;
-            Console.WriteLine($"\n\n Initialization time: {ts2 - ts1}.\n\n");
-
-            return;
-        }
-
-
+        }   
+    
     }
 }

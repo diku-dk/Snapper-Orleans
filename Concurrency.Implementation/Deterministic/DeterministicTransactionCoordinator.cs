@@ -111,9 +111,10 @@ namespace Concurrency.Implementation.Deterministic
             if (batchStatusMap.ContainsKey(curBatchID) == false)
                 batchStatusMap.Add(curBatchID, new TaskCompletionSource<Boolean>());
 
+            var v = typeof(IDeterministicTransactionCoordinator);
             foreach (KeyValuePair<Guid, BatchSchedule> item in curScheduleMap)
             {
-                ITransactionExecutionGrain dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key);
+                var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key);
                 BatchSchedule schedule = item.Value;
                 Task emit = dest.ReceiveBatchSchedule(schedule);
 
