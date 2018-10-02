@@ -40,6 +40,7 @@ namespace AccountTransfer.Grains
         public AccountGrain()
         {
             int type = 2;
+            this.myUserClassName = "AccountTransfer.Grains.AccountGrain";
             Balance balance = new Balance();
             Concurrency.Interface.Nondeterministic.ITransactionalState<Balance> tmp;
             if (type == 0)

@@ -18,7 +18,7 @@ namespace Concurrency.Implementation.Deterministic
         private Dictionary<int, TransactionContext> transactionContextMap;
         private Dictionary<int, Dictionary<Guid, BatchSchedule>> batchSchedulePerGrain;
         private Dictionary<int, List<int>> batchTransactionList;
-
+        private Dictionary<int, Dictionary<Guid, String>> batchGrainClassName;
         //For each actor, coordinator stores the ID of the last uncommitted batch.
         //private Dictionary<IDTransactionGrain, int> actorLastBatch;
 
@@ -37,6 +37,7 @@ namespace Concurrency.Implementation.Deterministic
             curTransactionID = 0;
             transactionContextMap = new Dictionary<int, TransactionContext>();
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, BatchSchedule>>();
+            batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             //actorLastBatch = new Dictionary<IDTransactionGrain, int>();
             batchTransactionList = new Dictionary<int, List<int>>();
             expectedAcksPerBatch = new Dictionary<int, int>();
@@ -53,7 +54,7 @@ namespace Concurrency.Implementation.Deterministic
          * 2. Append the new transaction to transaction table.
          * 3. Add the new transaction to the schedule of the current batch.
          */
-        public Task<TransactionContext> NewTransaction(Dictionary<Guid, int> grainToAccessTimes)
+        public Task<TransactionContext> NewTransaction(Dictionary<Guid, int> grainToAccessTimes, Dictionary<Guid, String> grainClassName)
         {
             int bid = this.curBatchID;
             int tid = this.curTransactionID++;
@@ -66,6 +67,7 @@ namespace Concurrency.Implementation.Deterministic
             {
                 batchSchedulePerGrain.Add(bid, new Dictionary<Guid, BatchSchedule>());
                 batchTransactionList.Add(bid, new List<int>());
+                batchGrainClassName.Add(bid, new Dictionary<Guid, String>());
             }
 
             batchTransactionList[bid].Add(tid);
@@ -77,6 +79,7 @@ namespace Concurrency.Implementation.Deterministic
                 //    lastBid = actorLastBatch[item.Key];
                 //else
                 //    lastBid = -1;
+                batchGrainClassName[bid][item.Key] = grainClassName[item.Key];
                 if (curScheduleMap.ContainsKey(item.Key) == false)
                     curScheduleMap.Add(item.Key, new BatchSchedule(bid));
                 curScheduleMap[item.Key].AddNewTransaction(tid, item.Value);
@@ -114,7 +117,7 @@ namespace Concurrency.Implementation.Deterministic
             var v = typeof(IDeterministicTransactionCoordinator);
             foreach (KeyValuePair<Guid, BatchSchedule> item in curScheduleMap)
             {
-                var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key);
+                var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);
                 BatchSchedule schedule = item.Value;
                 Task emit = dest.ReceiveBatchSchedule(schedule);
 
@@ -123,7 +126,7 @@ namespace Concurrency.Implementation.Deterministic
                 //else
                 //    actorLastBatch.Add(dest, schedule.batchID);
             }
-
+            batchGrainClassName.Remove(curBatchID);
             //This guarantees that batch schedules with smaller IDs are received earlier by grains.
             //await Task.WhenAll(emitTasks);
             //Console.WriteLine($"Coordinator: sent schedule for batch {curBatchID} to {curScheduleMap.Count} grains.");

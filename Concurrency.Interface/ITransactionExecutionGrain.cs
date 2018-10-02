@@ -14,7 +14,7 @@ namespace Concurrency.Interface
          * Client calls this function to submit a determinictic transaction to the transaction coordinator.
          */
         [AlwaysInterleave]
-        Task<FunctionResult> StartTransaction(Dictionary<Guid, int> grainToAccessTimes, String startFunction, FunctionInput inputs);
+        Task<FunctionResult> StartTransaction(Dictionary<Guid, int> grainToAccessTimes, Dictionary<Guid, String> grainClassName, String startFunction, FunctionInput inputs);
 
         /*  
          * Client calls this function to submit a non-determinictic transaction to the transaction coordinator.

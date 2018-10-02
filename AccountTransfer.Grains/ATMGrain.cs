@@ -17,6 +17,10 @@ namespace AccountTransfer.Grains
         TaskCompletionSource<String> promise = new TaskCompletionSource<String>();
         private  Dictionary<int, TaskCompletionSource<String>> promiseMap = new Dictionary<int, TaskCompletionSource<String>>();
 
+        public ATMGrain()
+        {
+            this.myUserClassName = "AccountTransfer.Grains.ATmGrain";
+        }
         public Task<string> getPromise()
         {
             return promise.Task;
@@ -88,7 +92,7 @@ namespace AccountTransfer.Grains
 
 
             Task<FunctionResult> t1 = fromAccount.Execute(c1);
-            Task<FunctionResult> t2 = fromAccount.Execute(c2);
+            Task<FunctionResult> t2 = toAccount.Execute(c2);
             await Task.WhenAll(t1, t2);
 
             return new FunctionResult(t1.Result, t2.Result);

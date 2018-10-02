@@ -106,13 +106,19 @@ namespace OrleansClient
             grainToAccessTimes.Add(fromId, 1);
             grainToAccessTimes.Add(toId, 1);
             grainToAccessTimes.Add(atmId, 1);
+
+            Dictionary<Guid, String> grainClassName = new Dictionary<Guid, String>();
+            grainClassName.Add(fromId, "AccountTransfer.Grains.AccountGrain");
+            grainClassName.Add(toId, "AccountTransfer.Grains.AccountGrain");
+            grainClassName.Add(atmId, "AccountTransfer.Grains.ATMGrain");
+
             List<object> args = new List<Object> { fromId, toId, atmId, 100 };
             FunctionInput input = new FunctionInput(args);
             try
             {
-                Task t1 = atm.StartTransaction(grainToAccessTimes, "Transfer", input);
-                Task t2 = atm.StartTransaction(grainToAccessTimes, "Transfer", input);
-                Task t3 = atm.StartTransaction(grainToAccessTimes, "Transfer", input);
+                Task t1 = atm.StartTransaction(grainToAccessTimes, grainClassName, "Transfer", input);
+                Task t2 = atm.StartTransaction(grainToAccessTimes, grainClassName, "Transfer", input);
+                Task t3 = atm.StartTransaction(grainToAccessTimes, grainClassName, "Transfer", input);
 
                 await Task.WhenAll(t1, t2, t3);
             }

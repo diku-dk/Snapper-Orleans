@@ -18,7 +18,7 @@ namespace Concurrency.Implementation
         private Dictionary<int, List<TaskCompletionSource<Boolean>>> promiseMap;
         private Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
-
+        protected String myUserClassName;
         public TransactionExecutionGrain(ITransactionalState<TState> state){
             this.state = state;
         }
@@ -49,9 +49,9 @@ namespace Concurrency.Implementation
          * 
          */
 
-        public async Task<FunctionResult> StartTransaction(Dictionary<Guid, int> grainToAccessTimes, String startFunction, FunctionInput inputs)
+        public async Task<FunctionResult> StartTransaction(Dictionary<Guid, int> grainToAccessTimes, Dictionary<Guid, String> grainClassName, String startFunction, FunctionInput inputs)
         {
-            TransactionContext context = await tc.NewTransaction(grainToAccessTimes);
+            TransactionContext context = await tc.NewTransaction(grainToAccessTimes, grainClassName);
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
             Task<FunctionResult> t1 = this.Execute(c1);
@@ -69,16 +69,16 @@ namespace Concurrency.Implementation
 
             Task<FunctionResult> t1 = this.Execute(c1);
             await t1;
-            ISet<Guid> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
+            Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
             Object transactionResult = t1.Result.resultObject;
             bool hasException = t1.Result.hasException();
 
 
             // Prepare Phase
             List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
-            foreach (var grainGuid in grainIDsInTransaction)
+            foreach (var grain in grainIDsInTransaction)
             {
-                prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grainGuid).Prepare(context.transactionID));
+                prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(context.transactionID));
             }
 
             await Task.WhenAll(prepareResult);
@@ -96,16 +96,16 @@ namespace Concurrency.Implementation
             List<Task> abortResult = new List<Task>();
             if (canCommit)
             {
-                foreach (var grainGuid in grainIDsInTransaction)
+                foreach (var grain in grainIDsInTransaction)
                 {                    
-                    commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grainGuid).Commit(context.transactionID));
+                    commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
                 }
             }
             else
             {
-                foreach (var grainGuid in grainIDsInTransaction)
+                foreach (var grain in grainIDsInTransaction)
                 {                    
-                    commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grainGuid).Abort(context.transactionID));
+                    commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
                 }
             }
             await Task.WhenAll(commitResult);
@@ -164,7 +164,7 @@ namespace Concurrency.Implementation
             if (call.funcInput.context.isDeterministic == false)
             {
                 FunctionResult invokeRet = await InvokeFunction(call);
-                invokeRet.grainsInNestedFunctions.Add(myPrimaryKey);
+                invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
                 return invokeRet;
             }
 
