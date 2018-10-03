@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Orleans;
 using Concurrency.Interface;
+using Concurrency.Utilities;
 
 namespace TPCC.Interfaces
 {
@@ -60,17 +61,47 @@ namespace TPCC.Interfaces
         }
     }
 
+    public class NewOrderInput
+    {
+        public UInt32 warehouseId;
+        public UInt32 districtId;
+        public UInt32 customerId;
+        public Dictionary<UInt32, Dictionary<UInt32, UInt16>> ordersPerWarehousePerItem;
+
+        public NewOrderInput(uint warehouseId, uint districtId, uint customerId, Dictionary<uint, Dictionary<uint, ushort>> ordersPerWarehousePerItem)
+        {
+            this.warehouseId = warehouseId;
+            this.districtId = districtId;
+            this.customerId = customerId;
+            this.ordersPerWarehousePerItem = ordersPerWarehousePerItem;
+        }
+    }
+
+    public class StockUpdateInput
+    {
+        public UInt32 warehouseId;
+        public UInt32 districtId;
+        public Dictionary<UInt32, UInt16> ordersPerItem;
+
+        public StockUpdateInput(uint warehouseId, uint districtId, Dictionary<uint, ushort> ordersPerItem)
+        {
+            this.warehouseId = warehouseId;
+            this.districtId = districtId;
+            this.ordersPerItem = ordersPerItem;
+        }
+    }
+
     public interface IWarehouseGrain : ITransactionExecutionGrain, IGrainWithIntegerKey
     {
-        /*Task<float> NewOrder(UInt32 wareHouseId, UInt32 districtId, UInt32 customerId, Dictionary<UInt32, Dictionary<UInt32, UInt16>> ordersPerWarehousePerItem);
+        Task<FunctionResult> NewOrder(FunctionInput functionInput);
 
-        Task<StockUpdateResult> StockUpdate(UInt32 warehouseId, UInt32 districtId, Dictionary<UInt32, UInt16> ordersPerItem);
+        Task<FunctionResult> StockUpdate(FunctionInput functionInput);
 
-        Task<float> Payment(PaymentInfo paymentInformation);
+        /*Task<FunctionResult> Payment(FunctionInput functionInput);
 
-        Task<UInt32> CustomerPayment(PaymentInfo paymentInformation);
+        Task<FunctionResult> CustomerPayment(FunctionInput functionInput);
 
-        Task<UInt32> FindCustomerId(UInt32 districtId, String customerLastName);        
+        Task<FunctionResult> FindCustomerId(FunctionInput functionInput);        
         */
     }
 }

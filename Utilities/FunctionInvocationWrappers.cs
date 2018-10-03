@@ -20,7 +20,12 @@ namespace Concurrency.Utilities
         {
             inputObjects = data;
         }
-
+        
+        public FunctionInput(FunctionInput input, Object data)
+        {
+            inputObjects = new List<object>();
+            inputObjects.Add(data);
+        }
 
     }
 

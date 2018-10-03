@@ -20,6 +20,9 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TPCC.Interfaces", "TPCC.Interfaces\TPCC.Interfaces.csproj", "{DD5957B3-DBB6-43B7-9D61-CADCEB4FD094}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TPCC.Grains", "TPCC.Grains\TPCC.Grains.csproj", "{4FF2DBAD-6461-46E1-A1F1-93EACAB979C3}"
+	ProjectSection(ProjectDependencies) = postProject
+		{5E31DAD0-3493-4D6A-81B1-A0A03483305C} = {5E31DAD0-3493-4D6A-81B1-A0A03483305C}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
