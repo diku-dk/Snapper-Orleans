@@ -115,9 +115,9 @@ namespace OrleansClient
             try
             {
 
-                //Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", input);
-                //await t1;
-                //Console.WriteLine($"\n\n {t1.Result.resultObject}\n\n");
+                Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", input);
+                await t1;
+                Console.WriteLine($"\n\n {t1.Result.resultObject}\n\n");
 
                 Task<FunctionResult> t2 = atm.StartTransaction("Transfer", input);
                 Task<FunctionResult> t3 = atm.StartTransaction("Transfer", input);
@@ -125,9 +125,9 @@ namespace OrleansClient
 
                 await Task.WhenAll(t2, t3);
 
-                //Task<FunctionResult> t5 = fromAccount.StartTransaction("GetBalance", input);
-                //await t5;
-                //Console.WriteLine($"\n\n {t5.Result.resultObject}\n\n");
+                Task<FunctionResult> t5 = fromAccount.StartTransaction("GetBalance", input);
+                await t5;
+                Console.WriteLine($"\n\n {t5.Result.resultObject}\n\n");
                 
             }
             catch (Exception e)
