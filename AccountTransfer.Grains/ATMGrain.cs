@@ -19,7 +19,7 @@ namespace AccountTransfer.Grains
 
         public ATMGrain()
         {
-            this.myUserClassName = "AccountTransfer.Grains.ATmGrain";
+            this.myUserClassName = "AccountTransfer.Grains.ATMGrain";
         }
         public Task<string> getPromise()
         {
@@ -78,18 +78,19 @@ namespace AccountTransfer.Grains
             TransactionContext context = input.context;
             List<object> inputs = input.inputObjects;
 
-            IAccountGrain fromAccount = this.GrainFactory.GetGrain<IAccountGrain>((Guid) (inputs[0]));
-            IAccountGrain toAccount = this.GrainFactory.GetGrain<IAccountGrain>((Guid)(inputs[1]));
+            IAccountGrain fromAccount = this.GrainFactory.GetGrain<IAccountGrain>((Guid) inputs[0]);
+            IAccountGrain toAccount = this.GrainFactory.GetGrain<IAccountGrain>((Guid)inputs[1]);
+           
 
             int amountToTransfer = (int)inputs[2];
             List<object> args = new List<object>();
             args.Add(amountToTransfer);
+            
 
             FunctionInput input_1 = new FunctionInput(input, args);
             FunctionInput input_2 = new FunctionInput(input, args);
             FunctionCall c1 = new FunctionCall(typeof(AccountGrain), "Withdraw", input_1);
             FunctionCall c2 = new FunctionCall(typeof(AccountGrain), "Deposit", input_2);
-
 
             Task<FunctionResult> t1 = fromAccount.Execute(c1);
             Task<FunctionResult> t2 = toAccount.Execute(c2);

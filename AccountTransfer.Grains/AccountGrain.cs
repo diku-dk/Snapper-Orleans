@@ -39,24 +39,21 @@ namespace AccountTransfer.Grains
     {
         public AccountGrain()
         {
-            int type = 2;
+            int type = 0;
             this.myUserClassName = "AccountTransfer.Grains.AccountGrain";
             Balance balance = new Balance();
-            Concurrency.Interface.Nondeterministic.ITransactionalState<Balance> tmp;
             if (type == 0)
             {
-                tmp = new TimestampTransactionalState<Balance>(balance);
-                state = tmp;
+                state = new TimestampTransactionalState<Balance>(balance);
+
             }
             else if (type == 1)
             {
-                tmp = new S2PLTransactionalState<Balance>(balance);
-                state = tmp;
+                state = new S2PLTransactionalState<Balance>(balance);
             }
             else if (type == 2)
             {
-                tmp = new DeterministicTransactionalState<Balance>(balance);
-                state = tmp;
+                state = new DeterministicTransactionalState<Balance>(balance);
             }      
         }
 
@@ -70,6 +67,7 @@ namespace AccountTransfer.Grains
                 Balance balance = await state.ReadWrite(context.transactionID);
                 int amount = (int)inputs[0];
                 balance.value += amount;
+                //Console.WriteLine($"\n\n After deposit of Tx: {context.transactionID}, {this.myPrimaryKey} balance: {balance.value}.\n\n");
             }
             catch(Exception)
             {
@@ -89,6 +87,7 @@ namespace AccountTransfer.Grains
                 Balance balance = await state.ReadWrite(context.transactionID);
                 int amount = (int)inputs[0];
                 balance.value -= amount;
+                //Console.WriteLine($"\n\n After withdraw of Tx: {context.transactionID}, {this.myPrimaryKey} balance: {balance.value}.\n\n");
             }
             catch (Exception)
             {
@@ -97,9 +96,23 @@ namespace AccountTransfer.Grains
             return ret;
         }
 
-        public Task<int> GetBalance()
+        public async Task<FunctionResult> GetBalance(FunctionInput fin)
         {
-            return Task.FromResult(100);
+            TransactionContext context = fin.context;
+            List<object> inputs = fin.inputObjects;
+            FunctionResult ret = new FunctionResult();
+            int v = -1;
+            try
+            {
+                Balance balance = await state.ReadWrite(context.transactionID);
+                v = balance.value;
+            }
+            catch (Exception)
+            {
+                ret.setException(true);
+            }
+            ret.setResult(v);
+            return ret;
         }
     }
 }

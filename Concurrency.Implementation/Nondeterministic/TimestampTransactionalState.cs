@@ -159,8 +159,9 @@ namespace Concurrency.Implementation.Nondeterministic
             return Task.FromResult<TState>(copy);
         }
 
-        async Task<bool> ITransactionalState<TState>.Prepare(long tid)
+        public async Task<bool> Prepare(long tid)
         {
+            //Console.WriteLine($"\n\n Received prepare message of transaction {tid} \n\n");
             if (transactionMap[tid].data.status.Equals(Status.Aborted))
                 return false;
             else
@@ -171,6 +172,7 @@ namespace Concurrency.Implementation.Nondeterministic
                 else
                 {
                     TransactionStateInfo depTxInfo = transactionMap[tid].prev.data;
+                    //Console.WriteLine($"\n\n check the if the promise of previous transaction is set. {depTxInfo.tid}:+{depTxInfo.ExecutionPromise.Task.Status} \n\n");
                     //wait until its dependent transaction is committed or aborted.
                     if (depTxInfo.ExecutionPromise.Task.IsCompleted)
                     {
@@ -208,13 +210,13 @@ namespace Concurrency.Implementation.Nondeterministic
             }
         }
 
-        Task ITransactionalState<TState>.Commit(long tid)
+        public Task Commit(long tid)
         {
             //Update status and Set the execution promise, such that the blocking prepare() of the dependant transactions can proceed.
             Node<TransactionStateInfo> node = transactionMap[tid];
             node.data.status = Status.Committed;
             node.data.ExecutionPromise.SetResult(true);
-
+            //Console.WriteLine($"\n\n Set the promise of transaction {tid}.\n\n");
             //Remove transactions that are prior to this one
             cleanBackList(node);
 
@@ -237,7 +239,7 @@ namespace Concurrency.Implementation.Nondeterministic
         }
 
 
-        Task ITransactionalState<TState>.Abort(long tid)
+        public Task Abort(long tid)
         {
             //Update status and Set the execution promise, such that the blocking prepare() of the dependant transactions can proceed.
             Node<TransactionStateInfo> node = transactionMap[tid];
