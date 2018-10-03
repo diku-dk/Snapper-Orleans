@@ -54,7 +54,7 @@ namespace Concurrency.Implementation.Deterministic
          * 2. Append the new transaction to transaction table.
          * 3. Add the new transaction to the schedule of the current batch.
          */
-        public Task<TransactionContext> NewTransaction(Dictionary<Guid, int> grainToAccessTimes, Dictionary<Guid, String> grainClassName)
+        public Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation)
         {
             int bid = this.curBatchID;
             int tid = this.curTransactionID++;
@@ -73,16 +73,16 @@ namespace Concurrency.Implementation.Deterministic
             batchTransactionList[bid].Add(tid);
 
             Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[bid];
-            foreach (KeyValuePair<Guid, int> item in grainToAccessTimes)
+            foreach (var item in grainAccessInformation)
             {
                 //if (actorLastBatch.ContainsKey(item.Key))
                 //    lastBid = actorLastBatch[item.Key];
                 //else
                 //    lastBid = -1;
-                batchGrainClassName[bid][item.Key] = grainClassName[item.Key];
+                batchGrainClassName[bid][item.Key] = item.Value.Item1;
                 if (curScheduleMap.ContainsKey(item.Key) == false)
                     curScheduleMap.Add(item.Key, new BatchSchedule(bid));
-                curScheduleMap[item.Key].AddNewTransaction(tid, item.Value);
+                curScheduleMap[item.Key].AddNewTransaction(tid, item.Value.Item2);
             }
 
             //Console.WriteLine($"Coordinator: received Transaction {tid} for Batch {curBatchID}.");

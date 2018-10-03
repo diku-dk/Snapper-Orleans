@@ -49,9 +49,9 @@ namespace Concurrency.Implementation
          * 
          */
 
-        public async Task<FunctionResult> StartTransaction(Dictionary<Guid, int> grainToAccessTimes, Dictionary<Guid, String> grainClassName, String startFunction, FunctionInput inputs)
+        public async Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation, String startFunction, FunctionInput inputs)
         {
-            TransactionContext context = await tc.NewTransaction(grainToAccessTimes, grainClassName);
+            TransactionContext context = await tc.NewTransaction(grainAccessInformation);
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
             Task<FunctionResult> t1 = this.Execute(c1);

@@ -56,24 +56,19 @@ namespace OrleansClient
                 IAccountGrain from = client.GetGrain<IAccountGrain>(grains[1]);
                 IAccountGrain to = client.GetGrain<IAccountGrain>(grains[2]);
 
-                Dictionary<Guid, int> grainToAccessTimes = new Dictionary<Guid, int>();
+                var grainAccessInformation = new Dictionary<Guid, Tuple<String,int>>();
                 Guid fromId = from.GetPrimaryKey();
                 Guid toId = to.GetPrimaryKey();
                 Guid atmId = atm.GetPrimaryKey();
 
-                grainToAccessTimes.Add(fromId, 1);
-                grainToAccessTimes.Add(toId, 1);
-                grainToAccessTimes.Add(atmId, 1);
-
-                Dictionary<Guid, String> grainClassName = new Dictionary<Guid, String>();
-                grainClassName.Add(fromId, "AccountTransfer.Grains.AccountGrain");
-                grainClassName.Add(toId, "AccountTransfer.Grains.AccountGrain");
-                grainClassName.Add(atmId, "AccountTransfer.Grains.ATMGrain");
+                grainAccessInformation.Add(fromId, new Tuple<String,int>("AccountTransfer.Grains.AccountGrain",1));
+                grainAccessInformation.Add(toId, new Tuple<String, int>("AccountTransfer.Grains.AccountGrain", 1));
+                grainAccessInformation.Add(atmId, new Tuple<String, int>("AccountTransfer.Grains.ATMGrain", 1));                
 
                 List<object> input = new List<object> { fromId, toId, 100 };
 
 
-                tasks.Add(atm.StartTransaction(grainToAccessTimes, grainClassName, "Transfer", new Concurrency.Utilities.FunctionInput(input)));
+                tasks.Add(atm.StartTransaction(grainAccessInformation, "Transfer", new Concurrency.Utilities.FunctionInput(input)));
 
             }
             await Task.WhenAll(tasks);

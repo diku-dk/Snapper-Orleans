@@ -28,7 +28,7 @@ namespace Concurrency.Interface
         /// </summary>
         /// 
         [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction(Dictionary<Guid, int> grainToAccessTimes, Dictionary<Guid, String> grainClassName);
+        Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation);
 
         /// <summary>
         /// Return contetx for a non-determinictic transaction
