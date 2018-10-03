@@ -73,25 +73,31 @@ namespace Concurrency.Implementation
             Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
             Object transactionResult = t1.Result.resultObject;
             bool hasException = t1.Result.hasException();
-            
-            // Prepare Phase
-            List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
-            foreach (var grain in grainIDsInTransaction)
+            bool canCommit = hasException;
+            if (hasException == false)
             {
-                prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(context.transactionID));
-            }
-
-            await Task.WhenAll(prepareResult);
-            Console.WriteLine($"\n\n Prepared transaction: {context.transactionID}\n\n");
-
-            bool canCommit = true;
-            foreach(Task<Boolean> vote in prepareResult){
-                if(vote.Result == false)
+                // Prepare Phase
+                List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
+                foreach (var grain in grainIDsInTransaction)
                 {
-                    canCommit = false;
-                    break;
+                    prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(context.transactionID));
+                }
+
+                await Task.WhenAll(prepareResult);
+                Console.WriteLine($"\n\n Prepared transaction: {context.transactionID}\n\n");
+
+                
+                foreach (Task<Boolean> vote in prepareResult)
+                {
+                    if (vote.Result == false)
+                    {
+                        canCommit = false;
+                        break;
+                    }
                 }
             }
+            
+
             
 
             // Commit / Abort Phase
@@ -103,15 +109,17 @@ namespace Concurrency.Implementation
                 {
                     commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
                 }
+                await Task.WhenAll(commitResult);
             }
             else
             {
                 foreach (var grain in grainIDsInTransaction)
                 {
-                    commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
+                    abortResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
                 }
+                await Task.WhenAll(abortResult);
             }
-            await Task.WhenAll(commitResult);
+            
 
             if(canCommit)
                 Console.WriteLine($"\n\n Committed transaction: {context.transactionID}\n\n");

@@ -110,8 +110,9 @@ namespace OrleansClient
             
             List<object> args = new List<Object> { fromId, toId, 100 };
             FunctionInput input = new FunctionInput(args);
-           
-            //Non-deterministic transaction
+
+            //Non - deterministic transaction
+
             try
             {
 
@@ -119,16 +120,22 @@ namespace OrleansClient
                 await t1;
                 Console.WriteLine($"\n\n {t1.Result.resultObject}\n\n");
 
-                Task<FunctionResult> t2 = atm.StartTransaction("Transfer", input);
-                Task<FunctionResult> t3 = atm.StartTransaction("Transfer", input);
+                List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
+                for (int i = 0; i < 10; i++)
+                {
+                    tasks.Add(atm.StartTransaction("Transfer", input));
+                }
+
+                //Task<FunctionResult> t2 = atm.StartTransaction("Transfer", input);
+                //Task<FunctionResult> t3 = atm.StartTransaction("Transfer", input);
                 //Task<FunctionResult> t4 = atm.StartTransaction("Transfer", input);
 
-                await Task.WhenAll(t2, t3);
+                await Task.WhenAll(tasks);
 
                 Task<FunctionResult> t5 = fromAccount.StartTransaction("GetBalance", input);
                 await t5;
                 Console.WriteLine($"\n\n {t5.Result.resultObject}\n\n");
-                
+
             }
             catch (Exception e)
             {
@@ -136,20 +143,20 @@ namespace OrleansClient
             }
 
             //Deterministic Transactions
-            /*
-            try
-            {
-                Task t1 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
-                Task t2 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
-                Task t3 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
 
-                await Task.WhenAll(t1, t2, t3);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"\n\n {e.ToString()}\n\n");
-            }
-            */
+            //try
+            //{
+            //    Task t1 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
+            //    Task t2 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
+            //    Task t3 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
+
+            //    await Task.WhenAll(t1, t2, t3);
+            //}
+            //catch (Exception e)
+            //{
+            //    Console.WriteLine($"\n\n {e.ToString()}\n\n");
+            //}
+
 
         }
 

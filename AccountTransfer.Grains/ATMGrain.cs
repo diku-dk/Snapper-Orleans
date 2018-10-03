@@ -96,7 +96,10 @@ namespace AccountTransfer.Grains
             Task<FunctionResult> t2 = toAccount.Execute(c2);
             await Task.WhenAll(t1, t2);
 
-            return new FunctionResult(t1.Result, t2.Result);
+            FunctionResult ret = new FunctionResult();
+            ret.mergeWithFunctionResult(t1.Result);
+            ret.mergeWithFunctionResult(t2.Result);
+            return ret;
         }
 
         public async Task<FunctionResult> TransferOneToMulti(FunctionInput input)
