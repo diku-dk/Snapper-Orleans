@@ -172,7 +172,6 @@ namespace Concurrency.Implementation.Nondeterministic
                 else
                 {
                     TransactionStateInfo depTxInfo = transactionMap[tid].prev.data;
-                    //Console.WriteLine($"\n\n check the if the promise of previous transaction is set. {depTxInfo.tid}:+{depTxInfo.ExecutionPromise.Task.Status} \n\n");
                     //wait until its dependent transaction is committed or aborted.
                     if (depTxInfo.ExecutionPromise.Task.IsCompleted)
                     {
@@ -183,6 +182,7 @@ namespace Concurrency.Implementation.Nondeterministic
                     }
                     else
                     {
+                        Console.WriteLine($"\n\n Transaction {tid} is waiting promise of previous transaction {depTxInfo.tid} \n\n");
                         await depTxInfo.ExecutionPromise.Task;
                         if (depTxInfo.status.Equals(Status.Committed))
                             return true;

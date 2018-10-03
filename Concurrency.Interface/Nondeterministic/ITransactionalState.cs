@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Orleans.Concurrency;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -14,10 +15,13 @@ namespace Concurrency.Interface.Nondeterministic
 
         Task Write(long tid);
 
+        [AlwaysInterleave]
         Task<bool> Prepare(long tid);
 
+        [AlwaysInterleave]
         Task Commit(long tid);
 
+        [AlwaysInterleave]
         Task Abort(long tid);
 
     }

@@ -272,6 +272,7 @@ namespace Concurrency.Implementation
 
         public Task Abort(long tid)
         {
+            Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Abort message for transaction {tid}. \n\n");
             if (state == null)
                 return Task.CompletedTask;
             return this.state.Abort(tid);
@@ -279,6 +280,7 @@ namespace Concurrency.Implementation
 
         public Task Commit(long tid)
         {
+            Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Commit message for transaction {tid}. \n\n");
             if (state == null)
                 return Task.CompletedTask;
             return this.state.Commit(tid);
@@ -289,6 +291,8 @@ namespace Concurrency.Implementation
          */
         public async Task<bool> Prepare(long tid)
         {
+            Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Prepare message for transaction {tid}. \n\n");
+
             if (state == null)
                 return true;
 

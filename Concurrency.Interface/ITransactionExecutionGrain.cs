@@ -37,8 +37,10 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task<bool> Prepare(long tid);
 
+        [AlwaysInterleave]
         Task Commit(long tid);
 
+        [AlwaysInterleave]
         Task Abort(long tid);
 
         Task ActivateGrain();
