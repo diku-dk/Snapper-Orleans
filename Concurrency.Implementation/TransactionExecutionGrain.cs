@@ -16,7 +16,7 @@ namespace Concurrency.Implementation
         private Dictionary<int, BatchSchedule> batchScheduleMap;
         private Queue<BatchSchedule> batchQueue;
         private Dictionary<int, List<TaskCompletionSource<Boolean>>> promiseMap;
-        private Guid myPrimaryKey;
+        protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
         protected String myUserClassName;
         public TransactionExecutionGrain(ITransactionalState<TState> state){
@@ -66,14 +66,14 @@ namespace Concurrency.Implementation
             TransactionContext context = await tc.NewTransaction();
             functionCallInput.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
-
             Task<FunctionResult> t1 = this.Execute(c1);
             await t1;
+            Console.WriteLine($"\n\n Completed Executing transaction: {context.transactionID}\n\n");
+
             Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
             Object transactionResult = t1.Result.resultObject;
             bool hasException = t1.Result.hasException();
-
-
+            
             // Prepare Phase
             List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
             foreach (var grain in grainIDsInTransaction)
@@ -82,6 +82,8 @@ namespace Concurrency.Implementation
             }
 
             await Task.WhenAll(prepareResult);
+            Console.WriteLine($"\n\n Prepared transaction: {context.transactionID}\n\n");
+
             bool canCommit = true;
             foreach(Task<Boolean> vote in prepareResult){
                 if(vote.Result == false)
@@ -90,6 +92,7 @@ namespace Concurrency.Implementation
                     break;
                 }
             }
+            
 
             // Commit / Abort Phase
             List<Task> commitResult = new List<Task>();
@@ -97,22 +100,28 @@ namespace Concurrency.Implementation
             if (canCommit)
             {
                 foreach (var grain in grainIDsInTransaction)
-                {                    
+                {
                     commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
                 }
             }
             else
             {
                 foreach (var grain in grainIDsInTransaction)
-                {                    
+                {
                     commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
                 }
             }
             await Task.WhenAll(commitResult);
 
+            if(canCommit)
+                Console.WriteLine($"\n\n Committed transaction: {context.transactionID}\n\n");
+            else
+                Console.WriteLine($"\n\n Aborted transaction: {context.transactionID}\n\n");
+
             FunctionResult ret = new FunctionResult(transactionResult);
             ret.setException(hasException);
-            return new FunctionResult(transactionResult);
+            
+            return ret;
         }
 
         /**
@@ -263,17 +272,29 @@ namespace Concurrency.Implementation
 
         public Task Abort(long tid)
         {
+            if (state == null)
+                return Task.CompletedTask;
             return this.state.Abort(tid);
         }
 
         public Task Commit(long tid)
         {
+            if (state == null)
+                return Task.CompletedTask;
             return this.state.Commit(tid);
         }
 
-        public Task<bool> Prepare(long tid)
+        /**
+         * Stateless grain always vote "yes" for 2PC.
+         */
+        public async Task<bool> Prepare(long tid)
         {
-            return this.state.Prepare(tid);
+            if (state == null)
+                return true;
+
+            Task<bool> task = this.state.Prepare(tid);
+            await task;
+            return task.Result;
         }
 
         public Task ActivateGrain()

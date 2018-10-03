@@ -11,6 +11,7 @@ using AccountTransfer.Grains;
 using System.Reflection;
 using Concurrency.Interface;
 using Concurrency.Utilities;
+using System.Threading;
 
 namespace OrleansClient
 {
@@ -88,7 +89,7 @@ namespace OrleansClient
         private static async Task DoClientWork(IClusterClient client)
         {
             await TestTransaction(client);
-
+            return;
         }
 
         private static async Task TestTransaction(IClusterClient client)
@@ -107,8 +108,35 @@ namespace OrleansClient
             grainAccessInformation.Add(toId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
             grainAccessInformation.Add(atmId, new Tuple<string, int>("AccountTransfer.Grains.ATMGrain", 1));
             
-            List<object> args = new List<Object> { fromId, toId, atmId, 100 };
+            List<object> args = new List<Object> { fromId, toId, 100 };
             FunctionInput input = new FunctionInput(args);
+           
+            //Non-deterministic transaction
+            try
+            {
+
+                Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", input);
+                await t1;
+                Console.WriteLine($"\n\n {t1.Result.resultObject}\n\n");
+
+                Task<FunctionResult> t2 = atm.StartTransaction("Transfer", input);
+                Task<FunctionResult> t3 = atm.StartTransaction("Transfer", input);
+                Task<FunctionResult> t4 = atm.StartTransaction("Transfer", input);
+
+                await Task.WhenAll(t2, t3, t4);
+
+                Task<FunctionResult> t5 = fromAccount.StartTransaction("GetBalance", input);
+                await t5;
+                Console.WriteLine($"\n\n {t5.Result.resultObject}\n\n");
+                
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"\n\n {e.ToString()}\n\n");
+            }
+
+            //Deterministic Transactions
+            /*
             try
             {
                 Task t1 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
@@ -121,7 +149,8 @@ namespace OrleansClient
             {
                 Console.WriteLine($"\n\n {e.ToString()}\n\n");
             }
-            Console.WriteLine($"\n\n {fromAccount.GetBalance().Result}  , {toAccount.GetBalance().Result}\n\n");
+            */
+
         }
 
         private static List<int> getGrains(Random rand)

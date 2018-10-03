@@ -8,7 +8,7 @@ namespace AccountTransfer.Interfaces
 {
     public interface IAccountGrain : ITransactionExecutionGrain
     {
-        Task<int> GetBalance();
+        Task<FunctionResult> GetBalance(FunctionInput fin);
         Task<FunctionResult> Withdraw(FunctionInput fin);
         Task<FunctionResult> Deposit(FunctionInput fin);
 
