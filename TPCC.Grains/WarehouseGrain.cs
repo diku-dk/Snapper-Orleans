@@ -17,7 +17,7 @@ namespace TPCC.Grains
         async Task<FunctionResult> IWarehouseGrain.NewOrder(FunctionInput functionInput)
         {
             var myResult = new FunctionResult();
-            var input = (NewOrderInput)functionInput.inputObjects[0];
+            var input = (NewOrderInput)functionInput.inputObject;
             int orderLineCount = 0; bool allLocal = true;
             var stockUpdates = new List<Task<FunctionResult>>();
             foreach (var orderEntry in input.ordersPerWarehousePerItem)
@@ -72,7 +72,7 @@ namespace TPCC.Grains
                         }
                         catch (Exception)
                         {
-                            myResult.setException(true);
+                            myResult.setException();
                         }
                     }
                     stockUpdates.Remove(stockUpdateResultTask);
@@ -84,7 +84,7 @@ namespace TPCC.Grains
             }
             catch (Exception)
             {
-                myResult.setException(true);
+                myResult.setException();
             }
             return myResult;
         }
@@ -94,7 +94,7 @@ namespace TPCC.Grains
             var myResult = new FunctionResult();
             try
             {
-                var input = (StockUpdateInput)functionInput.inputObjects[0];
+                var input = (StockUpdateInput)functionInput.inputObject;
                 var result = new StockUpdateResult();
                 var myState = await state.ReadWrite(functionInput.context.transactionID);
                 foreach (var itemOrdered in input.ordersPerItem)
@@ -156,7 +156,7 @@ namespace TPCC.Grains
                 myResult.setResult(result);
             } catch(Exception)
             {                
-                myResult.setException(true);
+                myResult.setException();
             }
             return myResult;
         }

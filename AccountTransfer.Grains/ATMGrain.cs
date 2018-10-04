@@ -7,15 +7,16 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using Concurrency.Utilities;
 using Concurrency.Implementation;
+using Utilities;
 
 namespace AccountTransfer.Grains
 {
 
     public class ATMGrain : TransactionExecutionGrain<Balance>, IATMGrain
     {
-        
+
         TaskCompletionSource<String> promise = new TaskCompletionSource<String>();
-        private  Dictionary<int, TaskCompletionSource<String>> promiseMap = new Dictionary<int, TaskCompletionSource<String>>();
+        private Dictionary<int, TaskCompletionSource<String>> promiseMap = new Dictionary<int, TaskCompletionSource<String>>();
 
         public ATMGrain()
         {
@@ -52,16 +53,16 @@ namespace AccountTransfer.Grains
                 Console.WriteLine($"\n\n Size before add: {promiseMap.Count}. \n\n");
                 promiseMap.Add(i, new TaskCompletionSource<string>());
                 Console.WriteLine($"\n\n Size after add: {promiseMap.Count}. \n\n");
-                
+
             }
-                
-            if(i == 1)
+
+            if (i == 1)
             {
                 Console.WriteLine($"\n\n Executed call: {i}. \n\n");
                 promiseMap[2].SetResult("hello");
             }
 
-            if(i == 2)
+            if (i == 2)
             {
                 await promiseMap[i].Task;
                 //await Task.Delay(TimeSpan.FromSeconds(10));
@@ -72,23 +73,17 @@ namespace AccountTransfer.Grains
             return i;
         }
 
-        public async Task<FunctionResult> Transfer(FunctionInput input)
+        public async Task<FunctionResult> Transfer(FunctionInput functionInput)
         {
 
-            TransactionContext context = input.context;
-            List<object> inputs = input.inputObjects;
+            TransactionContext context = functionInput.context;
+            var input = (TransferInput)functionInput.inputObject;
 
-            IAccountGrain fromAccount = this.GrainFactory.GetGrain<IAccountGrain>((Guid) inputs[0]);
-            IAccountGrain toAccount = this.GrainFactory.GetGrain<IAccountGrain>((Guid)inputs[1]);
-           
+            IAccountGrain fromAccount = this.GrainFactory.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(input.sourceAccount));
+            IAccountGrain toAccount = this.GrainFactory.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(input.destinationAccount));
 
-            int amountToTransfer = (int)inputs[2];
-            List<object> args = new List<object>();
-            args.Add(amountToTransfer);
-            
-
-            FunctionInput input_1 = new FunctionInput(input, args);
-            FunctionInput input_2 = new FunctionInput(input, args);
+            FunctionInput input_1 = new FunctionInput(functionInput, input.transferAmount);
+            FunctionInput input_2 = new FunctionInput(functionInput, input.transferAmount);
             FunctionCall c1 = new FunctionCall(typeof(AccountGrain), "Withdraw", input_1);
             FunctionCall c2 = new FunctionCall(typeof(AccountGrain), "Deposit", input_2);
 
@@ -102,43 +97,24 @@ namespace AccountTransfer.Grains
             return ret;
         }
 
-        public async Task<FunctionResult> TransferOneToMulti(FunctionInput input)
+        public async Task<FunctionResult> TransferOneToMulti(FunctionInput functionInput)
         {
-            TransactionContext context = input.context;
-            List<object> inputs = input.inputObjects;
-
-            IAccountGrain fromAccount = this.GrainFactory.GetGrain<IAccountGrain>((Guid)(inputs[0]));
-            int sum = (int)inputs[1];
-
-            List<IAccountGrain> destinationAccountList = new List<IAccountGrain>();
-            List<int> transferAmount = new List<int>();
-
-            int numerOfDestination = (inputs.Count - 2) / 2;
-            for(int i= 2; i< 2 + numerOfDestination; i++)
+            TransactionContext context = functionInput.context;
+            var input = (TransferOneToMultiInput)functionInput.inputObject;
+            var resultTasks = new List<Task<FunctionResult>>();
+            resultTasks.Add(this.GrainFactory.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(input.sourceAccount)).Execute(new FunctionCall(typeof(AccountGrain), "Withdraw", new FunctionInput(functionInput, input.transferAmount * input.destinationAccounts.Count))));
+            foreach (var destinationAccount in input.destinationAccounts)
             {
-                destinationAccountList.Add(this.GrainFactory.GetGrain<IAccountGrain>((Guid)(inputs[i])));
-                transferAmount.Add((int)inputs[i + numerOfDestination]);
+                resultTasks.Add(this.GrainFactory.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(destinationAccount)).Execute(new FunctionCall(typeof(AccountGrain), "Deposit", new FunctionInput(functionInput, input.transferAmount))));
             }
+            var results = await Task.WhenAll(resultTasks);
 
-            List<Task<FunctionResult>> taskList = new List<Task<FunctionResult>>();
-            List<object> args = new List<object>{sum};
-            taskList.Add(fromAccount.Execute(new FunctionCall(typeof(AccountGrain), "Withdraw", new FunctionInput(input, args))));
-            for(int i=0; i< destinationAccountList.Count; i++)
+            FunctionResult myResult = new FunctionResult();
+            foreach (var result in results)
             {
-                args = new List<object> { transferAmount[i] };
-                taskList.Add(destinationAccountList[i].Execute(new FunctionCall(typeof(AccountGrain), "Deposit", new FunctionInput(input, args))));
+                result.mergeWithFunctionResult(result);
             }
-
-            await Task.WhenAll(taskList);
-
-            FunctionResult result = new FunctionResult();
-            foreach(Task<FunctionResult> task in taskList)
-            {
-                result.mergeWithFunctionResult(task.Result);
-            }
-
-
-            return result;
+            return myResult;
         }
     }
 }

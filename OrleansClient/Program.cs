@@ -12,6 +12,7 @@ using System.Reflection;
 using Concurrency.Interface;
 using Concurrency.Utilities;
 using System.Threading;
+using Utilities;
 
 namespace OrleansClient
 {
@@ -94,48 +95,80 @@ namespace OrleansClient
 
         private static async Task TestTransaction(IClusterClient client)
         {
-
-            IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(1);
-            IAccountGrain toAccount = client.GetGrain<IAccountGrain>(2);
-            IATMGrain atm = client.GetGrain<IATMGrain>(3);
+            bool sequential = false;
+            int numTransfer = 5;
+            IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(1));
+            IAccountGrain toAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(2));
+            IATMGrain atm = client.GetGrain<IATMGrain>(Helper.convertUInt32ToGuid(3));
 
             Guid fromId = fromAccount.GetPrimaryKey();
             Guid toId = toAccount.GetPrimaryKey();
             Guid atmId = atm.GetPrimaryKey();
 
-            var grainAccessInformation = new Dictionary<Guid, Tuple<String,int>>();
+            var grainAccessInformation = new Dictionary<Guid, Tuple<String, int>>();
             grainAccessInformation.Add(fromId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
             grainAccessInformation.Add(toId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
             grainAccessInformation.Add(atmId, new Tuple<string, int>("AccountTransfer.Grains.ATMGrain", 1));
-            
-            List<object> args = new List<Object> { fromId, toId, 100 };
-            FunctionInput input = new FunctionInput(args);
 
+            var args = new TransferInput(1, 2, 100);
+            FunctionInput input = new FunctionInput(args);
             //Non - deterministic transaction
+            int count = 0;
 
             try
             {
 
                 Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", input);
-                await t1;
-                Console.WriteLine($"\n\n {t1.Result.resultObject}\n\n");
+                await t1;                
+                Task<FunctionResult> t2 = fromAccount.StartTransaction("GetBalance", input);
+                await t2;                
+                if (!t1.Result.hasException() && !t2.Result.hasException())
+                    Console.WriteLine($"Pre transfer balances(src, dest) = ({t1.Result.resultObject},{t2.Result.resultObject})\n");
+                else
+                    Console.WriteLine("These getBalance txns should not abort");
 
+                Console.WriteLine($"Performing {numTransfer} transfers with sequential mode {sequential}");
                 List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
-                for (int i = 0; i < 10; i++)
+                for (int i = 0; i < numTransfer; i++)
                 {
-                    tasks.Add(atm.StartTransaction("Transfer", input));
+                    var task = atm.StartTransaction("Transfer", input);
+                    if (sequential)
+                    {
+                        var result = await task;
+                        if (!result.hasException())
+                        {
+                            count++;
+                        }
+                    }
+                    else
+                        tasks.Add(atm.StartTransaction("Transfer", input));
                 }
 
                 //Task<FunctionResult> t2 = atm.StartTransaction("Transfer", input);
                 //Task<FunctionResult> t3 = atm.StartTransaction("Transfer", input);
                 //Task<FunctionResult> t4 = atm.StartTransaction("Transfer", input);
 
-                await Task.WhenAll(tasks);
+                if (!sequential)
+                {
+                    await Task.WhenAll(tasks);
+                    foreach (var aResultTask in tasks)
+                    {
+                        if (!aResultTask.Result.hasException())
+                        {
+                            count++;
+                        }
+                    }
+                }
 
+                Console.WriteLine($"Finished {count} transfer txns successfully");
                 Task<FunctionResult> t5 = fromAccount.StartTransaction("GetBalance", input);
                 await t5;
-                Console.WriteLine($"\n\n {t5.Result.resultObject}\n\n");
-
+                Task<FunctionResult> t6 = fromAccount.StartTransaction("GetBalance", input);
+                await t6;
+                if (!t1.Result.hasException() && !t2.Result.hasException())
+                    Console.WriteLine($"Post transfer balances ({t5.Result.resultObject},{t6.Result.resultObject})");
+                else
+                    Console.WriteLine("These getBalance txns should not abort");
             }
             catch (Exception e)
             {

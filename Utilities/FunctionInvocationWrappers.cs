@@ -8,25 +8,18 @@ namespace Concurrency.Utilities
     [Serializable]
     public class FunctionInput
     {
-        public List<object> inputObjects;
+        public Object inputObject;
         public TransactionContext context;
 
-        public FunctionInput(FunctionInput input, List<object> data)
-        {
-            context = input.context;
-            inputObjects = data;
-        }
-        public FunctionInput(List<object> data)
-        {
-            inputObjects = data;
-        }
-        
         public FunctionInput(FunctionInput input, Object data)
         {
-            inputObjects = new List<object>();
-            inputObjects.Add(data);
+            context = input.context;
+            inputObject = data;
         }
-
+        public FunctionInput(Object data)
+        {
+            inputObject = data;
+        }
     }
 
     [Serializable]
@@ -41,7 +34,7 @@ namespace Concurrency.Utilities
             this.resultObject = resultObject;
             this.grainsInNestedFunctions = new Dictionary<Guid, String>();
             foreach (var entry in r.grainsInNestedFunctions)
-                this.grainsInNestedFunctions[entry.Key] = entry.Value;
+                this.grainsInNestedFunctions.Add(entry.Key, entry.Value);
             this.exception = r.exception;
         }
 
@@ -51,23 +44,11 @@ namespace Concurrency.Utilities
             this.grainsInNestedFunctions = new Dictionary<Guid, String>();
         }
 
-        public FunctionResult(FunctionResult r1, FunctionResult r2)
-        {
-            exception = r1.exception | r2.exception;
-            grainsInNestedFunctions = new Dictionary<Guid, String>();
-
-            foreach (var entry in r1.grainsInNestedFunctions)
-                this.grainsInNestedFunctions[entry.Key] = entry.Value;
-            foreach (var entry in r2.grainsInNestedFunctions)
-                this.grainsInNestedFunctions[entry.Key] = entry.Value;
-
-        }
-
         public void mergeWithFunctionResult(FunctionResult r)
         {
             this.exception |= r.exception;
             foreach (var entry in r.grainsInNestedFunctions)
-                this.grainsInNestedFunctions[entry.Key] = entry.Value;
+                this.grainsInNestedFunctions.Add(entry.Key,entry.Value);
         }
 
         public void setResult(Object result)
@@ -75,16 +56,15 @@ namespace Concurrency.Utilities
             resultObject = result;
         }
 
-        public void setException(Boolean b)
+        public void setException()
         {
-            exception = b;
+            exception = true;
         }
 
         public Boolean hasException()
         {
-            return exception;
+            return (exception == true);
         }
-
     }
 
     [Serializable]

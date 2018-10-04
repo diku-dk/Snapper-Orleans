@@ -17,7 +17,7 @@ namespace AccountTransfer.Grains
     public class Balance : ICloneable
 
     {
-        public int value = 1000;
+        public float value = 1000;
         public int count = 0;
         public Balance(Balance balance)
         {
@@ -60,18 +60,18 @@ namespace AccountTransfer.Grains
         public async Task<FunctionResult> Deposit(FunctionInput fin)
         {
             TransactionContext context = fin.context;
-            List<object> inputs = fin.inputObjects;
+            Object input = fin.inputObject;
             FunctionResult ret = new FunctionResult();
             try
             {
                 Balance balance = await state.ReadWrite(context.transactionID);
-                int amount = (int)inputs[0];
+                var amount = (float)input;
                 balance.value += amount;
                 //Console.WriteLine($"\n\n After deposit of Tx: {context.transactionID}, {this.myPrimaryKey} balance: {balance.value}.\n\n");
             }
             catch(Exception)
             {
-                ret.setException(true);
+                ret.setException();
             }
             
             return ret;
@@ -80,29 +80,28 @@ namespace AccountTransfer.Grains
         public async Task<FunctionResult> Withdraw(FunctionInput fin)
         {
             TransactionContext context = fin.context;
-            List<object> inputs = fin.inputObjects;
+            Object input = fin.inputObject;
             FunctionResult ret = new FunctionResult();
             try
             {
                 Balance balance = await state.ReadWrite(context.transactionID);
-                int amount = (int)inputs[0];
+                var amount = (float)input;
                 balance.value -= amount;
                 Console.WriteLine($"\n\n After withdraw of Tx: {context.transactionID}, {this.myPrimaryKey} balance: {balance.value}.\n\n");
             }
             catch (Exception e)
             {
                 Console.WriteLine($"\n\n After withdraw of Tx: {context.transactionID}, Exception {e.Message}\n\n");
-                ret.setException(true);
+                ret.setException();
             }
             return ret;
         }
 
         public async Task<FunctionResult> GetBalance(FunctionInput fin)
         {
-            TransactionContext context = fin.context;
-            List<object> inputs = fin.inputObjects;
+            TransactionContext context = fin.context;            
             FunctionResult ret = new FunctionResult();
-            int v = -1;
+            float v = -1;
             try
             {
                 Balance balance = await state.ReadWrite(context.transactionID);
@@ -111,7 +110,7 @@ namespace AccountTransfer.Grains
             catch (Exception e)
             {
                 Console.WriteLine($"\n\n After get balance of Tx: {context.transactionID}, Exception {e.Message}\n\n");
-                ret.setException(true);
+                ret.setException();
             }
             ret.setResult(v);
             return ret;

@@ -71,10 +71,10 @@ namespace Concurrency.Implementation
             Console.WriteLine($"\n\n Completed Executing transaction: {context.transactionID}\n\n");
 
             Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
-            Object transactionResult = t1.Result.resultObject;
+            FunctionResult result = new FunctionResult(t1.Result.resultObject);            
             bool hasException = t1.Result.hasException();
-            bool canCommit = hasException;
-            if (hasException == false)
+            bool canCommit = !hasException;
+            if (!hasException)
             {
                 // Prepare Phase
                 List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
@@ -96,10 +96,6 @@ namespace Concurrency.Implementation
                     }
                 }
             }
-            
-
-            
-
             // Commit / Abort Phase
             List<Task> commitResult = new List<Task>();
             List<Task> abortResult = new List<Task>();
@@ -110,6 +106,7 @@ namespace Concurrency.Implementation
                     commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
                 }
                 await Task.WhenAll(commitResult);
+                Console.WriteLine($"\n\n Committed transaction: {context.transactionID}\n\n");
             }
             else
             {
@@ -118,18 +115,11 @@ namespace Concurrency.Implementation
                     abortResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
                 }
                 await Task.WhenAll(abortResult);
-            }
-            
-
-            if(canCommit)
-                Console.WriteLine($"\n\n Committed transaction: {context.transactionID}\n\n");
-            else
                 Console.WriteLine($"\n\n Aborted transaction: {context.transactionID}\n\n");
-
-            FunctionResult ret = new FunctionResult(transactionResult);
-            ret.setException(hasException);
-            
-            return ret;
+                //Ensure the exception is set if the voting phase decides to abort
+                result.setException();
+            }         
+            return result;
         }
 
         /**
@@ -280,7 +270,7 @@ namespace Concurrency.Implementation
 
         public Task Abort(long tid)
         {
-            Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Abort message for transaction {tid}. \n\n");
+            //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Abort message for transaction {tid}. \n\n");
             if (state == null)
                 return Task.CompletedTask;
             return this.state.Abort(tid);
@@ -288,7 +278,7 @@ namespace Concurrency.Implementation
 
         public Task Commit(long tid)
         {
-            Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Commit message for transaction {tid}. \n\n");
+            //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Commit message for transaction {tid}. \n\n");
             if (state == null)
                 return Task.CompletedTask;
             return this.state.Commit(tid);
@@ -299,7 +289,7 @@ namespace Concurrency.Implementation
          */
         public async Task<bool> Prepare(long tid)
         {
-            Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Prepare message for transaction {tid}. \n\n");
+            //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Prepare message for transaction {tid}. \n\n");
 
             if (state == null)
                 return true;

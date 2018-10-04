@@ -12,15 +12,15 @@ namespace Concurrency.Implementation.Nondeterministic
         // In-memory version of the persistent state.
         private TState committedState;
         private TState activeState;
-        private bool lockTaken;
+        private bool lockTaken;        
         private long lockTakenByTid;        
-        private SemaphoreSlim stateLock;
+        private SemaphoreSlim stateLock;        
 
         public S2PLTransactionalState(TState s)
         {
             committedState = s;
             lockTaken = false;
-            lockTakenByTid = 0;
+            lockTakenByTid = 0;            
             stateLock = new SemaphoreSlim(1);
         }
         private async Task<TState> AccessState(long tid)
@@ -43,8 +43,8 @@ namespace Concurrency.Implementation.Nondeterministic
                     }
                     else
                     {
-                        //abort the transaction
-                        throw new Exception("Abort the transaction");                        
+                        //abort the transaction                        
+                        throw new Exception($"Txn {tid} is aborted to avoid deadlock since its tid is larger than txn {lockTakenByTid} that holds the lock");                        
                     }
                 }
             }
@@ -76,29 +76,36 @@ namespace Concurrency.Implementation.Nondeterministic
             return AccessState(tid);
         }
         public Task<bool> Prepare(long tid)
-        {
-            //Nothing to do here until logging is integrated
-            return Task.FromResult(true);
+        {            
+            return Task.FromResult(lockTaken && lockTakenByTid == tid);            
         }
 
         private void CleanUp()
         {
             lockTaken = false;
-            lockTakenByTid = 0;
-            activeState = default(TState);
+            lockTakenByTid = 0;            
             stateLock.Release();
         }
 
         public Task Commit(long tid)
         {
-            committedState = activeState;            
-            CleanUp();
+            if (lockTaken && lockTakenByTid == tid)
+            {
+                committedState = activeState;
+                CleanUp();
+            } else
+            {
+                //Nothing really to do but should not have received the commit call
+            }
             return Task.CompletedTask;
         }
 
         public Task Abort(long tid)
         {
-            CleanUp();
+            if (lockTaken && lockTakenByTid == tid)
+            {
+                CleanUp();
+            }
             return Task.CompletedTask;
         }
     }
