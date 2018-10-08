@@ -68,7 +68,7 @@ namespace Concurrency.Implementation
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
             Task<FunctionResult> t1 = this.Execute(c1);
             await t1;
-            Console.WriteLine($"\n\n Completed Executing transaction: {context.transactionID}\n\n");
+            Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
 
             Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
             FunctionResult result = new FunctionResult(t1.Result.resultObject);            
@@ -84,7 +84,7 @@ namespace Concurrency.Implementation
                 }
 
                 await Task.WhenAll(prepareResult);
-                Console.WriteLine($"\n\n Prepared transaction: {context.transactionID}\n\n");
+                
 
                 
                 foreach (Task<Boolean> vote in prepareResult)
@@ -96,26 +96,29 @@ namespace Concurrency.Implementation
                     }
                 }
             }
+
             // Commit / Abort Phase
             List<Task> commitResult = new List<Task>();
             List<Task> abortResult = new List<Task>();
             if (canCommit)
             {
+                Console.WriteLine($"Transaction {context.transactionID}: prepared to committed. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
                     commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
                 }
                 await Task.WhenAll(commitResult);
-                Console.WriteLine($"\n\n Committed transaction: {context.transactionID}\n\n");
+                Console.WriteLine($"Transaction {context.transactionID}: committed. \n");
             }
             else
             {
+                Console.WriteLine($"Transaction {context.transactionID}: prepared to aborted. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
                     abortResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
                 }
                 await Task.WhenAll(abortResult);
-                Console.WriteLine($"\n\n Aborted transaction: {context.transactionID}\n\n");
+                Console.WriteLine($"Transaction {context.transactionID}: aborted. \n");
                 //Ensure the exception is set if the voting phase decides to abort
                 result.setException();
             }         
@@ -132,16 +135,9 @@ namespace Concurrency.Implementation
         public Task ReceiveBatchSchedule(BatchSchedule schedule)
         {
             //Console.WriteLine($"\n\n{this.GetType()}: Received schedule for batch {schedule.batchID}.\n\n");
-            if (batchScheduleMap.ContainsKey(schedule.batchID))
-            {
-                //Console.WriteLine($"\n\n The key {schedule.batchID} is existed.\n\n");
-            }
-            else
-            {
-                BatchSchedule curSchedule = new BatchSchedule(schedule);
-                batchScheduleMap.Add(schedule.batchID, curSchedule);
-                batchQueue.Enqueue(curSchedule);
-            }
+            BatchSchedule curSchedule = new BatchSchedule(schedule);
+            batchScheduleMap.Add(schedule.batchID, curSchedule);
+            batchQueue.Enqueue(curSchedule);
 
             //Check if this batch is at the head of the queue
             BatchSchedule headSchedule = batchQueue.Peek();
@@ -152,10 +148,6 @@ namespace Concurrency.Implementation
                 if (promiseMap.ContainsKey(tid) && promiseMap[tid].Count != 0)
                 {
                     promiseMap[tid][0].SetResult(true);
-                }
-                else
-                {
-                    //Console.WriteLine($"\n\n{this.GetType()}: Promise for Tx {tid} doesn't exist, size of promiseMap: {promiseMap.Count}.\n\n");
                 }
             }
 
@@ -217,29 +209,26 @@ namespace Concurrency.Implementation
             }
 
             //Console.WriteLine($"\n\n{this.GetType()}:  Tx {tid} is executed... trying next Tx ... \n\n");
+            
             //Record the execution in batch schedule
             batchScheduleMap[bid].AccessIncrement(tid);
-
-            //set promise for the next call if existed.
-
+            //Find the next transaction to be executed in this batch;
             nextTid = batchScheduleMap[bid].curExecTransaction();
             //Console.WriteLine($"\n\n{this.GetType()}: nextTid is {nextTid} \n\n");
-
             if (nextTid != -1)
             {
                 if (promiseMap.ContainsKey(nextTid))
                 {
                     //Console.WriteLine($"\n\n{this.GetType()}: Set promise result for Tx {nextTid} \n\n");
                     promiseMap[nextTid][0].SetResult(true);
-
                 }
             }
             else
             {
                 batchQueue.Dequeue();
                 batchScheduleMap.Remove(bid);
-
-                //TODO: remove state about the completed batch state?
+                promiseMap.Remove(bid);
+                //TODO: remove state of the completed batch?
                 Task ack = tc.AckBatchCompletion(bid, this.myPrimaryKey);
 
                 //The schedule for this batch {$bid} has been completely executed. Check if any promise for next batch can be set.

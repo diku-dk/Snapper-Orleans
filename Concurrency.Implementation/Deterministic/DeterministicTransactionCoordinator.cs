@@ -158,6 +158,7 @@ namespace Concurrency.Implementation.Deterministic
                     batchTransactionList.Remove(bid);
                     expectedAcksPerBatch.Remove(bid);
                     batchSchedulePerGrain.Remove(bid);
+                    batchGrainClassName.Remove(bid);
 
                     batchStatusMap[bid].SetResult(true);
                     Console.WriteLine($"Coordinator: batch {bid} has been committed with {n} transactions. ");
@@ -180,7 +181,7 @@ namespace Concurrency.Implementation.Deterministic
 
             if (batchStatusMap[context.batchID].Task.IsCompleted == false)
                 await batchStatusMap[context.batchID].Task;
-
+            batchStatusMap.Remove(context.batchID);
             return batchStatusMap[context.batchID].Task.Result;
         }
 

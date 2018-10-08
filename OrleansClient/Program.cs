@@ -89,7 +89,9 @@ namespace OrleansClient
 
         private static async Task DoClientWork(IClusterClient client)
         {
-            await TestTransaction(client);
+            TestThroughput test = new TestThroughput(10, 100);
+            await test.DoTest(client, 100, false);
+            //await TestTransaction(client);
             return;
         }
 
@@ -139,10 +141,6 @@ namespace OrleansClient
                     }
                         
                 }
-
-                //Task<FunctionResult> t2 = atm.StartTransaction("Transfer", input);
-                //Task<FunctionResult> t3 = atm.StartTransaction("Transfer", input);
-                //Task<FunctionResult> t4 = atm.StartTransaction("Transfer", input);
 
                 if (!sequential)
                 {

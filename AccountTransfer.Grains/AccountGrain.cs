@@ -39,7 +39,7 @@ namespace AccountTransfer.Grains
     {
         public AccountGrain()
         {
-            int type = 1;
+            int type = 0;
             this.myUserClassName = "AccountTransfer.Grains.AccountGrain";
             Balance balance = new Balance();
             if (type == 0)
@@ -87,11 +87,11 @@ namespace AccountTransfer.Grains
                 Balance balance = await state.ReadWrite(context.transactionID);
                 var amount = (float)input;
                 balance.value -= amount;
-                Console.WriteLine($"\n\n After withdraw of Tx: {context.transactionID}, {this.myPrimaryKey} balance: {balance.value}.\n\n");
+                //Console.WriteLine($"\n\n After withdraw of Tx: {context.transactionID}, {this.myPrimaryKey} balance: {balance.value}.\n\n");
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                Console.WriteLine($"\n\n After withdraw of Tx: {context.transactionID}, Exception {e.Message}\n\n");
+                //Console.WriteLine($"\n\n After withdraw of Tx: {context.transactionID}, Exception {e.Message}\n\n");
                 ret.setException();
             }
             return ret;
