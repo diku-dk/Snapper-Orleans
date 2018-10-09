@@ -6,12 +6,14 @@ using Concurrency.Interface;
 using Concurrency.Interface.Nondeterministic;
 using Concurrency.Utilities;
 using Orleans;
+using Utilities;
 
 namespace Concurrency.Implementation
 {
     public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain
     {
-        public IDeterministicTransactionCoordinator tc;
+        public INondeterministicTransactionCoordinator ndtc;
+        public IDeterministicTransactionCoordinator dtc;
         private int lastBatchId;
         private Dictionary<int, BatchSchedule> batchScheduleMap;
         private Queue<BatchSchedule> batchQueue;
@@ -29,7 +31,9 @@ namespace Concurrency.Implementation
         }
         public override Task OnActivateAsync()
         {
-            tc = this.GrainFactory.GetGrain<IDeterministicTransactionCoordinator>(0);
+
+            ndtc = this.GrainFactory.GetGrain<INondeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
+            //dtc = this.GrainFactory.GetGrain<IDeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
             batchQueue = new Queue<BatchSchedule>();
             batchScheduleMap = new Dictionary<int, BatchSchedule>();
 
@@ -51,24 +55,25 @@ namespace Concurrency.Implementation
 
         public async Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation, String startFunction, FunctionInput inputs)
         {
-            TransactionContext context = await tc.NewTransaction(grainAccessInformation);
+            TransactionContext context = await dtc.NewTransaction(grainAccessInformation);
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
             Task<FunctionResult> t1 = this.Execute(c1);
-            Task t2 = tc.checkBatchCompletion(context);
+            Task t2 = dtc.checkBatchCompletion(context);
             await Task.WhenAll(t1, t2);
+            //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
             return t1.Result;
 
         }
 
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
-            TransactionContext context = await tc.NewTransaction();
+            TransactionContext context = await ndtc.NewTransaction();
             functionCallInput.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
             Task<FunctionResult> t1 = this.Execute(c1);
             await t1;
-            Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
+            //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
 
             Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
             FunctionResult result = new FunctionResult(t1.Result.resultObject);            
@@ -82,11 +87,8 @@ namespace Concurrency.Implementation
                 {
                     prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(context.transactionID));
                 }
-
                 await Task.WhenAll(prepareResult);
-                
-
-                
+ 
                 foreach (Task<Boolean> vote in prepareResult)
                 {
                     if (vote.Result == false)
@@ -102,7 +104,7 @@ namespace Concurrency.Implementation
             List<Task> abortResult = new List<Task>();
             if (canCommit)
             {
-                Console.WriteLine($"Transaction {context.transactionID}: prepared to committed. \n");
+                Console.WriteLine($"Transaction {context.transactionID}: prepared to commit. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
                     commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
@@ -112,7 +114,7 @@ namespace Concurrency.Implementation
             }
             else
             {
-                Console.WriteLine($"Transaction {context.transactionID}: prepared to aborted. \n");
+                Console.WriteLine($"Transaction {context.transactionID}: prepared to abort. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
                     abortResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
@@ -158,7 +160,7 @@ namespace Concurrency.Implementation
          *Allow reentrance to enforce ordered execution
          */
         public async Task<FunctionResult> Execute(FunctionCall call)
-        {   
+        {
             //Non-deterministic exection
             if (call.funcInput.context.isDeterministic == false)
             {
@@ -170,7 +172,7 @@ namespace Concurrency.Implementation
             int tid = call.funcInput.context.transactionID;
             int bid = call.funcInput.context.batchID;
             int nextTid;
-            //Console.WriteLine($"\n\n{this.GetType()}: Execute batch {bid} transaction {tid}. \n\n");
+            
 
             if (promiseMap.ContainsKey(tid) == false)
             {
@@ -229,7 +231,7 @@ namespace Concurrency.Implementation
                 batchScheduleMap.Remove(bid);
                 promiseMap.Remove(bid);
                 //TODO: remove state of the completed batch?
-                Task ack = tc.AckBatchCompletion(bid, this.myPrimaryKey);
+                Task ack = dtc.AckBatchCompletion(bid, this.myPrimaryKey);
 
                 //The schedule for this batch {$bid} has been completely executed. Check if any promise for next batch can be set.
                 if (batchQueue.Count != 0)

@@ -89,8 +89,11 @@ namespace OrleansClient
 
         private static async Task DoClientWork(IClusterClient client)
         {
-            TestThroughput test = new TestThroughput(10, 100);
-            await test.DoTest(client, 100, false);
+            TestThroughput test = new TestThroughput(10, 200);
+            await test.initializeGrain(client);
+            for(int i=0; i++ <= 10;)
+                await test.DoTest(client, 100, false);
+
             //await TestTransaction(client);
             return;
         }

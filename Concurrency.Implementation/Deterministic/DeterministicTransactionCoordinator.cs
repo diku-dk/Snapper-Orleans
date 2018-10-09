@@ -13,7 +13,7 @@ namespace Concurrency.Implementation.Deterministic
         //Batch
         private IDisposable disposable;
         private TimeSpan waitingTime = TimeSpan.FromSeconds(1);
-        private TimeSpan batchInterval = TimeSpan.FromMilliseconds(1000);
+        private TimeSpan batchInterval = TimeSpan.FromMilliseconds(10);
 
         private Dictionary<int, TransactionContext> transactionContextMap;
         private Dictionary<int, Dictionary<Guid, BatchSchedule>> batchSchedulePerGrain;
@@ -182,7 +182,7 @@ namespace Concurrency.Implementation.Deterministic
             if (batchStatusMap[context.batchID].Task.IsCompleted == false)
                 await batchStatusMap[context.batchID].Task;
             batchStatusMap.Remove(context.batchID);
-            return batchStatusMap[context.batchID].Task.Result;
+            return true;
         }
 
         public Task resetTimer(int period)

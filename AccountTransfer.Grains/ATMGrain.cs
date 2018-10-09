@@ -86,11 +86,12 @@ namespace AccountTransfer.Grains
             FunctionInput input_2 = new FunctionInput(functionInput, input.transferAmount);
             FunctionCall c1 = new FunctionCall(typeof(AccountGrain), "Withdraw", input_1);
             FunctionCall c2 = new FunctionCall(typeof(AccountGrain), "Deposit", input_2);
+            //Console.WriteLine($"\n\n ATm transfer from : {input.sourceAccount} to {input.destinationAccount}. \n\n");
 
             Task<FunctionResult> t1 = fromAccount.Execute(c1);
             Task<FunctionResult> t2 = toAccount.Execute(c2);
             await Task.WhenAll(t1, t2);
-
+            //await t1;
             FunctionResult ret = new FunctionResult();
             ret.mergeWithFunctionResult(t1.Result);
             ret.mergeWithFunctionResult(t2.Result);

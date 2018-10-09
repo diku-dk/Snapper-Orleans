@@ -25,18 +25,21 @@ namespace OrleansClient
         //  N = number of transactions
         uint n1, n2;
         int N;
-        
-        public TestThroughput(uint n1, uint n2)
+
+
+        public TestThroughput( uint n1, uint n2)
         {
             this.n1 = n1;
             this.n2 = n2;
+            
+
         }
 
         public async Task DoTest(IClusterClient client, int nTx, bool isDeterministic)
         {
 
             //initialize n1 ATM and n2 accounts
-            await initializeGrain(client);
+            //await initializeGrain();
             this.N = nTx;
 
             List<List<uint>> grainsPerTx = new List<List<uint>>();
@@ -46,7 +49,7 @@ namespace OrleansClient
             for (uint i = 0; i < N; i++)
             {
                 grainsPerTx.Add(getGrains(n1, n2, rand));
-                Console.WriteLine($"Grains in transaction: {grainsPerTx[grainsPerTx.Count-1][0]}, {grainsPerTx[grainsPerTx.Count - 1][1]}, {grainsPerTx[grainsPerTx.Count - 1][2]}\n");
+                //Console.WriteLine($"Grains in transaction: {grainsPerTx[grainsPerTx.Count-1][0]}, {grainsPerTx[grainsPerTx.Count - 1][1]}, {grainsPerTx[grainsPerTx.Count - 1][2]}\n");
             }
 
             Console.WriteLine($"\n\n Start running Transactions ....\n\n");
@@ -58,28 +61,32 @@ namespace OrleansClient
                 for (int i = 0; i < N; i++)
                 {
                     List<uint> grains = grainsPerTx[i];
-                    IATMGrain atm = client.GetGrain<IATMGrain>((Helper.convertUInt32ToGuid(grains[0])));
-                    IAccountGrain from = client.GetGrain<IAccountGrain>((Helper.convertUInt32ToGuid(grains[1])));
-                    IAccountGrain to = client.GetGrain<IAccountGrain>((Helper.convertUInt32ToGuid(grains[2])));
+                    
 
                     if (isDeterministic)
                     {
                         var grainAccessInformation = new Dictionary<Guid, Tuple<String, int>>();
-                        Guid fromId = from.GetPrimaryKey();
-                        Guid toId = to.GetPrimaryKey();
-                        Guid atmId = atm.GetPrimaryKey();
+                        Guid atmId = Helper.convertUInt32ToGuid(grains[0]);
+                        Guid fromId = Helper.convertUInt32ToGuid(grains[1]);
+                        Guid toId = Helper.convertUInt32ToGuid(grains[2]);
+
+           
                         grainAccessInformation.Add(fromId, new Tuple<String, int>("AccountTransfer.Grains.AccountGrain", 1));
                         grainAccessInformation.Add(toId, new Tuple<String, int>("AccountTransfer.Grains.AccountGrain", 1));
                         grainAccessInformation.Add(atmId, new Tuple<String, int>("AccountTransfer.Grains.ATMGrain", 1));
 
-                        List<object> input = new List<object> { fromId, toId, 100 };
-                        tasks.Add(atm.StartTransaction(grainAccessInformation, "Transfer", new FunctionInput(input)));
+                        IATMGrain atm = client.GetGrain<IATMGrain>(atmId);
+                        var args = new TransferInput(grains[1], grains[2], 10);
+                        FunctionInput input = new FunctionInput(args);
+                        tasks.Add(atm.StartTransaction(grainAccessInformation, "Transfer", input));
                     }
                     else
                     {
+                        IATMGrain atm = client.GetGrain<IATMGrain>((Helper.convertUInt32ToGuid(grains[0])));
                         var args = new TransferInput(grains[1], grains[2], 10);
                         FunctionInput input = new FunctionInput(args);
-                        tasks.Add(atm.StartTransaction("Transfer", input));
+                        Task<FunctionResult> task = atm.StartTransaction("Transfer", input);
+                        tasks.Add(task);
                     }
                 }
                 await Task.WhenAll(tasks);

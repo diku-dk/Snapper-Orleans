@@ -40,10 +40,11 @@ namespace Concurrency.Implementation.Nondeterministic
 
             transactionList = new DLinkedList<TransactionStateInfo>();
             transactionMap = new Dictionary<long, Node<TransactionStateInfo>>();
+
         }
         public Task<TState> ReadWrite(long tid)
         {
-            long rts, wts;
+            long rts, wts, depTid;
             TState state;
 
             if (transactionList.size == 0)
@@ -51,13 +52,33 @@ namespace Concurrency.Implementation.Nondeterministic
                 state = commitedState;
                 rts = readTs;
                 wts = writeTs;
+                depTid = commitTransactionId;
             }
             else
             {
-                TransactionStateInfo dependState = transactionList.tail.data;
-                state = dependState.state;
-                rts = dependState.rts;
-                wts = dependState.wts;
+                Node<TransactionStateInfo> lastNode = transactionList.tail;
+                while(lastNode != null)
+                {
+                    if (lastNode.data.status.Equals(Status.Aborted))
+                        lastNode = lastNode.prev;
+                    else
+                        break;
+                }
+                if(lastNode != null)
+                {
+                    TransactionStateInfo dependState = lastNode.data;
+                    state = dependState.state;
+                    rts = dependState.rts;
+                    wts = dependState.wts;
+                    depTid = dependState.tid;
+                }
+                else
+                {
+                    state = commitedState;
+                    rts = readTs;
+                    wts = writeTs;
+                    depTid = commitTransactionId;
+                }
             }
 
             //check read timestamp
@@ -79,7 +100,7 @@ namespace Concurrency.Implementation.Nondeterministic
 
             //Clone the state of the depending transaction
             TState copy = (TState)state.Clone();
-            TransactionStateInfo info = new TransactionStateInfo(tid, rts, wts, Status.Executing, copy);
+            TransactionStateInfo info = new TransactionStateInfo(tid, depTid, rts, tid, Status.Executing, copy);
 
             //Update the transaction table and dependency list
             Node<TransactionStateInfo> node = transactionList.Append(info);
@@ -92,33 +113,41 @@ namespace Concurrency.Implementation.Nondeterministic
         public async Task<bool> Prepare(long tid)
         {
             //Console.WriteLine($"\n\n Received prepare message of transaction {tid} \n\n");
-            Console.WriteLine($"Transaction {tid}: Grain: Prepare: {transactionMap.ContainsKey(tid)} \n");
+            //Console.WriteLine($"Transaction {tid}: Grain: Prepare: {transactionMap.ContainsKey(tid)} \n");
             if (transactionMap[tid].data.status.Equals(Status.Aborted))
                 return false;
             else
             {
-                //Vote "yes" if it depends on nothing.
-                if (transactionList.head == transactionMap[tid])
+                //Vote "yes" if it depends commited state.
+                long depTid = transactionMap[tid].data.depTid;
+                if (depTid <= this.commitTransactionId)
                     return true;
                 else
                 {
-                    TransactionStateInfo depTxInfo = transactionMap[tid].prev.data;
+                    Console.WriteLine($" State Prepare: {tid} depends on {depTid}: {transactionMap.ContainsKey(depTid)}\n");
+                    TransactionStateInfo depTxInfo = transactionMap[depTid].data;
                     //wait until its dependent transaction is committed or aborted.
                     if (depTxInfo.ExecutionPromise.Task.IsCompleted)
                     {
                         if (depTxInfo.status.Equals(Status.Committed))
                             return true;
                         else if (depTxInfo.status.Equals(Status.Aborted))
+                        {
+                            Console.WriteLine($"State: Transaction {tid}: aborts as it depends on {depTxInfo.tid}. \n");
                             return false;
+                        }
                     }
                     else
                     {
-                        Console.WriteLine($"Transaction {tid}: is waiting promise of previous transaction {depTxInfo.tid}. \n");
+                        //Console.WriteLine($"Transaction {tid}: is waiting promise of previous transaction {depTxInfo.tid}. \n");
                         await depTxInfo.ExecutionPromise.Task;
                         if (depTxInfo.status.Equals(Status.Committed))
                             return true;
                         else if (depTxInfo.status.Equals(Status.Aborted))
+                        {
+                            Console.WriteLine($"State: Transaction {tid}: aborts as it depends on {depTxInfo.tid}. \n");
                             return false;
+                        }
                     }
                 }
             }
@@ -145,7 +174,7 @@ namespace Concurrency.Implementation.Nondeterministic
         public Task Commit(long tid)
         {
             //Update status and Set the execution promise, such that the blocking prepare() of the dependant transactions can proceed.
-            Console.WriteLine($"Transaction {tid}: Grain: Commit: {transactionMap.ContainsKey(tid)} \n");
+            //Console.WriteLine($"Transaction {tid}: Grain: Commit: {transactionMap.ContainsKey(tid)} \n");
             Node<TransactionStateInfo> node = transactionMap[tid];
             node.data.status = Status.Committed;
             node.data.ExecutionPromise.SetResult(true);
@@ -156,12 +185,14 @@ namespace Concurrency.Implementation.Nondeterministic
 
             this.commitTransactionId = tid;
             this.commitedState = node.data.state;
+            this.readTs = node.data.rts;
+            this.writeTs = node.data.wts;
             return Task.CompletedTask;
         }
 
         public Task Abort(long tid)
         {
-            Console.WriteLine($"Transaction {tid}: Grain: Abort: {transactionMap.ContainsKey(tid)} \n");
+            //Console.WriteLine($"Transaction {tid}: Grain: Abort: {transactionMap.ContainsKey(tid)} \n");
             //Update status and Set the execution promise, such that the blocking prepare() of the dependant transactions can proceed.
             Node<TransactionStateInfo> node = transactionMap[tid];
             node.data.status = Status.Aborted;
@@ -175,68 +206,12 @@ namespace Concurrency.Implementation.Nondeterministic
 
         public Task<TState> Read(long tid)
         {
-            long rts, wts;
-            TState state;
-
-            if (transactionList.size == 0)
-            {
-                state = commitedState;
-                rts = readTs;
-                wts = writeTs;
-            }
-            else
-            {
-                TransactionStateInfo dependState = transactionList.tail.data;
-                state = dependState.state;
-                rts = dependState.rts;
-                wts = dependState.wts;
-            }
-
-            //check read timestamp
-            if (tid < wts)
-            {
-                transactionMap.Add(tid, new Node<TransactionStateInfo>(new TransactionStateInfo(tid, Status.Aborted)));
-                throw new Exception($"Read: Transaction {tid} is aborted as its timestamp is smaller than write timestamp {wts}.");
-            }
-
-            //update read timestamp and clone the state
-            rts = Math.Max(rts, tid);
-            TState copy = (TState)state.Clone();
-            TransactionStateInfo info = new TransactionStateInfo(tid, rts, wts, Status.Executing, copy);
-
-            //Update the transaction table and dependency list
-            Node<TransactionStateInfo> node = transactionList.Append(info);
-            transactionMap.Add(tid, node);
 
             //Should we return a copy of copy, as we don't wanna user to update this state
-            return Task.FromResult<TState>(copy);
+            return Task.FromResult<TState>(this.commitedState);
         }
         public Task Write(long tid)
         {
-            //We assume there is no blind write, so once a transaction reads successfully, there is an entry for it in the transactionMap
-            TransactionStateInfo info;
-            info = transactionMap[tid].data;
-
-            //If the dependancy is aborted, this transaction should also be aborted.
-            if (info.status.Equals(Status.Aborted))
-                throw new Exception($"Write: Transaction {tid} is aborted as the transaction it depends on is aborted.");
-
-            //Check write timestamp
-            if (tid < info.rts)
-            {
-
-                transactionMap.Add(tid, new Node<TransactionStateInfo>(new TransactionStateInfo(tid, Status.Aborted)));
-                throw new Exception($"Write: Transaction {tid} is aborted as its timestamp is smaller than read timestamp {info.rts}.");
-            }
-
-            //Thomas Write Rule?
-            if (tid < info.wts)
-            {
-                return Task.CompletedTask;
-            }
-
-            //Update the write timestamp and write back the state
-            info.wts = tid;
             return Task.CompletedTask;
         }
 
@@ -258,11 +233,14 @@ namespace Concurrency.Implementation.Nondeterministic
             public long rts { get; set; }
             public long wts { get; set; }
 
+            public long depTid { get; set; }
+
             public TaskCompletionSource<Boolean> ExecutionPromise { get; set; }
 
-            public TransactionStateInfo(long tid, long rts, long wts, Status status, TState copy)
+            public TransactionStateInfo(long tid, long depTid, long rts, long wts, Status status, TState copy)
             {
                 this.tid = tid;
+                this.depTid = depTid;
                 this.status = status;
                 this.state = copy;
                 this.rts = rts;

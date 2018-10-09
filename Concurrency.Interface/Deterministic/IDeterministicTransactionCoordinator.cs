@@ -7,7 +7,7 @@ using Orleans.Concurrency;
 
 namespace Concurrency.Interface
 {
-    public interface IDeterministicTransactionCoordinator : IGrainWithIntegerKey
+    public interface IDeterministicTransactionCoordinator : IGrainWithGuidKey
     {
         /// <summary>
         /// Start the TC
