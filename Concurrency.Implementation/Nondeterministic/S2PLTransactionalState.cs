@@ -23,6 +23,7 @@ namespace Concurrency.Implementation.Nondeterministic
             lockTakenByTid = 0;            
             stateLock = new SemaphoreSlim(1);
         }
+
         private async Task<TState> AccessState(long tid)
         {
             if (lockTaken)
@@ -50,7 +51,7 @@ namespace Concurrency.Implementation.Nondeterministic
             }
             else
             {
-                stateLock.Wait(); // This should never block but required to make subsequent waits block
+                await stateLock.WaitAsync(); // This should never block but required to make subsequent waits block
                 lockTaken = true;
                 lockTakenByTid = tid;
                 activeState = (TState)committedState.Clone();
@@ -75,6 +76,7 @@ namespace Concurrency.Implementation.Nondeterministic
             // Use a single lock right now
             return AccessState(tid);
         }
+        
         public Task<bool> Prepare(long tid)
         {            
             return Task.FromResult(lockTaken && lockTakenByTid == tid);            
