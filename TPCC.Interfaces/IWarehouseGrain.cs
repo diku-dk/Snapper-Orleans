@@ -91,17 +91,28 @@ namespace TPCC.Interfaces
         }
     }
 
+    public class FindCustomerIdInput
+    {
+        public UInt32 districtId;
+        public String customerLastName;
+
+        public FindCustomerIdInput(uint districtId, String customerLastName)
+        {
+            this.districtId = districtId;
+            this.customerLastName = customerLastName;
+        }
+    }
+
     public interface IWarehouseGrain : ITransactionExecutionGrain, IGrainWithIntegerKey
     {
         Task<FunctionResult> NewOrder(FunctionInput functionInput);
 
         Task<FunctionResult> StockUpdate(FunctionInput functionInput);
 
-        /*Task<FunctionResult> Payment(FunctionInput functionInput);
+        Task<FunctionResult> Payment(FunctionInput functionInput);
 
         Task<FunctionResult> CustomerPayment(FunctionInput functionInput);
 
-        Task<FunctionResult> FindCustomerId(FunctionInput functionInput);        
-        */
+        Task<FunctionResult> FindCustomerId(FunctionInput functionInput);
     }
 }

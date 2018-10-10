@@ -10,10 +10,8 @@ using Concurrency.Utilities;
 
 namespace TPCC.Grains
 {
-    
     public class WarehouseGrain : TransactionExecutionGrain<WarehouseData>, IWarehouseGrain
-    {        
-
+    {
         async Task<FunctionResult> IWarehouseGrain.NewOrder(FunctionInput functionInput)
         {
             var myResult = new FunctionResult();
@@ -27,7 +25,8 @@ namespace TPCC.Grains
                 {
                     allLocal = false;
                 }
-                stockUpdates.Add(Task.Run(() => this.GrainFactory.GetGrain<IWarehouseGrain>(input.warehouseId).StockUpdate(new FunctionInput(functionInput, new StockUpdateInput(input.warehouseId, input.districtId, orderEntry.Value)))));
+                FunctionCall fc = new FunctionCall(typeof(WarehouseGrain), "StockUpdate", new FunctionInput(functionInput, new StockUpdateInput(input.warehouseId, input.districtId, orderEntry.Value)));
+                stockUpdates.Add(Task.Run(() => this.GrainFactory.GetGrain<IWarehouseGrain>(input.warehouseId).Execute(fc)));
             }
             try
             {
@@ -154,54 +153,107 @@ namespace TPCC.Grains
                     result.stockItemUpdates.Add(new StockItemUpdate(input.warehouseId, itemOrdered.Key, itemOrdered.Value, item.price, districtInfo));
                 }
                 myResult.setResult(result);
-            } catch(Exception)
-            {                
+            }
+            catch (Exception)
+            {
                 myResult.setException();
             }
             return myResult;
         }
-        
-        /*async Task<float> IWarehouseGrain.Payment(PaymentInfo paymentInformation)
+
+        async Task<FunctionResult> IWarehouseGrain.Payment(FunctionInput functionInput)
         {
+            var paymentInformation = (PaymentInfo)functionInput.inputObject;
+            var myResult = new FunctionResult();
             float total = 0;
             //We need to lookup customer id from last name 
             //TODO: This await can be pushed to the line before the history record addition
-            await this.GrainFactory.GetGrain<IWarehouseGrain>(paymentInformation.customerWarehouseId).CustomerPayment(paymentInformation);
-            //Update warehouse payment
-            state.warehouseRecord.ytd += paymentInformation.paymentAmount;
-            total += state.warehouseRecord.ytd;
-            //Update district payment
-            state.districtRecords[paymentInformation.districtId].ytd += paymentInformation.paymentAmount;
-            total += state.districtRecords[paymentInformation.districtId].ytd;
-            state.historyRecords.Add(new History(paymentInformation.customerId, paymentInformation.customerDistrictId, paymentInformation.customerWarehouseId, paymentInformation.districtId, 0, paymentInformation.paymentAmount, String.Format("{0,10}     {0,10}", state.warehouseRecord.name, state.districtRecords[paymentInformation.districtId].name)));
-            return total;
+            FunctionCall fc = new FunctionCall(typeof(WarehouseGrain), "CustomerPayment", new FunctionInput(functionInput, paymentInformation));
+            var fr = await this.GrainFactory.GetGrain<IWarehouseGrain>(paymentInformation.customerWarehouseId).Execute(fc);
+            myResult.mergeWithFunctionResult(fr);
+            if (!fr.hasException())
+            {
+                paymentInformation.customerId = (UInt32)fr.resultObject;
+            }
+            else
+            {
+                return myResult;
+            }
+            try
+            {
+                var myState = await state.ReadWrite(functionInput.context.transactionID);
+                //Update warehouse payment
+                myState.warehouseRecord.ytd += paymentInformation.paymentAmount;
+                total += myState.warehouseRecord.ytd;
+                //Update district payment
+                myState.districtRecords[paymentInformation.districtId].ytd += paymentInformation.paymentAmount;
+                total += myState.districtRecords[paymentInformation.districtId].ytd;
+                myState.historyRecords.Add(new History(paymentInformation.customerId, paymentInformation.customerDistrictId, paymentInformation.customerWarehouseId, paymentInformation.districtId, 0, paymentInformation.paymentAmount, String.Format("{0,10}     {0,10}", myState.warehouseRecord.name, myState.districtRecords[paymentInformation.districtId].name)));
+                myResult.setResult(total);
+            }
+            catch (Exception)
+            {
+                myResult.setException();
+            }
+            return myResult;
         }
 
-        async Task<uint> IWarehouseGrain.CustomerPayment(PaymentInfo paymentInformation)
+        async Task<FunctionResult> IWarehouseGrain.CustomerPayment(FunctionInput functionInput)
         {
+            var paymentInformation = (PaymentInfo)functionInput.inputObject;
+            var myResult = new FunctionResult();
             if (!String.IsNullOrEmpty(paymentInformation.customerLastName))
             {
-                paymentInformation.customerId = await this.GrainFactory.GetGrain<IWarehouseGrain>(paymentInformation.customerWarehouseId).FindCustomerId(paymentInformation.customerDistrictId, paymentInformation.customerLastName);
+                FunctionCall fc = new FunctionCall(typeof(WarehouseGrain), "FindCustomerId", new FunctionInput(functionInput, new FindCustomerIdInput(paymentInformation.customerDistrictId, paymentInformation.customerLastName)));
+                var fr = await this.GrainFactory.GetGrain<IWarehouseGrain>(paymentInformation.customerWarehouseId).Execute(fc);
+                myResult.mergeWithFunctionResult(fr);
+                if (!fr.hasException())
+                {
+                    paymentInformation.customerId = (UInt32)fr.resultObject;
+                }
+                else
+                {
+                    return myResult;
+                }
             }
-            var customer = state.customerRecords[new Tuple<UInt32, UInt32>(paymentInformation.districtId, paymentInformation.customerId)];
-            customer.balance -= paymentInformation.paymentAmount;
-            customer.ytdPayment += paymentInformation.paymentAmount;
-            customer.paymentCount++;
-            if (customer.credit.Substring(0, 2).ToUpper().Equals("BC"))
+            try
             {
-                //Append new credit line
-                String data = "" + paymentInformation.customerId + paymentInformation.customerDistrictId + paymentInformation.customerWarehouseId + paymentInformation.districtId + paymentInformation.warehouseId + paymentInformation.paymentAmount + customer.data;
-                customer.data = data;
+                var myState = await state.ReadWrite(functionInput.context.transactionID);
+                var customer = myState.customerRecords[new Tuple<UInt32, UInt32>(paymentInformation.districtId, paymentInformation.customerId)];
+                customer.balance -= paymentInformation.paymentAmount;
+                customer.ytdPayment += paymentInformation.paymentAmount;
+                customer.paymentCount++;
+                if (customer.credit.Substring(0, 2).ToUpper().Equals("BC"))
+                {
+                    //Append new credit line
+                    String data = "" + paymentInformation.customerId + paymentInformation.customerDistrictId + paymentInformation.customerWarehouseId + paymentInformation.districtId + paymentInformation.warehouseId + paymentInformation.paymentAmount + customer.data;
+                    customer.data = data;
+                }
+                myResult.setResult(paymentInformation.customerId);
             }
-            return paymentInformation.customerId;
+            catch (Exception)
+            {
+                myResult.setException();
+            }
+            return myResult;
         }
 
-        Task<uint> IWarehouseGrain.FindCustomerId(uint districtId, string customerLastName)
+        async Task<FunctionResult> IWarehouseGrain.FindCustomerId(FunctionInput functionInput)
         {
-            //Not strictly the same as the original since it requires the customer names to be sorted but will do for now
-            var customersWithSameLastName = state.customerNameRecords[new Tuple<UInt32, String>(districtId, customerLastName)];
-            return Task.FromResult(customersWithSameLastName[customersWithSameLastName.Count / 2].Item2);
+            var input = (FindCustomerIdInput)functionInput.inputObject;
+            var myResult = new FunctionResult();
+            try
+            {
+                var myState = await state.ReadWrite(functionInput.context.transactionID);
+                //Not strictly the same as the original since it requires the customer names to be sorted but will do for now
+                var customersWithSameLastName = myState.customerNameRecords[new Tuple<UInt32, String>(input.districtId, input.customerLastName)];
+                myResult.setResult(customersWithSameLastName[customersWithSameLastName.Count / 2].Item2);
+            }
+            catch (Exception)
+            {
+                myResult.setException();
+            }
+            return myResult;
         }
-        */
     }
 }
