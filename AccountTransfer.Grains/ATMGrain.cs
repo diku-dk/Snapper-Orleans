@@ -117,5 +117,10 @@ namespace AccountTransfer.Grains
             }
             return myResult;
         }
+
+        public Task<int> ActivateGrain()
+        {
+            return Task.FromResult(1);
+        }
     }
 }

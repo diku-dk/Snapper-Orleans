@@ -68,8 +68,10 @@ namespace Concurrency.Implementation
 
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
+
             TransactionContext context = await ndtc.NewTransaction();
             functionCallInput.context = context;
+            //Console.WriteLine($"Transaction {context.transactionID}: is started.\n");
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
             Task<FunctionResult> t1 = this.Execute(c1);
             await t1;
@@ -104,23 +106,23 @@ namespace Concurrency.Implementation
             List<Task> abortResult = new List<Task>();
             if (canCommit)
             {
-                Console.WriteLine($"Transaction {context.transactionID}: prepared to commit. \n");
+                //Console.WriteLine($"Transaction {context.transactionID}: prepared to commit. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
                     commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
                 }
                 await Task.WhenAll(commitResult);
-                Console.WriteLine($"Transaction {context.transactionID}: committed. \n");
+                //Console.WriteLine($"Transaction {context.transactionID}: committed. \n");
             }
             else
             {
-                Console.WriteLine($"Transaction {context.transactionID}: prepared to abort. \n");
+                //Console.WriteLine($"Transaction {context.transactionID}: prepared to abort. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
                     abortResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
                 }
                 await Task.WhenAll(abortResult);
-                Console.WriteLine($"Transaction {context.transactionID}: aborted. \n");
+                //Console.WriteLine($"Transaction {context.transactionID}: aborted. \n");
                 //Ensure the exception is set if the voting phase decides to abort
                 result.setException();
             }         
@@ -290,10 +292,7 @@ namespace Concurrency.Implementation
             return task.Result;
         }
 
-        public Task ActivateGrain()
-        {
-            return Task.CompletedTask;
-        }
+
     }
 
 

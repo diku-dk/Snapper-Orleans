@@ -10,8 +10,8 @@ namespace AccountTransfer.Interfaces
     {
         Task<FunctionResult> GetBalance(FunctionInput fin);
         Task<FunctionResult> Withdraw(FunctionInput fin);
-        Task<FunctionResult> Deposit(FunctionInput fin);
+        Task<FunctionResult> Deposit(FunctionInput fin); 
 
-
+        Task<int> ActivateGrain();
     }
 }

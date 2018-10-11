@@ -13,7 +13,7 @@ namespace Concurrency.Implementation.Deterministic
         //Batch
         private IDisposable disposable;
         private TimeSpan waitingTime = TimeSpan.FromSeconds(1);
-        private TimeSpan batchInterval = TimeSpan.FromMilliseconds(10);
+        private TimeSpan batchInterval = TimeSpan.FromMilliseconds(1000);
 
         private Dictionary<int, TransactionContext> transactionContextMap;
         private Dictionary<int, Dictionary<Guid, BatchSchedule>> batchSchedulePerGrain;

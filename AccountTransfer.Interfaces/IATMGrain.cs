@@ -50,5 +50,8 @@ namespace AccountTransfer.Interfaces
         Task<FunctionResult> Transfer(FunctionInput input);
 
         Task<FunctionResult> TransferOneToMulti(FunctionInput input);
+
+        Task<int> ActivateGrain();
     }
+
 }

@@ -84,6 +84,7 @@ namespace OrleansClient
                     {
                         IATMGrain atm = client.GetGrain<IATMGrain>((Helper.convertUInt32ToGuid(grains[0])));
                         var args = new TransferInput(grains[1], grains[2], 10);
+                        //var args = new TransferInput(13, 14, 10);
                         FunctionInput input = new FunctionInput(args);
                         Task<FunctionResult> task = atm.StartTransaction("Transfer", input);
                         tasks.Add(task);
@@ -100,7 +101,17 @@ namespace OrleansClient
                     }
                 }
                 Console.WriteLine($"\n\n {count} transactions committed, Execution Time: {ts2 - ts1}.\n\n");
-            }catch(Exception e)
+
+                //float sum = 0;
+                //for (uint i = n1 + 1; i <= n1 + n2; i++)
+                //{
+                //    IAccountGrain account = client.GetGrain<IAccountGrain>((Helper.convertUInt32ToGuid(i)));
+                //    Task<FunctionResult> t = account.StartTransaction("GetBalance", new FunctionInput());
+                //    sum += (float)t.Result.resultObject;
+                //}
+                //Console.WriteLine($"After Execution, sum of valances {sum}, expecting {n2 * 1000}\n");
+            }
+            catch(Exception e)
             {
                 Console.WriteLine($"\n\n {e.ToString()}\n\n");
             }
@@ -135,28 +146,29 @@ namespace OrleansClient
         }
 
 
-        public async Task initializeGrain(IClusterClient client)
+        public Task initializeGrain(IClusterClient client)
         {
             DateTime ts1 = DateTime.Now;
 
+            int count = 0;
             //ATM id ranges from 1 to 10;
             for (uint i = 1; i <= n1; i++)
             {
                 IATMGrain atm = client.GetGrain<IATMGrain>(Helper.convertUInt32ToGuid(i));
-                await atm.ActivateGrain();
+                count += atm.ActivateGrain().Result;
             }
 
             //Account id ranges from 11 to 110
             for (uint i = n1+1; i <= n1+n2; i++)
             {
                 IAccountGrain account = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(i));
-                await account.ActivateGrain();
+                count += account.ActivateGrain().Result;
             }
 
             DateTime ts2 = DateTime.Now;
-            Console.WriteLine($"\n\n Initialization time: {ts2 - ts1}.\n\n");
+            Console.WriteLine($"\n\n Initialized {count} actors, cost of time: {ts2 - ts1}.\n\n");
 
-            return;
+            return Task.CompletedTask;
         }   
     
     }

@@ -89,9 +89,9 @@ namespace OrleansClient
 
         private static async Task DoClientWork(IClusterClient client)
         {
-            TestThroughput test = new TestThroughput(10, 200);
+            TestThroughput test = new TestThroughput(10, 20);
             await test.initializeGrain(client);
-            for(int i=0; i++ <= 10;)
+            for(int i=0; i < 100; i++)
                 await test.DoTest(client, 100, false);
 
             //await TestTransaction(client);
@@ -189,71 +189,6 @@ namespace OrleansClient
 
 
         }
-
-        private static List<int> getGrains(Random rand)
-        {
-            List<int> ret = new List<int>();
-            int atm = rand.Next(1, 10000);
-            int from = rand.Next(10000, 1000000);
-            int to = rand.Next(10000, 1000000);
-            while (from == to)
-            {
-                to = rand.Next(101, 10100);
-            }
-            ret.Add(atm);
-            ret.Add(from);
-            ret.Add(to);
-
-            return ret;
-        }
-
-        /*private static async void TestOrleansThroughputLatency(IClusterClient client)
-        {
-
-            List<List<int>> grainsPerTx = new List<List<int>>();
-            Random rand = new Random();
-            int N = 10;
-
-            for (int i = 0; i < N; i++)
-            {
-                grainsPerTx.Add(getGrains(rand));
-            }
-
-            DateTime ts3 = DateTime.Now;
-            List<Task> Txs = new List<Task>();
-
-            int n = 0;
-            try
-            {
-                for (int i = 0; i < N; i++)
-                {
-                    List<int> grains = grainsPerTx[i];
-                    IOrleansATM atm = client.GetGrain<IOrleansATM>(grains[0]);
-                    Txs.Add(atm.Transfer(grains[1], grains[2], 100));
-                    if (i % 1000 == 0)
-                    {
-                        System.Threading.Thread.Sleep(1000);
-                    }
-                }
-
-                await Task.WhenAll(Txs);
-            }
-            catch(Exception ){
-                n++;
-            }
-
-            DateTime ts4 = DateTime.Now;
-
-            int m = 0;
-            foreach(Task t in Txs)
-            {
-                if (t.IsCompletedSuccessfully)
-                    m++;
-            }
-            Console.WriteLine($"\n\n Processed {N} transactions using: {ts4 - ts3}. errors {n}, completed transactions: {m}.\n\n");
-
-        }*/
-
 
 
     }

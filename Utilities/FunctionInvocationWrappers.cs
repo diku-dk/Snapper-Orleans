@@ -20,6 +20,10 @@ namespace Concurrency.Utilities
         {
             inputObject = data;
         }
+
+        public FunctionInput()
+        {
+        }
     }
 
     [Serializable]

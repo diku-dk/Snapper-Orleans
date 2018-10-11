@@ -43,6 +43,5 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task Abort(long tid);
 
-        Task ActivateGrain();
     }
 }
