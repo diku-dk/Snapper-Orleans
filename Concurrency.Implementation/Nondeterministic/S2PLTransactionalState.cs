@@ -110,5 +110,15 @@ namespace Concurrency.Implementation.Nondeterministic
             }
             return Task.CompletedTask;
         }
+
+        public TState GetPreparedState(long tid)
+        {
+            return activeState;
+        }
+
+        public TState GetCommittedState(long tid)
+        {
+            return committedState;
+        }
     }
 }

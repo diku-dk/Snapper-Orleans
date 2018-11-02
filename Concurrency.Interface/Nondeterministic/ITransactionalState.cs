@@ -24,5 +24,8 @@ namespace Concurrency.Interface.Nondeterministic
         [AlwaysInterleave]
         Task Abort(long tid);
 
+        TState GetPreparedState(long tid);
+
+        TState GetCommittedState(long tid);
     }
 }

@@ -231,5 +231,14 @@ namespace Concurrency.Implementation.Nondeterministic
             public T NewVal { get; set; }
         }
 
+        public TState GetPreparedState(long tid)
+        {
+            throw new NotSupportedException();
+        }
+
+        public TState GetCommittedState(long tid)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

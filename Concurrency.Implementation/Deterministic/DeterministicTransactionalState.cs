@@ -43,5 +43,15 @@ namespace Concurrency.Implementation.Deterministic
         {
             throw new NotImplementedException();
         }
+
+        public TState GetPreparedState(long tid)
+        {
+            throw new NotSupportedException();
+        }
+
+        public TState GetCommittedState(long tid)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

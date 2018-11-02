@@ -4,7 +4,9 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Concurrency.Interface;
 using Concurrency.Interface.Nondeterministic;
+using Concurrency.Interface.Logging;
 using Concurrency.Utilities;
+using Concurrency.Implementation.Logging;
 using Orleans;
 using Utilities;
 
@@ -20,6 +22,7 @@ namespace Concurrency.Implementation
         private Dictionary<int, List<TaskCompletionSource<Boolean>>> promiseMap;
         protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
+        protected ILoggingProtocol<TState> log;
         protected String myUserClassName;
         public TransactionExecutionGrain(ITransactionalState<TState> state){
             this.state = state;
@@ -43,6 +46,7 @@ namespace Concurrency.Implementation
 
             promiseMap = new Dictionary<int, List<TaskCompletionSource<Boolean>>>();
             myPrimaryKey = this.GetPrimaryKey();
+            log = new Simple2PCLoggingProtocol<TState>(myPrimaryKey);
             return base.OnActivateAsync();
         }
 
@@ -99,29 +103,32 @@ namespace Concurrency.Implementation
                         break;
                     }
                 }
-            }
+            }           
 
             // Commit / Abort Phase
-            List<Task> commitResult = new List<Task>();
-            List<Task> abortResult = new List<Task>();
+            List<Task> commitTasks = new List<Task>();
+            List<Task> abortTasks = new List<Task>();
             if (canCommit)
             {
+                commitTasks.Add(log.HandleOnCommitIn2PC(state, context.transactionID, true));
                 //Console.WriteLine($"Transaction {context.transactionID}: prepared to commit. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
-                    commitResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
+                    commitTasks.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
                 }
-                await Task.WhenAll(commitResult);
+
+                await Task.WhenAll(commitTasks);
                 //Console.WriteLine($"Transaction {context.transactionID}: committed. \n");
             }
             else
             {
+                abortTasks.Add(log.HandleOnAbortIn2PC(state, context.transactionID, true));
                 //Console.WriteLine($"Transaction {context.transactionID}: prepared to abort. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
-                    abortResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
+                    abortTasks.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
                 }
-                await Task.WhenAll(abortResult);
+                await Task.WhenAll(abortTasks);
                 //Console.WriteLine($"Transaction {context.transactionID}: aborted. \n");
                 //Ensure the exception is set if the voting phase decides to abort
                 result.setException();
@@ -261,20 +268,26 @@ namespace Concurrency.Implementation
         }
 
 
-        public Task Abort(long tid)
+        public async Task Abort(long tid)
         {
             //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Abort message for transaction {tid}. \n\n");
             if (state == null)
-                return Task.CompletedTask;
-            return this.state.Abort(tid);
+                return;
+
+            var loggingTask = log.HandleOnAbortIn2PC(state, tid, false);
+            var abortTask = this.state.Abort(tid);
+            await Task.WhenAll(abortTask, loggingTask);            
         }
 
-        public Task Commit(long tid)
+        public async Task Commit(long tid)
         {
             //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Commit message for transaction {tid}. \n\n");
             if (state == null)
-                return Task.CompletedTask;
-            return this.state.Commit(tid);
+                return;
+
+            var loggingTask = log.HandleOnCommitIn2PC(state, tid, false);
+            var commitTask = this.state.Commit(tid);
+            await Task.WhenAll(commitTask, loggingTask);
         }
 
         /**
@@ -287,9 +300,10 @@ namespace Concurrency.Implementation
             if (state == null)
                 return true;
 
-            Task<bool> task = this.state.Prepare(tid);
-            await task;
-            return task.Result;
+            var loggingTask = log.HandleOnPrepareIn2PC(state, tid, false);
+            Task<bool> prepareTask = this.state.Prepare(tid);
+            await Task.WhenAll(prepareTask, loggingTask);
+            return prepareTask.Result;
         }
 
 
