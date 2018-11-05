@@ -87,21 +87,25 @@ namespace OrleansClient
             return client;
         }
 
-        private static async Task DoClientWork(IClusterClient client)
+        private static async Task RunPerformanceTestOnThroughput(IClusterClient client)
         {
             TestThroughput test = new TestThroughput(10, 20);
             await test.initializeGrain(client);
-            for(int i=0; i < 100; i++)
+            for (int i = 0; i < 100; i++)
                 await test.DoTest(client, 100, false);
 
+        }
+
+        private static async Task DoClientWork(IClusterClient client)
+        {
+            await RunPerformanceTestOnThroughput(client);
             //await TestTransaction(client);
-            return;
         }
 
         private static async Task TestTransaction(IClusterClient client)
         {
-            bool sequential = false;
-            int numTransfer = 100;
+            bool sequential = true;
+            int numTransfer = 10;
             IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(1));
             IAccountGrain toAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(2));
             IATMGrain atm = client.GetGrain<IATMGrain>(Helper.convertUInt32ToGuid(3));

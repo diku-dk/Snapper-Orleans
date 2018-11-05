@@ -46,7 +46,8 @@ namespace Concurrency.Implementation
 
             promiseMap = new Dictionary<int, List<TaskCompletionSource<Boolean>>>();
             myPrimaryKey = this.GetPrimaryKey();
-            log = new Simple2PCLoggingProtocol<TState>(myPrimaryKey);
+            //Enable the following line for logging
+            //log = new Simple2PCLoggingProtocol<TState>(myPrimaryKey);
             return base.OnActivateAsync();
         }
 
@@ -110,7 +111,8 @@ namespace Concurrency.Implementation
             List<Task> abortTasks = new List<Task>();
             if (canCommit)
             {
-                commitTasks.Add(log.HandleOnCommitIn2PC(state, context.transactionID, true));
+                if(log != null)
+                    commitTasks.Add(log.HandleOnCommitIn2PC(state, context.transactionID, true));
                 //Console.WriteLine($"Transaction {context.transactionID}: prepared to commit. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
@@ -122,7 +124,8 @@ namespace Concurrency.Implementation
             }
             else
             {
-                abortTasks.Add(log.HandleOnAbortIn2PC(state, context.transactionID, true));
+                if(log != null)
+                    abortTasks.Add(log.HandleOnAbortIn2PC(state, context.transactionID, true));
                 //Console.WriteLine($"Transaction {context.transactionID}: prepared to abort. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
@@ -274,9 +277,13 @@ namespace Concurrency.Implementation
             if (state == null)
                 return;
 
-            var loggingTask = log.HandleOnAbortIn2PC(state, tid, false);
-            var abortTask = this.state.Abort(tid);
-            await Task.WhenAll(abortTask, loggingTask);            
+            var tasks = new List<Task>();
+            tasks.Add(this.state.Abort(tid));
+            if (log != null)
+                tasks.Add(log.HandleOnAbortIn2PC(state, tid, false));
+
+            
+            await Task.WhenAll(tasks);
         }
 
         public async Task Commit(long tid)
@@ -285,9 +292,13 @@ namespace Concurrency.Implementation
             if (state == null)
                 return;
 
-            var loggingTask = log.HandleOnCommitIn2PC(state, tid, false);
-            var commitTask = this.state.Commit(tid);
-            await Task.WhenAll(commitTask, loggingTask);
+
+            var tasks = new List<Task>();
+            tasks.Add(this.state.Commit(tid));
+            if (log != null)
+                tasks.Add(log.HandleOnCommitIn2PC(state, tid, false));
+           
+            await Task.WhenAll(tasks);
         }
 
         /**
@@ -300,15 +311,11 @@ namespace Concurrency.Implementation
             if (state == null)
                 return true;
 
-            var loggingTask = log.HandleOnPrepareIn2PC(state, tid, false);
-            Task<bool> prepareTask = this.state.Prepare(tid);
-            await Task.WhenAll(prepareTask, loggingTask);
-            return prepareTask.Result;
+            var prepareResult = await this.state.Prepare(tid);
+            if(prepareResult && log != null)
+            if (log != null)            
+                await log.HandleOnPrepareIn2PC(state, tid, false);
+            return prepareResult;
         }
-
-
     }
-
-
-
 }
