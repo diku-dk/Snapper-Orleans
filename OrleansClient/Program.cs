@@ -105,7 +105,7 @@ namespace OrleansClient
         private static async Task TestTransaction(IClusterClient client)
         {
             bool sequential = true;
-            int numTransfer = 10;
+            int numTransfer = 100;
             IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(1));
             IAccountGrain toAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(2));
             IATMGrain atm = client.GetGrain<IATMGrain>(Helper.convertUInt32ToGuid(3));

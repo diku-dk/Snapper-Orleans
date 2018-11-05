@@ -33,7 +33,7 @@ namespace Concurrency.Implementation.Logging
 
         async Task ILoggingProtocol<TState>.HandleOnCommitIn2PC(ITransactionalState<TState> state, long tid, bool onCoordinator)
         {
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.COMMIT, onCoordinator, tid, state.GetCommittedState(tid));
+            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.COMMIT, onCoordinator, tid);
             await logStorage.Write(grainPrimaryKey, Helper.serializeToByteArray<LogFormat<TState>>(logRecord));
             
         }
