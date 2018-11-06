@@ -79,12 +79,10 @@ namespace Concurrency.Utilities
         public string func;
 
         public FunctionCall(Type t, String func, FunctionInput funcInput)
-        {
-        
+        {        
             this.type = t;
             this.func = func;
-            this.funcInput = funcInput;
-    
+            this.funcInput = funcInput;    
         }
     }
 

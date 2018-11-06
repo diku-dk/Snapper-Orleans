@@ -18,6 +18,7 @@ namespace Concurrency.Implementation
         public IDeterministicTransactionCoordinator dtc;
         private int lastBatchId;
         private Dictionary<int, BatchSchedule> batchScheduleMap;
+        private Dictionary<long, Guid> coordinatorMap;
         private Queue<BatchSchedule> batchQueue;
         private Dictionary<int, List<TaskCompletionSource<Boolean>>> promiseMap;
         protected Guid myPrimaryKey;
@@ -35,8 +36,8 @@ namespace Concurrency.Implementation
         public override Task OnActivateAsync()
         {
 
-            ndtc = this.GrainFactory.GetGrain<INondeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
-            //dtc = this.GrainFactory.GetGrain<IDeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
+            //ndtc = this.GrainFactory.GetGrain<INondeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
+            dtc = this.GrainFactory.GetGrain<IDeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
             batchQueue = new Queue<BatchSchedule>();
             batchScheduleMap = new Dictionary<int, BatchSchedule>();
 
@@ -47,7 +48,8 @@ namespace Concurrency.Implementation
             promiseMap = new Dictionary<int, List<TaskCompletionSource<Boolean>>>();
             myPrimaryKey = this.GetPrimaryKey();
             //Enable the following line for logging
-            //log = new Simple2PCLoggingProtocol<TState>(myPrimaryKey);
+            log = new Simple2PCLoggingProtocol<TState>(myPrimaryKey);
+            coordinatorMap = new Dictionary<long, Guid>();
             return base.OnActivateAsync();
         }
 
@@ -63,6 +65,7 @@ namespace Concurrency.Implementation
             TransactionContext context = await dtc.NewTransaction(grainAccessInformation);
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
+            
             Task<FunctionResult> t1 = this.Execute(c1);
             Task t2 = dtc.checkBatchCompletion(context);
             await Task.WhenAll(t1, t2);
@@ -76,6 +79,7 @@ namespace Concurrency.Implementation
 
             TransactionContext context = await ndtc.NewTransaction();
             functionCallInput.context = context;
+            context.coordinatorKey = this.myPrimaryKey;
             //Console.WriteLine($"Transaction {context.transactionID}: is started.\n");
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
             Task<FunctionResult> t1 = this.Execute(c1);
@@ -112,7 +116,7 @@ namespace Concurrency.Implementation
             if (canCommit)
             {
                 if(log != null)
-                    commitTasks.Add(log.HandleOnCommitIn2PC(state, context.transactionID, true));
+                    commitTasks.Add(log.HandleOnCommitIn2PC(state, context.transactionID, coordinatorMap[context.transactionID]));
                 //Console.WriteLine($"Transaction {context.transactionID}: prepared to commit. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
@@ -125,7 +129,7 @@ namespace Concurrency.Implementation
             else
             {
                 if(log != null)
-                    abortTasks.Add(log.HandleOnAbortIn2PC(state, context.transactionID, true));
+                    abortTasks.Add(log.HandleOnAbortIn2PC(state, context.transactionID, coordinatorMap[context.transactionID]));
                 //Console.WriteLine($"Transaction {context.transactionID}: prepared to abort. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
@@ -242,6 +246,10 @@ namespace Concurrency.Implementation
                 batchQueue.Dequeue();
                 batchScheduleMap.Remove(bid);
                 promiseMap.Remove(bid);
+                //Log the state now
+                if(log != null)
+                    await log.HandleOnCompleteInDeterministicProtocol(state, bid, coordinatorMap[bid]);
+                Cleanup(bid);
                 //TODO: remove state of the completed batch?
                 Task ack = dtc.AckBatchCompletion(bid, this.myPrimaryKey);
 
@@ -263,6 +271,12 @@ namespace Concurrency.Implementation
 
         public async Task<FunctionResult> InvokeFunction(FunctionCall call)
         {
+            var context = call.funcInput.context;
+            var key = (context.isDeterministic) ? context.batchID : context.transactionID;            
+            if(!coordinatorMap.ContainsKey(key))
+            {
+                coordinatorMap.Add(key, context.coordinatorKey);
+            }
             FunctionInput functionCallInput = call.funcInput;                        
             MethodInfo mi = call.type.GetMethod(call.func);
             Task<FunctionResult> t = (Task<FunctionResult>)mi.Invoke(this, new object[] { functionCallInput });
@@ -270,6 +284,10 @@ namespace Concurrency.Implementation
             return t.Result;
         }
 
+        private void Cleanup(long tid)
+        {
+            coordinatorMap.Remove(tid);
+        }
 
         public async Task Abort(long tid)
         {
@@ -280,9 +298,9 @@ namespace Concurrency.Implementation
             var tasks = new List<Task>();
             tasks.Add(this.state.Abort(tid));
             if (log != null)
-                tasks.Add(log.HandleOnAbortIn2PC(state, tid, false));
+                tasks.Add(log.HandleOnAbortIn2PC(state, tid, coordinatorMap[tid]));
 
-            
+            Cleanup(tid);
             await Task.WhenAll(tasks);
         }
 
@@ -296,8 +314,9 @@ namespace Concurrency.Implementation
             var tasks = new List<Task>();
             tasks.Add(this.state.Commit(tid));
             if (log != null)
-                tasks.Add(log.HandleOnCommitIn2PC(state, tid, false));
-           
+                tasks.Add(log.HandleOnCommitIn2PC(state, tid, coordinatorMap[tid]));
+
+            Cleanup(tid);
             await Task.WhenAll(tasks);
         }
 
@@ -314,7 +333,7 @@ namespace Concurrency.Implementation
             var prepareResult = await this.state.Prepare(tid);
             if(prepareResult && log != null)
             if (log != null)            
-                await log.HandleOnPrepareIn2PC(state, tid, false);
+                await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
             return prepareResult;
         }
     }

@@ -25,23 +25,41 @@ namespace Concurrency.Implementation.Logging
         {
             return sequenceNumber++;
         }
-        async Task ILoggingProtocol<TState>.HandleOnAbortIn2PC(ITransactionalState<TState> state, long tid, bool onCoordinator)
+        async Task ILoggingProtocol<TState>.HandleOnAbortIn2PC(ITransactionalState<TState> state, long tid, Guid coordinatorKey)
         {            
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.ABORT, onCoordinator, tid);            
+            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.ABORT, coordinatorKey, tid);            
             await logStorage.Write(grainPrimaryKey, Helper.serializeToByteArray<LogFormat<TState>>(logRecord));
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnCommitIn2PC(ITransactionalState<TState> state, long tid, bool onCoordinator)
+        async Task ILoggingProtocol<TState>.HandleOnCommitIn2PC(ITransactionalState<TState> state, long tid, Guid coordinatorKey)
         {
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.COMMIT, onCoordinator, tid);
+            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.COMMIT, coordinatorKey, tid);
             await logStorage.Write(grainPrimaryKey, Helper.serializeToByteArray<LogFormat<TState>>(logRecord));
             
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnPrepareIn2PC(ITransactionalState<TState> state, long tid, bool onCoordinator)
+        async Task ILoggingProtocol<TState>.HandleOnPrepareIn2PC(ITransactionalState<TState> state, long tid, Guid coordinatorKey)
         {
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.PREPARE, onCoordinator, tid, state.GetPreparedState(tid));
+            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.PREPARE, coordinatorKey, tid, state.GetPreparedState(tid));
             await logStorage.Write(grainPrimaryKey, Helper.serializeToByteArray<LogFormat<TState>>(logRecord));            
+        }
+
+        async Task ILoggingProtocol<TState>.HandleOnCompleteInDeterministicProtocol(ITransactionalState<TState> state, long bid, Guid coordinatorKey)
+        {
+            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMPLETE, coordinatorKey, bid, state.GetCommittedState(bid));
+            await logStorage.Write(grainPrimaryKey, Helper.serializeToByteArray<LogFormat<TState>>(logRecord));
+        }
+
+        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(long bid)
+        {
+            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_PREPARE, grainPrimaryKey, bid);
+            await logStorage.Write(grainPrimaryKey, Helper.serializeToByteArray<LogFormat<TState>>(logRecord));
+        }
+
+        async Task ILoggingProtocol<TState>.HandleOnCommitInDeterministicProtocol(long bid)
+        {
+            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMMIT, grainPrimaryKey, bid);
+            await logStorage.Write(grainPrimaryKey, Helper.serializeToByteArray<LogFormat<TState>>(logRecord)); 
         }
     }
 }

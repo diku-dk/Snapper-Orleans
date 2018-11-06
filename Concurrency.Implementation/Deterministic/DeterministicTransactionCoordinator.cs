@@ -4,6 +4,8 @@ using Orleans;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Concurrency.Implementation.Logging;
+using Concurrency.Interface.Logging;
 
 namespace Concurrency.Implementation.Deterministic
 {
@@ -19,6 +21,9 @@ namespace Concurrency.Implementation.Deterministic
         private Dictionary<int, Dictionary<Guid, BatchSchedule>> batchSchedulePerGrain;
         private Dictionary<int, List<int>> batchTransactionList;
         private Dictionary<int, Dictionary<Guid, String>> batchGrainClassName;
+        private ILoggingProtocol<String> log;
+
+        protected Guid myPrimaryKey;
         //For each actor, coordinator stores the ID of the last uncommitted batch.
         //private Dictionary<IDTransactionGrain, int> actorLastBatch;
 
@@ -42,7 +47,9 @@ namespace Concurrency.Implementation.Deterministic
             batchTransactionList = new Dictionary<int, List<int>>();
             expectedAcksPerBatch = new Dictionary<int, int>();
             batchStatusMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
-
+            myPrimaryKey = this.GetPrimaryKey();
+            //Enable the following line for log
+            log = new Simple2PCLoggingProtocol<String>(myPrimaryKey);
             disposable = RegisterTimer(EmitBatch, null, waitingTime, batchInterval);
             return base.OnActivateAsync();
         }
@@ -58,7 +65,7 @@ namespace Concurrency.Implementation.Deterministic
         {
             int bid = this.curBatchID;
             int tid = this.curTransactionID++;
-            TransactionContext context = new TransactionContext(bid, tid);
+            TransactionContext context = new TransactionContext(bid, tid, myPrimaryKey);
 
             transactionContextMap.Add(tid, context);
 
@@ -96,16 +103,16 @@ namespace Concurrency.Implementation.Deterministic
         public Task<TransactionContext> NewTransaction()
         {
             int tid = this.curTransactionID++;
-            TransactionContext context = new TransactionContext(tid);
+            TransactionContext context = new TransactionContext(tid,myPrimaryKey);
             transactionContextMap.Add(tid, context);
             //Console.WriteLine($"Coordinator: received Transaction {tid}");
             return Task.FromResult(context);
         }
         
-        Task EmitBatch(object var)
+        async Task EmitBatch(object var)
         {
             if (batchSchedulePerGrain.ContainsKey(curBatchID) == false)
-                return Task.CompletedTask;
+                return;
 
 
             Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
@@ -115,6 +122,8 @@ namespace Concurrency.Implementation.Deterministic
                 batchStatusMap.Add(curBatchID, new TaskCompletionSource<Boolean>());
 
             var v = typeof(IDeterministicTransactionCoordinator);
+            if(log != null) 
+                await log.HandleOnPrepareInDeterministicProtocol(curBatchID);
             foreach (KeyValuePair<Guid, BatchSchedule> item in curScheduleMap)
             {
                 var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);
@@ -130,11 +139,10 @@ namespace Concurrency.Implementation.Deterministic
             //This guarantees that batch schedules with smaller IDs are received earlier by grains.
             //await Task.WhenAll(emitTasks);
             //Console.WriteLine($"Coordinator: sent schedule for batch {curBatchID} to {curScheduleMap.Count} grains.");
-            curBatchID++;
-            return Task.CompletedTask;
+            curBatchID++;            
         }
         
-        public  Task AckBatchCompletion(int bid, Guid executor_id)
+        public async Task AckBatchCompletion(int bid, Guid executor_id)
         {
             if (expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id))
             {
@@ -149,7 +157,8 @@ namespace Concurrency.Implementation.Deterministic
                     //}
 
                     //Remove the transaction info from coordinator state
-
+                    if(log != null)
+                        await log.HandleOnCommitInDeterministicProtocol(bid);
                     foreach (int tid in batchTransactionList[bid])
                     {
                         transactionContextMap.Remove(tid);
@@ -168,7 +177,6 @@ namespace Concurrency.Implementation.Deterministic
             {
                 Console.WriteLine($"Coordinator: ack information from {executor_id} for batch {bid} is not correct. ");
             }
-            return Task.CompletedTask;
         }
 
 

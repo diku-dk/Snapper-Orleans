@@ -12,9 +12,11 @@ namespace Concurrency.Implementation.Nondeterministic
     public class NondeterministicTransactionCoordinator : Grain, INondeterministicTransactionCoordinator
     {
         private int curTransactionID;
+        protected Guid myPrimaryKey;
         public override Task OnActivateAsync()
         {
             curTransactionID = 0;
+            myPrimaryKey = this.GetPrimaryKey();
             return base.OnActivateAsync();
         }
 
@@ -22,7 +24,7 @@ namespace Concurrency.Implementation.Nondeterministic
         public Task<TransactionContext> NewTransaction()
         {
             int tid = this.curTransactionID++;
-            TransactionContext context = new TransactionContext(tid);
+            TransactionContext context = new TransactionContext(tid,myPrimaryKey);
             //Console.WriteLine($"Coordinator: received Transaction {tid}");
             return Task.FromResult(context);
         }

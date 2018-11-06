@@ -36,7 +36,7 @@ namespace AccountTransfer.Grains
     {
         public AccountGrain()
         {
-            int type = 0;
+            int type = 2;
             this.myUserClassName = "AccountTransfer.Grains.AccountGrain";
             Balance balance = new Balance();
             if (type == 0)

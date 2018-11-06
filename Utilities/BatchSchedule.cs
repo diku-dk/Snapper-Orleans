@@ -13,6 +13,7 @@ namespace Concurrency.Utilities
         public Boolean completed;
         public int batchID;
         public int lastBatchId;
+        public Guid coordinatorKey;
 
         public BatchSchedule(int bid, int lastBid)
         {
@@ -27,7 +28,7 @@ namespace Concurrency.Utilities
         public BatchSchedule(int bid)
         {
             batchID = bid;
-            curPos = 0;
+            curPos = 0;            
             completed = false;
             transactionList = new List<int>();
             transactionAccessMap = new Dictionary<int, int>();
