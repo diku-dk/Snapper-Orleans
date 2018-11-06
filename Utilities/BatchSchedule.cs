@@ -13,7 +13,6 @@ namespace Concurrency.Utilities
         public Boolean completed;
         public int batchID;
         public int lastBatchId;
-        public Guid coordinatorKey;
 
         public BatchSchedule(int bid, int lastBid)
         {
