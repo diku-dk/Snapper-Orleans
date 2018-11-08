@@ -25,6 +25,7 @@ namespace Concurrency.Implementation
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log;
         protected String myUserClassName;
+
         public TransactionExecutionGrain(ITransactionalState<TState> state){
             this.state = state;
         }
@@ -247,8 +248,9 @@ namespace Concurrency.Implementation
                 batchScheduleMap.Remove(bid);
                 promiseMap.Remove(bid);
                 //Log the state now
-                if(log != null)
+                if (log != null && state != null)
                     await log.HandleOnCompleteInDeterministicProtocol(state, bid, coordinatorMap[bid]);
+           
                 Cleanup(bid);
                 //TODO: remove state of the completed batch?
                 Task ack = dtc.AckBatchCompletion(bid, this.myPrimaryKey);

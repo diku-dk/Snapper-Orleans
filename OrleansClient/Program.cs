@@ -89,7 +89,7 @@ namespace OrleansClient
 
         private static async Task RunPerformanceTestOnThroughput(IClusterClient client)
         {            
-            TestThroughput test = new TestThroughput(10, 20);
+            TestThroughput test = new TestThroughput(100, 200);
             await test.initializeGrain(client);
             //for (int i = 0; i < 100; i++)
             await test.DoTest(client, 1, true);

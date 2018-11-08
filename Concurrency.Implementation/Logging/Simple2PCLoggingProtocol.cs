@@ -17,7 +17,7 @@ namespace Concurrency.Implementation.Logging
         public Simple2PCLoggingProtocol(Guid grainPrimaryKey) {
             this.grainPrimaryKey = grainPrimaryKey;
             this.sequenceNumber = 0;
-            const string basePath = @"C:\Users\x\orleans-logs\";
+            const string basePath = @"C:\Users\wck573\orleans-logs\";
             logStorage = new FileKeyValueStorageWrapper(basePath);
         }
 
