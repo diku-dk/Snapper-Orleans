@@ -92,7 +92,7 @@ namespace OrleansClient
             TestThroughput test = new TestThroughput(100, 200);
             await test.initializeGrain(client);
             //for (int i = 0; i < 100; i++)
-            await test.DoTest(client, 1, true);
+            await test.DoTest(client, 1000, false);
 
         }
 

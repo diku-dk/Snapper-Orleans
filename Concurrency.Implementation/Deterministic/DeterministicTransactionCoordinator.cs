@@ -122,8 +122,12 @@ namespace Concurrency.Implementation.Deterministic
                 batchStatusMap.Add(curBatchID, new TaskCompletionSource<Boolean>());
 
             var v = typeof(IDeterministicTransactionCoordinator);
-            if(log != null) 
-                await log.HandleOnPrepareInDeterministicProtocol(curBatchID);
+            if (log != null)
+            {
+                HashSet<Guid> participants = new HashSet<Guid>();
+                participants.UnionWith(curScheduleMap.Keys);
+                await log.HandleOnPrepareInDeterministicProtocol(curBatchID, participants);
+            }
             foreach (KeyValuePair<Guid, BatchSchedule> item in curScheduleMap)
             {
                 var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);

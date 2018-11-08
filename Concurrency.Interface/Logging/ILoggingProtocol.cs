@@ -9,6 +9,8 @@ namespace Concurrency.Interface.Logging
 {
     public interface ILoggingProtocol<TState>
     {
+        Task HandleBeforePrepareIn2PC(long tid, Guid coordinatorKey, HashSet<Guid> grains);
+
         Task HandleOnPrepareIn2PC(ITransactionalState<TState> state, long tid, Guid coordinatorKey);
 
         Task HandleOnCommitIn2PC(ITransactionalState<TState> state, long tid, Guid coordinatorKey);
@@ -17,7 +19,7 @@ namespace Concurrency.Interface.Logging
 
         Task HandleOnCompleteInDeterministicProtocol(ITransactionalState<TState> state, long tid, Guid coordinatorKey);
 
-        Task HandleOnPrepareInDeterministicProtocol(long bid);
+        Task HandleOnPrepareInDeterministicProtocol(long bid, HashSet<Guid> grains);
 
         Task HandleOnCommitInDeterministicProtocol(long bid);
     }

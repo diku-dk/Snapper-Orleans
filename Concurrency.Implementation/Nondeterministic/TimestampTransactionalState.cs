@@ -226,19 +226,15 @@ namespace Concurrency.Implementation.Nondeterministic
 
         }
 
-        private class LogRecord<T>
-        {
-            public T NewVal { get; set; }
-        }
-
         public TState GetPreparedState(long tid)
         {
-            throw new NotSupportedException();
+            return this.transactionMap[tid].data.state;
+                
         }
 
         public TState GetCommittedState(long tid)
         {
-            throw new NotSupportedException();
+            return this.commitedState;
         }
     }
 }

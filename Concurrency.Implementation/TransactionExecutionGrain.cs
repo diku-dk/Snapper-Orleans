@@ -37,8 +37,8 @@ namespace Concurrency.Implementation
         public override Task OnActivateAsync()
         {
 
-            //ndtc = this.GrainFactory.GetGrain<INondeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
-            dtc = this.GrainFactory.GetGrain<IDeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
+            ndtc = this.GrainFactory.GetGrain<INondeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
+            //dtc = this.GrainFactory.GetGrain<IDeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
             batchQueue = new Queue<BatchSchedule>();
             batchScheduleMap = new Dictionary<int, BatchSchedule>();
 
@@ -88,18 +88,23 @@ namespace Concurrency.Implementation
             //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
 
             Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
+
             FunctionResult result = new FunctionResult(t1.Result.resultObject);            
             bool hasException = t1.Result.hasException();
             bool canCommit = !hasException;
             if (!hasException)
             {
                 // Prepare Phase
+                HashSet<Guid> participants = new HashSet<Guid>();
+                participants.UnionWith(grainIDsInTransaction.Keys);
+                Task logTask = log.HandleBeforePrepareIn2PC(context.transactionID, context.coordinatorKey, participants);
+
                 List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
                 foreach (var grain in grainIDsInTransaction)
                 {
                     prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(context.transactionID));
                 }
-                await Task.WhenAll(prepareResult);
+                await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
  
                 foreach (Task<Boolean> vote in prepareResult)
                 {
@@ -128,9 +133,11 @@ namespace Concurrency.Implementation
                 //Console.WriteLine($"Transaction {context.transactionID}: committed. \n");
             }
             else
-            {
-                if(log != null)
-                    abortTasks.Add(log.HandleOnAbortIn2PC(state, context.transactionID, coordinatorMap[context.transactionID]));
+            {   
+                //Presume Abort
+                //if(log != null)
+                    //abortTasks.Add(log.HandleOnAbortIn2PC(state, context.transactionID, coordinatorMap[context.transactionID]));
+
                 //Console.WriteLine($"Transaction {context.transactionID}: prepared to abort. \n");
                 foreach (var grain in grainIDsInTransaction)
                 {
@@ -299,8 +306,10 @@ namespace Concurrency.Implementation
 
             var tasks = new List<Task>();
             tasks.Add(this.state.Abort(tid));
-            if (log != null)
-                tasks.Add(log.HandleOnAbortIn2PC(state, tid, coordinatorMap[tid]));
+
+            //Presume Abort
+            //if (log != null)
+                //tasks.Add(log.HandleOnAbortIn2PC(state, tid, coordinatorMap[tid]));
 
             Cleanup(tid);
             await Task.WhenAll(tasks);
