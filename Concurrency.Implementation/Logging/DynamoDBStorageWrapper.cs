@@ -94,8 +94,8 @@ namespace Concurrency.Implementation.Logging
         {
             var table = Table.LoadTable(client, logName);
             var item = new Document();
-            item["Id"] = key;
-            item["Value"] = value;
+            item[ATT_KEY] = key;
+            item[ATT_VALUE] = value;
             await table.PutItemAsync(item);
         }
 
