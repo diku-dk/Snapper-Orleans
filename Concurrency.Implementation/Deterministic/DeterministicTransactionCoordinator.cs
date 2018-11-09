@@ -49,7 +49,7 @@ namespace Concurrency.Implementation.Deterministic
             batchStatusMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
             myPrimaryKey = this.GetPrimaryKey();
             //Enable the following line for log
-            log = new Simple2PCLoggingProtocol<String>(myPrimaryKey);
+            log = new Simple2PCLoggingProtocol<String>(this.GetType().ToString(),myPrimaryKey);
             disposable = RegisterTimer(EmitBatch, null, waitingTime, batchInterval);
             return base.OnActivateAsync();
         }

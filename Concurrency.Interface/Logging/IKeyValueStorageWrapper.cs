@@ -7,7 +7,7 @@ namespace Concurrency.Interface.Logging
 {
     public interface IKeyValueStorageWrapper
     {
-        Task<byte[]> Read(Guid key);
-        Task Write(Guid key, byte[] value);
+        Task<byte[]> Read(byte[] key);
+        Task Write(byte[] key, byte[] value);
     }
 }

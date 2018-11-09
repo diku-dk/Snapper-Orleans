@@ -49,7 +49,7 @@ namespace Concurrency.Implementation
             promiseMap = new Dictionary<int, List<TaskCompletionSource<Boolean>>>();
             myPrimaryKey = this.GetPrimaryKey();
             //Enable the following line for logging
-            log = new Simple2PCLoggingProtocol<TState>(myPrimaryKey);
+            log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey);
             coordinatorMap = new Dictionary<long, Guid>();
             return base.OnActivateAsync();
         }

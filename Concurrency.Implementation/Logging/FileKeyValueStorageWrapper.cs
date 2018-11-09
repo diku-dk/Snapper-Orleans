@@ -11,21 +11,23 @@ namespace Concurrency.Implementation.Logging
     class FileKeyValueStorageWrapper : IKeyValueStorageWrapper
     {
         String basePath = "";
+        String logName = "";
         int maxRetries = 10;
         private SemaphoreSlim instanceLock;
 
-        public FileKeyValueStorageWrapper(string basePath)
+        public FileKeyValueStorageWrapper(string basePath, String grainType, String grainKey)
         {
             this.basePath = basePath;
+            this.logName = grainType + grainKey;
             instanceLock = new SemaphoreSlim(1);
         }
 
-        Task<byte[]> IKeyValueStorageWrapper.Read(Guid key)
+        Task<byte[]> IKeyValueStorageWrapper.Read(byte[] key)
         {
             throw new NotImplementedException();
         }
 
-        async Task IKeyValueStorageWrapper.Write(Guid key, byte[] value)
+        async Task IKeyValueStorageWrapper.Write(byte[] key, byte[] value)
         {
             var success = false;
             long tries = 0;
@@ -35,8 +37,8 @@ namespace Concurrency.Implementation.Logging
             while (!success && tries <= maxRetries)
             {
                 try
-                {                    
-                    var fileName = basePath + key.ToString();
+                {
+                    var fileName = basePath + logName;
                     file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
                     fileLength = file.Length;
                     var sizeBytes = BitConverter.GetBytes(fileLength);
