@@ -56,7 +56,7 @@ namespace Concurrency.Implementation.Logging
                 {
                     response = await client.DescribeTableAsync(describeTableRequest);
                     Console.WriteLine("Current table status = {0}", response.Table.TableStatus);
-                    await Task.Delay(1000);
+                    await Task.Delay(TimeSpan.FromSeconds(5));
                 } while (response.Table.TableStatus != TableStatus.ACTIVE);
                 tableExists = true;
             } catch(ResourceNotFoundException)
@@ -107,7 +107,7 @@ namespace Concurrency.Implementation.Logging
                     if (response.Table.TableStatus == TableStatus.ACTIVE)
                         break;
                     else
-                        await Task.Delay(1000);
+                        await Task.Delay(TimeSpan.FromSeconds(5));
                 }                    
             }
         }
