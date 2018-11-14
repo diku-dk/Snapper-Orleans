@@ -99,7 +99,9 @@ namespace Concurrency.Implementation
                 // Prepare Phase
                 HashSet<Guid> participants = new HashSet<Guid>();
                 participants.UnionWith(grainIDsInTransaction.Keys);
-                Task logTask = log.HandleBeforePrepareIn2PC(context.transactionID, context.coordinatorKey, participants);
+                Task logTask = Task.CompletedTask;
+                if (log != null)
+                    logTask = log.HandleBeforePrepareIn2PC(context.transactionID, context.coordinatorKey, participants);
 
                 List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
                 foreach (var grain in grainIDsInTransaction)
