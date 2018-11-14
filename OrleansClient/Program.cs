@@ -13,6 +13,7 @@ using Concurrency.Interface;
 using Concurrency.Utilities;
 using System.Threading;
 using Utilities;
+using Orleans.Hosting;
 
 namespace OrleansClient
 {
@@ -30,7 +31,8 @@ namespace OrleansClient
         {
             try
             {
-                using (var client = await StartClientWithRetries())
+                //using (var client = await StartClientWithRetries())
+                using (var client = await StartClientWithRetriesToCluster())
                 {
                     await DoClientWork(client);
                     Console.ReadKey();
@@ -53,9 +55,7 @@ namespace OrleansClient
             {
                 try
                 {
-                    int gatewayPort = 30000;
-                    var siloAddress = IPAddress.Loopback;
-                    var gateway = new IPEndPoint(siloAddress, gatewayPort);
+                    Thread.Sleep(5000);
 
                     client = new ClientBuilder()
                         .UseLocalhostClustering()
@@ -87,12 +87,62 @@ namespace OrleansClient
             return client;
         }
 
+        private static async Task<IClusterClient> StartClientWithRetriesToCluster(int initializeAttemptsBeforeFailing = 5)
+        {
+            int attempt = 0;
+            IClusterClient client;
+            while (true)
+            {
+                try
+                {   
+                    
+
+                    Action<DynamoDBGatewayOptions> dynamoDBOptions = options => {
+                        options.AccessKey = "AKIAJILO2SVPTNUZB55Q";
+                        options.SecretKey = "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";
+                        options.TableName = "XLibMembershipTable";
+                        options.Service = "eu-west-1";
+                        options.WriteCapacityUnits = 10;
+                        options.ReadCapacityUnits = 10;
+                        
+                    };   
+
+                    client = new ClientBuilder()
+                        .Configure<ClusterOptions>(options =>
+                        {
+                            options.ClusterId = "dev";
+                            options.ServiceId = "AccountTransferApp";
+                        })
+                        .UseDynamoDBClustering(dynamoDBOptions)
+                        .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(IAccountGrain).Assembly).WithReferences())
+                        .ConfigureLogging(logging => logging.AddConsole())
+                        .Build();
+                    
+                    await client.Connect();
+                    Console.WriteLine("Client successfully connect to silo host");
+                    break;
+                }
+                catch (SiloUnavailableException)
+                {
+                    attempt++;
+                    Console.WriteLine($"Attempt {attempt} of {initializeAttemptsBeforeFailing} failed to initialize the Orleans client.");
+                    if (attempt > initializeAttemptsBeforeFailing)
+                    {
+                        throw;
+                    }
+                    await Task.Delay(TimeSpan.FromSeconds(4));
+                }
+            }
+
+            return client;
+        }
+
         private static async Task RunPerformanceTestOnThroughput(IClusterClient client)
         {            
             TestThroughput test = new TestThroughput(100, 200);
             await test.initializeGrain(client);
             //for (int i = 0; i < 100; i++)
-            await test.DoTest(client, 1000, false);
+            await test.DoTest(client, 10, false);
 
         }
 
