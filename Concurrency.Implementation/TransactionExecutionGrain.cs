@@ -23,7 +23,7 @@ namespace Concurrency.Implementation
         private Dictionary<int, List<TaskCompletionSource<Boolean>>> promiseMap;
         protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
-        protected ILoggingProtocol<TState> log;
+        protected ILoggingProtocol<TState> log = null;
         protected String myUserClassName;
 
         public TransactionExecutionGrain(ITransactionalState<TState> state){
@@ -49,7 +49,9 @@ namespace Concurrency.Implementation
             promiseMap = new Dictionary<int, List<TaskCompletionSource<Boolean>>>();
             myPrimaryKey = this.GetPrimaryKey();
             //Enable the following line for logging
-            log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey);
+
+            //log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey);
+
             coordinatorMap = new Dictionary<long, Guid>();
             return base.OnActivateAsync();
         }
