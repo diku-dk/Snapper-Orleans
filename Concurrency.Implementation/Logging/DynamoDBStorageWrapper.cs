@@ -22,6 +22,8 @@ namespace Concurrency.Implementation.Logging
         const string ATT_VALUE = "VALUE";
         const String DYNAMODB_ACCESS_KEY_ID = "";
         const String DYNAMODB_ACCESS_KEY_VALUE = "";
+        const int READ_CAPACITY_UNITS = 10;
+        const int WRITE_CAPACITY_UNITS = 10;
         
         bool singleTable = true;
         bool tableExists = false;
@@ -96,8 +98,8 @@ namespace Concurrency.Implementation.Logging
                     },
                     ProvisionedThroughput = new ProvisionedThroughput
                     {
-                        ReadCapacityUnits = 1000,
-                        WriteCapacityUnits = 1000
+                        ReadCapacityUnits = READ_CAPACITY_UNITS,
+                        WriteCapacityUnits = WRITE_CAPACITY_UNITS
                     }
                 };
                 await client.CreateTableAsync(request);
