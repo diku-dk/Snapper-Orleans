@@ -15,20 +15,34 @@ namespace Concurrency.Implementation.Logging
     {
         AmazonDynamoDBClient client;        
         String grainType;
-        String grainKey;
+        byte[] grainKey;
         String logName;
-        const string ATT_KEY = "key";
-        const string ATT_VALUE = "value";
+        const string ATT_KEY_1 = "GRAIN_REFERENCE";
+        const string ATT_KEY_2 = "SEQUENCE_NUMBER";
+        const string ATT_VALUE = "VALUE";
+        const String DYNAMODB_ACCESS_KEY_ID = "";
+        const String DYNAMODB_ACCESS_KEY_VALUE = "";
+        
+        bool singleTable = true;
         bool tableExists = false;
 
-        public DynamoDBStorageWrapper(String grainType, String grainKey)
-        {
-            client = new AmazonDynamoDBClient();
-            this.grainType = grainType;
-            this.grainKey = grainKey;
-            this.logName = grainType + grainKey;            
-        }
 
+        public DynamoDBStorageWrapper(String grainType, Guid grainKey)
+        {
+            client = new AmazonDynamoDBClient(DYNAMODB_ACCESS_KEY_ID, DYNAMODB_ACCESS_KEY_VALUE, Amazon.RegionEndpoint.USWest2);
+            Console.WriteLine("Initialized dynamodb client");
+            this.grainType = grainType;
+            this.grainKey = grainKey.ToByteArray();
+            if (singleTable)
+            {
+                logName = "XLibLog"; 
+            }
+            else
+            {
+                logName = grainType + grainKey;
+            }
+        }
+                
         async Task createTableIfNotExists()
         {
             var describeTableRequest = new DescribeTableRequest()
@@ -37,7 +51,14 @@ namespace Concurrency.Implementation.Logging
             };        
             try
             {
-                var response = await client.DescribeTableAsync(describeTableRequest);
+                DescribeTableResponse response;                
+                do
+                {
+                    response = await client.DescribeTableAsync(describeTableRequest);
+                    Console.WriteLine("Current table status = {0}", response.Table.TableStatus);
+                    await Task.Delay(1000);
+                } while (response.Table.TableStatus != TableStatus.ACTIVE);
+                tableExists = true;
             } catch(ResourceNotFoundException)
             {
                 tableExists = false;
@@ -51,25 +72,43 @@ namespace Concurrency.Implementation.Logging
                     {
                         new KeySchemaElement()
                         {
-                            AttributeName = ATT_KEY,
+                            AttributeName = ATT_KEY_1,
                             KeyType = "HASH"
+                        },
+                        new KeySchemaElement()
+                        {
+                            AttributeName = ATT_KEY_2,
+                            KeyType = "RANGE"
                         }
                     },
                     AttributeDefinitions = new List<AttributeDefinition>()
                     {
                         new AttributeDefinition()
                         {
-                            AttributeName = ATT_KEY,
+                            AttributeName = ATT_KEY_1,
                             AttributeType = "B"
                         },
                         new AttributeDefinition()
                         {
-                            AttributeName = ATT_VALUE,
+                            AttributeName = ATT_KEY_2,
                             AttributeType = "B"
                         }
+                    },
+                    ProvisionedThroughput = new ProvisionedThroughput
+                    {
+                        ReadCapacityUnits = 1000,
+                        WriteCapacityUnits = 1000
                     }
                 };
                 await client.CreateTableAsync(request);
+                while(true)
+                {                    
+                    var response = await client.DescribeTableAsync(describeTableRequest);
+                    if (response.Table.TableStatus == TableStatus.ACTIVE)
+                        break;
+                    else
+                        await Task.Delay(1000);
+                }                    
             }
         }
         Task<byte[]> IKeyValueStorageWrapper.Read(byte[] key)
@@ -83,7 +122,8 @@ namespace Concurrency.Implementation.Logging
             {
                 TableName = logName,
                 Item = new Dictionary<string, AttributeValue>() {
-                    {ATT_KEY, new AttributeValue() { B = new MemoryStream(key) }},
+                    {ATT_KEY_1, new AttributeValue() { B = new MemoryStream(grainKey)}},
+                    {ATT_KEY_2, new AttributeValue() { B = new MemoryStream(key)}},
                     {ATT_VALUE, new AttributeValue() { B = new MemoryStream(value)}}
                 }
             };
@@ -94,7 +134,8 @@ namespace Concurrency.Implementation.Logging
         {
             var table = Table.LoadTable(client, logName);
             var item = new Document();
-            item[ATT_KEY] = key;
+            item[ATT_KEY_1] = grainKey;
+            item[ATT_KEY_2] = key;
             item[ATT_VALUE] = value;
             await table.PutItemAsync(item);
         }

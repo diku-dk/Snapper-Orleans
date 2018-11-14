@@ -20,13 +20,19 @@ namespace Concurrency.Implementation.Logging
             this.grainPrimaryKey = grainPrimaryKey;
             this.sequenceNumber = 0;
             const string basePath = @"C:\Users\x\orleans-logs\";
-            logStorage = new FileKeyValueStorageWrapper(basePath, grainType, grainPrimaryKey.ToString());
-            //logStorage = new DynamoDBStorageWrapper(grainType, grainPrimaryKey.ToString());
+            logStorage = new FileKeyValueStorageWrapper(basePath, grainType, grainPrimaryKey);
+            //logStorage = new DynamoDBStorageWrapper(grainType, grainPrimaryKey);
         }
 
         private long getSequenceNumber()
         {
-            return sequenceNumber++;
+            long returnVal;
+            lock (this)
+            {
+                returnVal = sequenceNumber;
+                sequenceNumber++;
+            }
+            return returnVal;
         }
         async Task ILoggingProtocol<TState>.HandleBeforePrepareIn2PC(long tid, Guid coordinatorKey, HashSet<Guid> grains)
         {

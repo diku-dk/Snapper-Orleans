@@ -15,10 +15,10 @@ namespace Concurrency.Implementation.Logging
         int maxRetries = 10;
         private SemaphoreSlim instanceLock;
 
-        public FileKeyValueStorageWrapper(string basePath, String grainType, String grainKey)
+        public FileKeyValueStorageWrapper(string basePath, String grainType, Guid grainKey)
         {
             this.basePath = basePath;
-            this.logName = grainType + grainKey;
+            this.logName = grainType + grainKey.ToString();
             instanceLock = new SemaphoreSlim(1);
         }
 
