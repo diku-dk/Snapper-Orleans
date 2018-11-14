@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.3.14.15" />
     <PackageReference Include="Microsoft.Orleans.Core" Version="2.1.0" />
     <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator" Version="2.1.0" />
     <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="2.1.0" />
