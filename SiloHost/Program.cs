@@ -8,6 +8,7 @@ using System.Net;
 using AccountTransfer.Grains;
 using Concurrency.Implementation.Deterministic;
 using Concurrency.Implementation.Nondeterministic;
+using Utilities;
 
 namespace OrleansSiloHost
 {
@@ -46,6 +47,7 @@ namespace OrleansSiloHost
                 {
                     options.ClusterId = "dev";
                     options.ServiceId = "AccountTransferApp";
+                   
                     
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
@@ -79,7 +81,7 @@ namespace OrleansSiloHost
                     options.ClusterId = "dev";
                     options.ServiceId = "AccountTransferApp";
                 })
-                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
+                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .UseDynamoDBClustering(dynamoDBOptions)
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(DeterministicTransactionCoordinator).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(NondeterministicTransactionCoordinator).Assembly).WithReferences())
