@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "OrleansClient": {
+      "commandName": "Project",
+      "commandLineArgs": " 100 200 100 true"
+    }
+  }
+}

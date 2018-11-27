@@ -22,8 +22,17 @@ namespace OrleansClient
     /// </summary>
     public class Program
     {
+        static uint n1, n2;
+        static int N;
+        static Boolean initActor;
         static int Main(string[] args)
         {
+ 
+
+            n1 = Convert.ToUInt32(args[0]);
+            n2 = Convert.ToUInt32(args[1]);
+            N = Convert.ToInt32(args[2]);
+            initActor = Convert.ToBoolean(args[3]);
             return RunMainAsync().Result;
         }
 
@@ -139,10 +148,10 @@ namespace OrleansClient
 
         private static async Task RunPerformanceTestOnThroughput(IClusterClient client)
         {            
-            TestThroughput test = new TestThroughput(100, 200);
-            await test.initializeGrain(client);
-            //for (int i = 0; i < 100; i++)
-            await test.DoTest(client, 10, false);
+            TestThroughput test = new TestThroughput(n1, n2);
+            if(initActor)
+                await test.initializeGrain(client);
+            await test.DoTest(client, N, false);
 
         }
 
