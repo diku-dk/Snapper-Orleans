@@ -12,7 +12,8 @@ using Utilities;
 namespace AccountTransfer.Grains
 {
 
-    public class ATMGrain : TransactionExecutionGrain<Balance>, IATMGrain
+    public class 
+        ATMGrain : TransactionExecutionGrain<Balance>, IATMGrain
     {
 
         TaskCompletionSource<String> promise = new TaskCompletionSource<String>();
