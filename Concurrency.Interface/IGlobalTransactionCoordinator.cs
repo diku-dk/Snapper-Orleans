@@ -4,10 +4,11 @@ using System.Threading.Tasks;
 using Concurrency.Utilities;
 using Orleans;
 using Orleans.Concurrency;
+using Utilities;
 
 namespace Concurrency.Interface
 {
-    interface GlobalTransactionCoordinator
+    public interface IGlobalTransactionCoordinator : IGrainWithGuidKey
     {
 
         /// <summary>
@@ -34,7 +35,7 @@ namespace Concurrency.Interface
         /// </summary>
         /// 
         [AlwaysInterleave]
-        Task ScheduleBatchEmit();
+        Task PassToken(BatchToken token);
 
         /// <summary>
         /// Transaction coordinator of deterministic batches calls this function to notify the completion of a deterministic batch

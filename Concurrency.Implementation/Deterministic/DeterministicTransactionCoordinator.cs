@@ -204,7 +204,6 @@ namespace Concurrency.Implementation.Deterministic
             disposable = RegisterTimer(EmitBatch, null, waitingTime, batchInterval);
             Console.WriteLine($"Coordinator: batch interval is set as: {period} ms.");
             return Task.CompletedTask;
-
         }
 
 
