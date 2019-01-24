@@ -23,6 +23,7 @@ namespace Concurrency.Interface
         /// TODO: should it be interleaved?
         /// </summary>
         /// 
+        [AlwaysInterleave]
         Task<TransactionContext> NewTransaction();
 
         /// <summary>
@@ -44,7 +45,7 @@ namespace Concurrency.Interface
         Task AckTransactionCompletion(int bid, Guid executor_id);
 
 
-
+        Task SpawnCoordinator(uint myId, uint neighbourId);
 
 
 

@@ -7,8 +7,8 @@ namespace Utilities
     [Serializable]
     public class BatchToken
     {
-        public int lastBatchID { get; }
-        public int lastTransactionID { get; }
+        public int lastBatchID { get; set; }
+        public int lastTransactionID { get; set; }
      
 
         public BatchToken(int bid, int tid)
@@ -16,6 +16,8 @@ namespace Utilities
             this.lastBatchID = bid;
             this.lastTransactionID = tid;
         }
+
+
 
     }
 }

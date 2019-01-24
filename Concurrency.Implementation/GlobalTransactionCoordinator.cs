@@ -17,10 +17,11 @@ namespace Concurrency.Implementation
         private int curBatchID { get; set; }
         private int curTransactionID { get; set; }
         protected Guid myPrimaryKey;
+        private IGlobalTransactionCoordinator neighbour;
 
         //Timer
         private IDisposable disposable;
-        private TimeSpan waitingTime = TimeSpan.FromSeconds(1);
+        private TimeSpan waitingTime = TimeSpan.FromSeconds(2);
         private TimeSpan batchInterval = TimeSpan.FromMilliseconds(1000);
 
         //Batch Schedule
@@ -34,9 +35,18 @@ namespace Concurrency.Implementation
         //Maintains the number of uncompleted grains of each batch
         private Dictionary<int, int> expectedAcksPerBatch;
 
+        //Information controlling the emitting of non-deterministic transactions
+        private int curNondeterministicBatchID { get; set; }
+        Dictionary<int, TaskCompletionSource<Boolean>> nonDeterministicPromiseMap;
+        Dictionary<int, int> nonDeterministicBatchSize;
+
+        //Promise controlling the emitting of token
+        TaskCompletionSource<Boolean> tokenPromise;
+
         //Emitting status
         private Boolean isEmitTimerOn = false;
         private Boolean hasToken = false;
+        private Boolean hasEmitted = false;
 
         private ILoggingProtocol<String> log;
 
@@ -44,6 +54,7 @@ namespace Concurrency.Implementation
         {
             curBatchID = 0;
             curTransactionID = 0;
+            curNondeterministicBatchID = 0;
             transactionContextMap = new Dictionary<int, TransactionContext>();
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, BatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
@@ -55,30 +66,115 @@ namespace Concurrency.Implementation
             //Enable the following line for log
             //log = new Simple2PCLoggingProtocol<String>(this.GetType().ToString(), myPrimaryKey);
             disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
+
+            tokenPromise = new TaskCompletionSource<bool>();
+            nonDeterministicPromiseMap = new Dictionary<int, TaskCompletionSource<bool>>();
+            nonDeterministicBatchSize = new Dictionary<int, int>();
+
             return base.OnActivateAsync();
         }
 
+        /**
+         *Client calls this function to submit deterministic transaction
+         */
         public Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<string, int>> grainAccessInformation)
         {
-            throw new NotImplementedException();
+            int bid = this.curBatchID;
+            int tid = this.curTransactionID++;
+            TransactionContext context = new TransactionContext(bid, tid, myPrimaryKey);
+
+            transactionContextMap.Add(tid, context);
+
+            //update batch schedule
+            if (batchSchedulePerGrain.ContainsKey(bid) == false)
+            {
+                batchSchedulePerGrain.Add(bid, new Dictionary<Guid, BatchSchedule>());
+                batchTransactionList.Add(bid, new List<int>());
+                batchGrainClassName.Add(bid, new Dictionary<Guid, String>());
+            }
+
+            batchTransactionList[bid].Add(tid);
+
+            Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[bid];
+            foreach (var item in grainAccessInformation)
+            {
+                //if (actorLastBatch.ContainsKey(item.Key))
+                //    lastBid = actorLastBatch[item.Key];
+                //else
+                //    lastBid = -1;
+                batchGrainClassName[bid][item.Key] = item.Value.Item1;
+                if (curScheduleMap.ContainsKey(item.Key) == false)
+                    curScheduleMap.Add(item.Key, new BatchSchedule(bid));
+                curScheduleMap[item.Key].AddNewTransaction(tid, item.Value.Item2);
+            }
+
+            //Console.WriteLine($"Coordinator: received Transaction {tid} for Batch {curBatchID}.");
+            return Task.FromResult(context);
         }
 
-        public Task<TransactionContext> NewTransaction()
+
+        /**
+         *Client calls this function to submit non-deterministic transaction
+         */
+        public async Task<TransactionContext> NewTransaction()
         {
-            throw new NotImplementedException();
+            TaskCompletionSource<bool> emitting;
+            if (!nonDeterministicPromiseMap.ContainsKey(curNondeterministicBatchID))
+            {
+                nonDeterministicPromiseMap.Add(curNondeterministicBatchID, new TaskCompletionSource<bool>());
+                this.nonDeterministicBatchSize.Add(curNondeterministicBatchID, 0);
+            }
+                
+            emitting = nonDeterministicPromiseMap[curNondeterministicBatchID];
+            nonDeterministicBatchSize[curNondeterministicBatchID] = nonDeterministicBatchSize[curNondeterministicBatchID] + 1;
+
+            if (emitting.Task.IsCompleted != true)
+            {
+                await emitting.Task;
+            }
+            int tid = this.curTransactionID++;
+            TransactionContext context = new TransactionContext(tid, myPrimaryKey);
+
+            //Check if the emitting of the current non-deterministic batch is completed, if so, 
+            //set the token promise and increment the curNondeterministicBatchID.
+            nonDeterministicBatchSize[curNondeterministicBatchID] = nonDeterministicBatchSize[curNondeterministicBatchID] - 1;
+            if(nonDeterministicBatchSize[curNondeterministicBatchID] == 0)
+            {
+                this.tokenPromise.SetResult(true); //Note: the passing of token could interleave here
+                nonDeterministicBatchSize.Remove(curNondeterministicBatchID);
+                this.nonDeterministicPromiseMap.Remove(curNondeterministicBatchID);
+                curNondeterministicBatchID++;
+            }
+
+            //Console.WriteLine($"Coordinator: received Transaction {tid}");
+            return context;
         }
 
+        /**
+         *Coordinator calls this function to pass token
+         */
         public async Task PassToken(BatchToken token)
         {
             this.hasToken = true;
             await EmitTransaction(token);
 
-            //TODO: Pass the token to the next coordinator
+            if (this.hasEmitted)
+            {
+                //Update the token and pass it to the neighbour coordinator
+                token.lastBatchID = this.curBatchID - 1;
+                token.lastTransactionID = this.curTransactionID - 1;
+                this.hasEmitted = false;
+            }
+            neighbour.PassToken(token);           
         }
 
+        /**
+         *This functions is called when a new token is received or the timer is set
+         */
         async Task EmitTransaction(Object obj)
         {
-            if (hasToken == false && obj == null)
+            BatchToken token = (BatchToken)obj;
+            if (hasToken == false && token == null)
             {
                 this.isEmitTimerOn = true;
                 return;
@@ -87,13 +183,30 @@ namespace Concurrency.Implementation
             {
                 return;
             }
-
-            BatchToken token = (BatchToken) obj;
+  
             await EmitBatch(token);
+            if (this.nonDeterministicPromiseMap.ContainsKey(curNondeterministicBatchID))
+            {
+                this.nonDeterministicPromiseMap[this.curNondeterministicBatchID].SetResult(true);
+            }
+            else
+            {
+                if (tokenPromise.Task.IsCompleted == false)
+                    tokenPromise.SetResult(true);
+            }
 
-            ResetEmitStatus();
+            await tokenPromise.Task;
+
+            this.isEmitTimerOn = false;
+            this.hasToken = false;
+            this.hasEmitted = true;
+            tokenPromise = new TaskCompletionSource<bool>();
+            return;
         }
 
+        /**
+         *This functions is called to emit batch of deterministic transactions
+         */
         async Task EmitBatch(BatchToken token)
         {
             if (batchSchedulePerGrain.ContainsKey(curBatchID) == false)
@@ -130,23 +243,21 @@ namespace Concurrency.Implementation
             curBatchID++;
         }
 
-        async Task EmitNondeterministicTransaction()
-        {
-
-        }
-
         public Task AckTransactionCompletion(int bid, Guid executor_id)
         {
             throw new NotImplementedException();
         }
 
-
-        private void ResetEmitStatus()
+        public async Task SpawnCoordinator(uint myId, uint neighbourId)
         {
-            this.isEmitTimerOn = false;
-            this.hasToken = false;
+            neighbour = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid(neighbourId));
+            //The "first" coordinator starts the token passing
+            if (myId == 0)
+            {
+                System.Threading.Thread.Sleep(2000);
+                BatchToken token = new BatchToken(-1, -1);
+                EmitTransaction(token);
+            }
         }
-
-
     }
 }
