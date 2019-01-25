@@ -30,15 +30,21 @@ namespace Concurrency.Implementation
         private Dictionary<int, List<int>> batchTransactionList;
         private Dictionary<int, Dictionary<Guid, String>> batchGrainClassName;
 
+
+
         //Maintains the status of batch processing
         private Dictionary<int, TaskCompletionSource<Boolean>> batchStatusMap;
+
         //Maintains the number of uncompleted grains of each batch
         private Dictionary<int, int> expectedAcksPerBatch;
 
         //Information controlling the emitting of non-deterministic transactions
-        private int curNondeterministicBatchID { get; set; }
-        Dictionary<int, TaskCompletionSource<Boolean>> nonDeterministicPromiseMap;
-        Dictionary<int, int> nonDeterministicBatchSize;
+        private int curEmitSeq { get; set; }
+        Dictionary<int, TaskCompletionSource<Boolean>> emitPromiseMap;
+        Dictionary<int, int> nonDeterministicEmitSize;
+        //List buffering the incoming deterministic transaction requests
+        Dictionary<int, List<TransactionContext>> deterministicTransactionRequests;
+        int txSeqInBatch;
 
         //Promise controlling the emitting of token
         TaskCompletionSource<Boolean> tokenPromise;
@@ -54,22 +60,27 @@ namespace Concurrency.Implementation
         {
             curBatchID = 0;
             curTransactionID = 0;
-            curNondeterministicBatchID = 0;
+
             transactionContextMap = new Dictionary<int, TransactionContext>();
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, BatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
+            
             //actorLastBatch = new Dictionary<IDTransactionGrain, int>();
             batchTransactionList = new Dictionary<int, List<int>>();
             expectedAcksPerBatch = new Dictionary<int, int>();
             batchStatusMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
             myPrimaryKey = this.GetPrimaryKey();
+
             //Enable the following line for log
             //log = new Simple2PCLoggingProtocol<String>(this.GetType().ToString(), myPrimaryKey);
             disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
-
             tokenPromise = new TaskCompletionSource<bool>();
-            nonDeterministicPromiseMap = new Dictionary<int, TaskCompletionSource<bool>>();
-            nonDeterministicBatchSize = new Dictionary<int, int>();
+
+            curEmitSeq = 0;
+            emitPromiseMap = new Dictionary<int, TaskCompletionSource<bool>>(); 
+            nonDeterministicEmitSize = new Dictionary<int, int>();
+            txSeqInBatch = 0;
+            deterministicTransactionRequests = new Dictionary<int, List<TransactionContext>>();
 
             return base.OnActivateAsync();
         }
@@ -77,39 +88,26 @@ namespace Concurrency.Implementation
         /**
          *Client calls this function to submit deterministic transaction
          */
-        public Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<string, int>> grainAccessInformation)
+        public async Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<string, int>> grainAccessInformation)
         {
-            int bid = this.curBatchID;
-            int tid = this.curTransactionID++;
-            TransactionContext context = new TransactionContext(bid, tid, myPrimaryKey);
 
-            transactionContextMap.Add(tid, context);
+            int index = txSeqInBatch++;
+            int myEmitSeq = this.curEmitSeq;
+            if (deterministicTransactionRequests.ContainsKey(myEmitSeq) == false)
+                deterministicTransactionRequests.Add(myEmitSeq, new List<TransactionContext>());
+            deterministicTransactionRequests[myEmitSeq].Add(new TransactionContext(grainAccessInformation));
 
-            //update batch schedule
-            if (batchSchedulePerGrain.ContainsKey(bid) == false)
+            TaskCompletionSource<bool> emitting;
+            if (!emitPromiseMap.ContainsKey(myEmitSeq))
             {
-                batchSchedulePerGrain.Add(bid, new Dictionary<Guid, BatchSchedule>());
-                batchTransactionList.Add(bid, new List<int>());
-                batchGrainClassName.Add(bid, new Dictionary<Guid, String>());
+                emitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
             }
-
-            batchTransactionList[bid].Add(tid);
-
-            Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[bid];
-            foreach (var item in grainAccessInformation)
+            emitting = emitPromiseMap[myEmitSeq];
+            if (emitting.Task.IsCompleted != true)
             {
-                //if (actorLastBatch.ContainsKey(item.Key))
-                //    lastBid = actorLastBatch[item.Key];
-                //else
-                //    lastBid = -1;
-                batchGrainClassName[bid][item.Key] = item.Value.Item1;
-                if (curScheduleMap.ContainsKey(item.Key) == false)
-                    curScheduleMap.Add(item.Key, new BatchSchedule(bid));
-                curScheduleMap[item.Key].AddNewTransaction(tid, item.Value.Item2);
+                await emitting.Task;
             }
-
-            //Console.WriteLine($"Coordinator: received Transaction {tid} for Batch {curBatchID}.");
-            return Task.FromResult(context);
+            return deterministicTransactionRequests[myEmitSeq][index];
         }
 
 
@@ -119,14 +117,14 @@ namespace Concurrency.Implementation
         public async Task<TransactionContext> NewTransaction()
         {
             TaskCompletionSource<bool> emitting;
-            if (!nonDeterministicPromiseMap.ContainsKey(curNondeterministicBatchID))
+            int myEmitSeq = this.curEmitSeq;
+            if (!emitPromiseMap.ContainsKey(myEmitSeq))
             {
-                nonDeterministicPromiseMap.Add(curNondeterministicBatchID, new TaskCompletionSource<bool>());
-                this.nonDeterministicBatchSize.Add(curNondeterministicBatchID, 0);
-            }
-                
-            emitting = nonDeterministicPromiseMap[curNondeterministicBatchID];
-            nonDeterministicBatchSize[curNondeterministicBatchID] = nonDeterministicBatchSize[curNondeterministicBatchID] + 1;
+                emitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
+                this.nonDeterministicEmitSize.Add(myEmitSeq, 0);
+            }       
+            emitting = emitPromiseMap[myEmitSeq];
+            nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] + 1;
 
             if (emitting.Task.IsCompleted != true)
             {
@@ -137,13 +135,12 @@ namespace Concurrency.Implementation
 
             //Check if the emitting of the current non-deterministic batch is completed, if so, 
             //set the token promise and increment the curNondeterministicBatchID.
-            nonDeterministicBatchSize[curNondeterministicBatchID] = nonDeterministicBatchSize[curNondeterministicBatchID] - 1;
-            if(nonDeterministicBatchSize[curNondeterministicBatchID] == 0)
+            nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] - 1;
+            if(nonDeterministicEmitSize[myEmitSeq] == 0)
             {
-                this.tokenPromise.SetResult(true); //Note: the passing of token could interleave here
-                nonDeterministicBatchSize.Remove(curNondeterministicBatchID);
-                this.nonDeterministicPromiseMap.Remove(curNondeterministicBatchID);
-                curNondeterministicBatchID++;
+                tokenPromise.SetResult(true); //Note: the passing of token could interleave here
+                nonDeterministicEmitSize.Remove(myEmitSeq);
+                emitPromiseMap.Remove(myEmitSeq);
             }
 
             //Console.WriteLine($"Coordinator: received Transaction {tid}");
@@ -185,9 +182,11 @@ namespace Concurrency.Implementation
             }
   
             await EmitBatch(token);
-            if (this.nonDeterministicPromiseMap.ContainsKey(curNondeterministicBatchID))
+
+
+            if (emitPromiseMap.ContainsKey(curEmitSeq))
             {
-                this.nonDeterministicPromiseMap[this.curNondeterministicBatchID].SetResult(true);
+                emitPromiseMap[curEmitSeq].SetResult(true);
             }
             else
             {
@@ -209,8 +208,46 @@ namespace Concurrency.Implementation
          */
         async Task EmitBatch(BatchToken token)
         {
-            if (batchSchedulePerGrain.ContainsKey(curBatchID) == false)
+            int myEmitSequence = this.curEmitSeq++;
+            txSeqInBatch = 0;
+            curBatchID = token.lastBatchID + 1;
+            curTransactionID = token.lastTransactionID + 1;
+
+            List<TransactionContext> transactionList;
+            Boolean shouldEmit = deterministicTransactionRequests.TryGetValue(myEmitSequence, out transactionList);
+
+            //Return if there is no deterministic transactions waiting for emit
+            if (shouldEmit == false)
                 return;
+
+            foreach(TransactionContext context in transactionList)
+            {
+                context.batchID = curBatchID;
+                context.transactionID = curTransactionID++;
+
+                transactionContextMap.Add(context.transactionID, context);
+
+                //update batch schedule
+                if (batchSchedulePerGrain.ContainsKey(context.batchID) == false)
+                {
+                    batchSchedulePerGrain.Add(context.batchID, new Dictionary<Guid, BatchSchedule>());
+                    batchTransactionList.Add(context.batchID, new List<int>());
+                    batchGrainClassName.Add(context.batchID, new Dictionary<Guid, String>());
+                }
+    
+                batchTransactionList[context.batchID].Add(context.transactionID);
+
+                //update the schedule for each grain accessed by this transaction
+                Dictionary<Guid, BatchSchedule> grainSchedule = batchSchedulePerGrain[context.batchID];
+                foreach (var item in context.grainAccessInformation)
+                {
+                    batchGrainClassName[context.batchID][item.Key] = item.Value.Item1;
+                    if (grainSchedule.ContainsKey(item.Key) == false)
+                        grainSchedule.Add(item.Key, new BatchSchedule(context.batchID));
+                    grainSchedule[item.Key].AddNewTransaction(context.transactionID, item.Value.Item2);
+                }
+                context.grainAccessInformation.Clear();
+            }
 
             Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
             expectedAcksPerBatch.Add(curBatchID, curScheduleMap.Count);
@@ -230,17 +267,9 @@ namespace Concurrency.Implementation
                 var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);
                 BatchSchedule schedule = item.Value;
                 Task emit = dest.ReceiveBatchSchedule(schedule);
-
-                //if(actorLastBatch.ContainsKey(dest))
-                //    actorLastBatch[dest] = schedule.batchID;
-                //else
-                //    actorLastBatch.Add(dest, schedule.batchID);
             }
             batchGrainClassName.Remove(curBatchID);
-            //This guarantees that batch schedules with smaller IDs are received earlier by grains.
-            //await Task.WhenAll(emitTasks);
             //Console.WriteLine($"Coordinator: sent schedule for batch {curBatchID} to {curScheduleMap.Count} grains.");
-            curBatchID++;
         }
 
         public Task AckTransactionCompletion(int bid, Guid executor_id)

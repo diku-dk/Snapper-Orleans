@@ -7,14 +7,16 @@ namespace Concurrency.Utilities
     [Serializable]
     public class TransactionContext
     {
-        public int batchID { get; }
-        public int transactionID { get; }
+        public int batchID { get; set; }
+        public int transactionID { get; set; }
 
         public Status status;
 
         public Boolean isDeterministic;
 
         public Guid coordinatorKey;
+
+        public Dictionary<Guid, Tuple<string, int>> grainAccessInformation;
 
         /*
          * Transaction coordinator sets the batchID and transactionID, which are not allowed to be changed.
@@ -32,6 +34,13 @@ namespace Concurrency.Utilities
             transactionID = tid;
             status = Status.Submitted;
             isDeterministic = false;
+        }
+
+        public TransactionContext(Dictionary<Guid, Tuple<string, int>> grainAccessInformation)
+        {
+            this.grainAccessInformation = grainAccessInformation;
+            status = Status.Submitted;
+            isDeterministic = true;
         }
 
         /*
