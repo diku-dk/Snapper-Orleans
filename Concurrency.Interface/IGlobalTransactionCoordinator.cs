@@ -8,6 +8,10 @@ using Utilities;
 
 namespace Concurrency.Interface
 {
+    struct Message<T>
+    {
+        T msg;
+    }
     public interface IGlobalTransactionCoordinator : IGrainWithGuidKey
     {
 
@@ -45,7 +49,11 @@ namespace Concurrency.Interface
         Task AckTransactionCompletion(int bid, Guid executor_id);
 
 
-        Task SpawnCoordinator(uint myId, uint neighbourId);
+        Task SpawnCoordinator(uint myId, uint numOfCoordinators);
+
+        [AlwaysInterleave]
+        Task NotifyCommit(int bid);
+
 
 
 

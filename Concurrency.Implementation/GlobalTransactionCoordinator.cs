@@ -18,6 +18,7 @@ namespace Concurrency.Implementation
         private int curTransactionID { get; set; }
         protected Guid myPrimaryKey;
         private IGlobalTransactionCoordinator neighbour;
+        private List<IGlobalTransactionCoordinator> coordinatorList;
 
         //Timer
         private IDisposable disposable;
@@ -29,11 +30,12 @@ namespace Concurrency.Implementation
         private Dictionary<int, Dictionary<Guid, BatchSchedule>> batchSchedulePerGrain;
         private Dictionary<int, List<int>> batchTransactionList;
         private Dictionary<int, Dictionary<Guid, String>> batchGrainClassName;
-
-
+        private SortedSet<int> batchesWaitingForCommit;
+       
 
         //Maintains the status of batch processing
         private Dictionary<int, TaskCompletionSource<Boolean>> batchStatusMap;
+        private int highestCommittedBatchID = -1;
 
         //Maintains the number of uncompleted grains of each batch
         private Dictionary<int, int> expectedAcksPerBatch;
@@ -162,7 +164,7 @@ namespace Concurrency.Implementation
                 token.lastTransactionID = this.curTransactionID - 1;
                 this.hasEmitted = false;
             }
-            neighbour.PassToken(token);           
+                       
         }
 
         /**
@@ -245,12 +247,43 @@ namespace Concurrency.Implementation
                     if (grainSchedule.ContainsKey(item.Key) == false)
                         grainSchedule.Add(item.Key, new BatchSchedule(context.batchID));
                     grainSchedule[item.Key].AddNewTransaction(context.transactionID, item.Value.Item2);
+
                 }
                 context.grainAccessInformation.Clear();
             }
 
             Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
             expectedAcksPerBatch.Add(curBatchID, curScheduleMap.Count);
+
+            //update thelast batch ID for each grain accessed by this batch
+            foreach(var item in curScheduleMap)
+
+
+
+            {
+                Guid grain = item.Key;
+                BatchSchedule schedule = item.Value;
+                if (token.lastBatchPerGrain.ContainsKey(grain))
+                    schedule.lastBatchId = token.lastBatchPerGrain[grain];
+                else
+                    schedule.lastBatchId = -1;
+                token.lastBatchPerGrain[grain] = schedule.batchID;
+            }
+
+            //garbage collection
+            if(this.highestCommittedBatchID > token.highestCommittedBatchID)
+            {
+                List<Guid> expiredGrains = new List<Guid>();
+                foreach (var item in token.lastBatchPerGrain)
+                {
+                    if (item.Value <= this.highestCommittedBatchID)
+                        expiredGrains.Add(item.Key);
+                }
+                foreach (var item in expiredGrains)
+                    token.lastBatchPerGrain.Remove(item);
+                token.highestCommittedBatchID = this.highestCommittedBatchID;
+            }
+
 
             if (batchStatusMap.ContainsKey(curBatchID) == false)
                 batchStatusMap.Add(curBatchID, new TaskCompletionSource<Boolean>());
@@ -262,6 +295,8 @@ namespace Concurrency.Implementation
                 participants.UnionWith(curScheduleMap.Keys);
                 await log.HandleOnPrepareInDeterministicProtocol(curBatchID, participants);
             }
+
+            neighbour.PassToken(token);
             foreach (KeyValuePair<Guid, BatchSchedule> item in curScheduleMap)
             {
                 var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);
@@ -272,14 +307,88 @@ namespace Concurrency.Implementation
             //Console.WriteLine($"Coordinator: sent schedule for batch {curBatchID} to {curScheduleMap.Count} grains.");
         }
 
-        public Task AckTransactionCompletion(int bid, Guid executor_id)
+        //Grain calls this function to ack its completion of a batch execution
+        public async Task AckTransactionCompletion(int bid, Guid executor_id)
         {
-            throw new NotImplementedException();
+            if (expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id))
+            {
+                expectedAcksPerBatch[bid]--;
+                if (expectedAcksPerBatch[bid] == 0)
+                {
+                    if(this.highestCommittedBatchID == bid - 1)
+                    {
+                        //commit
+                        this.highestCommittedBatchID = bid;
+                        if (log != null)
+                            await log.HandleOnCommitInDeterministicProtocol(bid);
+                        await BroadcastCommit();
+                    }
+                    else
+                    {
+                        //Put this batch into a list waiting for commit
+                        this.batchesWaitingForCommit.Add(bid);
+                    }
+
+                    foreach (int tid in batchTransactionList[bid])
+                    {
+                        transactionContextMap.Remove(tid);
+                    }
+                    int n = batchTransactionList[bid].Count;
+                    batchTransactionList.Remove(bid);
+                    expectedAcksPerBatch.Remove(bid);
+                    batchSchedulePerGrain.Remove(bid);
+                    batchGrainClassName.Remove(bid);
+
+                    batchStatusMap[bid].SetResult(true);
+                    Console.WriteLine($"Coordinator: batch {bid} has been committed with {n} transactions. ");
+                }
+            }
+            else
+            {
+                throw new Exception("Batch Id or grain not found!");
+            }
+        }
+        private async Task BroadcastCommit()
+        {
+            List<Task> tasks = new List<Task>();
+            foreach (var coordinator in this.coordinatorList)
+            {
+                tasks.Add(coordinator.NotifyCommit(this.highestCommittedBatchID));
+            }
+            await Task.WhenAll(tasks);
         }
 
-        public async Task SpawnCoordinator(uint myId, uint neighbourId)
+        public async Task NotifyCommit(int bid)
         {
+            if (bid > this.highestCommittedBatchID)
+                this.highestCommittedBatchID = bid;
+
+            Boolean commitOccur = false;
+            while(this.batchesWaitingForCommit.Count != 0 && batchesWaitingForCommit.Min == highestCommittedBatchID + 1)
+            {
+                //commit
+                this.highestCommittedBatchID++;
+                batchesWaitingForCommit.Remove(batchesWaitingForCommit.Min);
+                commitOccur = true;
+
+            }
+            if (commitOccur == true)
+            {
+                if (log != null)
+                    await log.HandleOnCommitInDeterministicProtocol(this.highestCommittedBatchID);
+                await BroadcastCommit();
+            }
+        }
+        public async Task SpawnCoordinator(uint myId, uint numofCoordinators)
+        {
+            uint neighbourId = (myId + 1) % numofCoordinators;
             neighbour = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid(neighbourId));
+            coordinatorList = new List<IGlobalTransactionCoordinator>();
+            for(uint i=0; i<numofCoordinators; i++)
+            {
+                if (i != myId)
+                    coordinatorList.Add(this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid(neighbourId)));
+            }
             //The "first" coordinator starts the token passing
             if (myId == 0)
             {
