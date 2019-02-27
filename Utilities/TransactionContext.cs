@@ -9,6 +9,7 @@ namespace Concurrency.Utilities
     {
         public int batchID { get; set; }
         public int transactionID { get; set; }
+        public int inBatchTransactionID;
 
         public Status status;
 
@@ -42,6 +43,7 @@ namespace Concurrency.Utilities
             status = Status.Submitted;
             isDeterministic = true;
         }
+
 
         /*
          * State of a transaction

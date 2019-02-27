@@ -26,9 +26,7 @@ namespace Concurrency.Implementation
         private TimeSpan batchInterval = TimeSpan.FromMilliseconds(1000);
 
         //Batch Schedule
-        private Dictionary<int, TransactionContext> transactionContextMap;
         private Dictionary<int, Dictionary<Guid, BatchSchedule>> batchSchedulePerGrain;
-        private Dictionary<int, List<int>> batchTransactionList;
         private Dictionary<int, Dictionary<Guid, String>> batchGrainClassName;
         private SortedSet<int> batchesWaitingForCommit;
        
@@ -63,12 +61,11 @@ namespace Concurrency.Implementation
             curBatchID = 0;
             curTransactionID = 0;
 
-            transactionContextMap = new Dictionary<int, TransactionContext>();
+ 
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, BatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             
             //actorLastBatch = new Dictionary<IDTransactionGrain, int>();
-            batchTransactionList = new Dictionary<int, List<int>>();
             expectedAcksPerBatch = new Dictionary<int, int>();
             batchStatusMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
             myPrimaryKey = this.GetPrimaryKey();
@@ -145,6 +142,7 @@ namespace Concurrency.Implementation
                 emitPromiseMap.Remove(myEmitSeq);
             }
 
+
             //Console.WriteLine($"Coordinator: received Transaction {tid}");
             return context;
         }
@@ -212,6 +210,7 @@ namespace Concurrency.Implementation
         {
             int myEmitSequence = this.curEmitSeq++;
             txSeqInBatch = 0;
+            int inBatchTransactionID = 0;
             curBatchID = token.lastBatchID + 1;
             curTransactionID = token.lastTransactionID + 1;
 
@@ -225,19 +224,16 @@ namespace Concurrency.Implementation
             foreach(TransactionContext context in transactionList)
             {
                 context.batchID = curBatchID;
-                context.transactionID = curTransactionID++;
+                context.transactionID = curTransactionID;
+                context.inBatchTransactionID = inBatchTransactionID++;
 
-                transactionContextMap.Add(context.transactionID, context);
 
                 //update batch schedule
                 if (batchSchedulePerGrain.ContainsKey(context.batchID) == false)
                 {
                     batchSchedulePerGrain.Add(context.batchID, new Dictionary<Guid, BatchSchedule>());
-                    batchTransactionList.Add(context.batchID, new List<int>());
                     batchGrainClassName.Add(context.batchID, new Dictionary<Guid, String>());
                 }
-    
-                batchTransactionList[context.batchID].Add(context.transactionID);
 
                 //update the schedule for each grain accessed by this transaction
                 Dictionary<Guid, BatchSchedule> grainSchedule = batchSchedulePerGrain[context.batchID];
@@ -257,9 +253,6 @@ namespace Concurrency.Implementation
 
             //update thelast batch ID for each grain accessed by this batch
             foreach(var item in curScheduleMap)
-
-
-
             {
                 Guid grain = item.Key;
                 BatchSchedule schedule = item.Value;
@@ -329,18 +322,12 @@ namespace Concurrency.Implementation
                         this.batchesWaitingForCommit.Add(bid);
                     }
 
-                    foreach (int tid in batchTransactionList[bid])
-                    {
-                        transactionContextMap.Remove(tid);
-                    }
-                    int n = batchTransactionList[bid].Count;
-                    batchTransactionList.Remove(bid);
                     expectedAcksPerBatch.Remove(bid);
                     batchSchedulePerGrain.Remove(bid);
                     batchGrainClassName.Remove(bid);
 
                     batchStatusMap[bid].SetResult(true);
-                    Console.WriteLine($"Coordinator: batch {bid} has been committed with {n} transactions. ");
+                    Console.WriteLine($"Coordinator: batch {bid} has been committed.");
                 }
             }
             else
