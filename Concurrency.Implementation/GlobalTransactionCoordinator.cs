@@ -46,9 +46,6 @@ namespace Concurrency.Implementation
         Dictionary<int, List<TransactionContext>> deterministicTransactionRequests;
         int txSeqInBatch;
 
-        //Promise controlling the emitting of token
-        TaskCompletionSource<Boolean> tokenPromise;
-
         //Emitting status
         private Boolean isEmitTimerOn = false;
         private Boolean hasToken = false;
@@ -73,7 +70,7 @@ namespace Concurrency.Implementation
             //Enable the following line for log
             //log = new Simple2PCLoggingProtocol<String>(this.GetType().ToString(), myPrimaryKey);
             disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
-            tokenPromise = new TaskCompletionSource<bool>();
+
 
             curEmitSeq = 0;
             emitPromiseMap = new Dictionary<int, TaskCompletionSource<bool>>(); 
@@ -137,7 +134,7 @@ namespace Concurrency.Implementation
             nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] - 1;
             if(nonDeterministicEmitSize[myEmitSeq] == 0)
             {
-                tokenPromise.SetResult(true); //Note: the passing of token could interleave here
+                
                 nonDeterministicEmitSize.Remove(myEmitSeq);
                 emitPromiseMap.Remove(myEmitSeq);
             }
@@ -180,26 +177,24 @@ namespace Concurrency.Implementation
             {
                 return;
             }
-  
+
+            int myCurEmitSeq = this.curEmitSeq;
             await EmitBatch(token);
 
+            token.lastBatchID = this.curBatchID;
+            token.lastTransactionID = this.curTransactionID + nonDeterministicEmitSize[myCurEmitSeq];
+            neighbour.PassToken(token);
 
-            if (emitPromiseMap.ContainsKey(curEmitSeq))
-            {
-                emitPromiseMap[curEmitSeq].SetResult(true);
-            }
-            else
-            {
-                if (tokenPromise.Task.IsCompleted == false)
-                    tokenPromise.SetResult(true);
-            }
 
-            await tokenPromise.Task;
+            if (emitPromiseMap.ContainsKey(myCurEmitSeq))
+            {
+                emitPromiseMap[myCurEmitSeq].SetResult(true);
+            }
 
             this.isEmitTimerOn = false;
             this.hasToken = false;
             this.hasEmitted = true;
-            tokenPromise = new TaskCompletionSource<bool>();
+
             return;
         }
 
@@ -289,7 +284,7 @@ namespace Concurrency.Implementation
                 await log.HandleOnPrepareInDeterministicProtocol(curBatchID, participants);
             }
 
-            neighbour.PassToken(token);
+            
             foreach (KeyValuePair<Guid, BatchSchedule> item in curScheduleMap)
             {
                 var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);

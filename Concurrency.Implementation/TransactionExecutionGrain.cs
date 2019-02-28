@@ -197,7 +197,8 @@ namespace Concurrency.Implementation
                 return invokeRet;
             }
 
-            int tid = call.funcInput.context.transactionID;
+            
+            int tid = call.funcInput.context.inBatchTransactionID;
             int bid = call.funcInput.context.batchID;
             int nextTid;
             
@@ -237,9 +238,10 @@ namespace Concurrency.Implementation
                 await promise.Task;
                 ret = await InvokeFunction(call);
             }
+            promiseMap.Remove(tid);
 
             //Console.WriteLine($"\n\n{this.GetType()}:  Tx {tid} is executed... trying next Tx ... \n\n");
-            
+
             //Record the execution in batch schedule
             batchScheduleMap[bid].AccessIncrement(tid);
             //Find the next transaction to be executed in this batch;
@@ -257,7 +259,6 @@ namespace Concurrency.Implementation
             {
                 batchQueue.Dequeue();
                 batchScheduleMap.Remove(bid);
-                promiseMap.Remove(bid);
                 //Log the state now
                 if (log != null && state != null)
                     await log.HandleOnCompleteInDeterministicProtocol(state, bid, coordinatorMap[bid]);
@@ -297,9 +298,9 @@ namespace Concurrency.Implementation
             return t.Result;
         }
 
-        private void Cleanup(long tid)
+        private void Cleanup(long bid)
         {
-            coordinatorMap.Remove(tid);
+            coordinatorMap.Remove(bid);
         }
 
         public async Task Abort(long tid)
