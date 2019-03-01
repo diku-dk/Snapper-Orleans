@@ -10,7 +10,6 @@ namespace Concurrency.Interface
 {
     struct Message<T>
     {
-        T msg;
     }
     public interface IGlobalTransactionCoordinator : IGrainWithGuidKey
     {
@@ -54,9 +53,7 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task NotifyCommit(int bid);
 
-
-
-
-
+        [AlwaysInterleave]
+        Task<bool> checkBatchCompletion(TransactionContext context);
     }
 }

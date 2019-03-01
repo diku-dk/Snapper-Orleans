@@ -1,42 +1,45 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Concurrency.Utilities
-{
-    [Serializable]
-    public class BatchSchedule
+{    
+    public class DeterministicBatchSchedule
     {
-        public List<int> transactionList;
-        public Dictionary<int, int> transactionAccessMap;
+        private List<int> transactionList;
+        private Dictionary<int, int> transactionAccessMap;
         private int curPos;
-        public Boolean completed;
+        private Boolean completed;
         public int batchID;
-        public int lastBatchId;
+        public int lastBatchID;        
+        public TaskCompletionSource<Boolean> prevDetBatch;
+        public TaskCompletionSource<Boolean> prevNonDetBatch;
 
-        public BatchSchedule(int bid, int lastBid)
+        public DeterministicBatchSchedule(int bid, int lastBid)
         {
             batchID = bid;
-            lastBatchId = lastBid;
+            lastBatchID = lastBid;
             curPos = 0;
             completed = false;
             transactionList = new List<int>();
             transactionAccessMap = new Dictionary<int, int>();
         }
 
-        public BatchSchedule(int bid)
+        public DeterministicBatchSchedule(int bid)
         {
             batchID = bid;
+            lastBatchID = -1;
             curPos = 0;            
             completed = false;
             transactionList = new List<int>();
             transactionAccessMap = new Dictionary<int, int>();
         }
 
-        public BatchSchedule(BatchSchedule schedule)
+        public DeterministicBatchSchedule(DeterministicBatchSchedule schedule)
         {
             batchID = schedule.batchID;
-            lastBatchId = schedule.lastBatchId;
+            lastBatchID = schedule.lastBatchID;
             curPos = schedule.curPos;
             completed = schedule.completed;
             transactionList = new List<int>(schedule.transactionList);
@@ -44,7 +47,7 @@ namespace Concurrency.Utilities
         }
 
         //set a completed batch schedule
-        public BatchSchedule(int bid, Boolean b)
+        public DeterministicBatchSchedule(int bid, Boolean b)
         {
             batchID = bid;
             completed = b;

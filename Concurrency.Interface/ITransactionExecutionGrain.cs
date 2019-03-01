@@ -26,7 +26,7 @@ namespace Concurrency.Interface
          * Receive batch schedule from the coordinator.
          */
         [AlwaysInterleave]
-        Task ReceiveBatchSchedule(BatchSchedule schedule);
+        Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule);
 
         /*
          * Called by other grains to execute a function.

@@ -18,7 +18,7 @@ namespace Concurrency.Implementation.Deterministic
         private TimeSpan batchInterval = TimeSpan.FromMilliseconds(1000);
 
         private Dictionary<int, TransactionContext> transactionContextMap;
-        private Dictionary<int, Dictionary<Guid, BatchSchedule>> batchSchedulePerGrain;
+        private Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>> batchSchedulePerGrain;
         private Dictionary<int, List<int>> batchTransactionList;
         private Dictionary<int, Dictionary<Guid, String>> batchGrainClassName;
         private ILoggingProtocol<String> log;
@@ -41,7 +41,7 @@ namespace Concurrency.Implementation.Deterministic
             curBatchID = 0;
             curTransactionID = 0;
             transactionContextMap = new Dictionary<int, TransactionContext>();
-            batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, BatchSchedule>>();
+            batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             //actorLastBatch = new Dictionary<IDTransactionGrain, int>();
             batchTransactionList = new Dictionary<int, List<int>>();
@@ -72,14 +72,14 @@ namespace Concurrency.Implementation.Deterministic
             //update batch schedule
             if (batchSchedulePerGrain.ContainsKey(bid) == false)
             {
-                batchSchedulePerGrain.Add(bid, new Dictionary<Guid, BatchSchedule>());
+                batchSchedulePerGrain.Add(bid, new Dictionary<Guid, DeterministicBatchSchedule>());
                 batchTransactionList.Add(bid, new List<int>());
                 batchGrainClassName.Add(bid, new Dictionary<Guid, String>());
             }
 
             batchTransactionList[bid].Add(tid);
 
-            Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[bid];
+            Dictionary<Guid, DeterministicBatchSchedule> curScheduleMap = batchSchedulePerGrain[bid];
             foreach (var item in grainAccessInformation)
             {
                 //if (actorLastBatch.ContainsKey(item.Key))
@@ -88,7 +88,7 @@ namespace Concurrency.Implementation.Deterministic
                 //    lastBid = -1;
                 batchGrainClassName[bid][item.Key] = item.Value.Item1;
                 if (curScheduleMap.ContainsKey(item.Key) == false)
-                    curScheduleMap.Add(item.Key, new BatchSchedule(bid));
+                    curScheduleMap.Add(item.Key, new DeterministicBatchSchedule(bid));
                 curScheduleMap[item.Key].AddNewTransaction(tid, item.Value.Item2);
             }
 
@@ -115,7 +115,7 @@ namespace Concurrency.Implementation.Deterministic
                 return;
 
 
-            Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
+            Dictionary<Guid, DeterministicBatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
             expectedAcksPerBatch.Add(curBatchID, curScheduleMap.Count);
 
             if (batchStatusMap.ContainsKey(curBatchID) == false)
@@ -128,10 +128,10 @@ namespace Concurrency.Implementation.Deterministic
                 participants.UnionWith(curScheduleMap.Keys);
                 await log.HandleOnPrepareInDeterministicProtocol(curBatchID, participants);
             }
-            foreach (KeyValuePair<Guid, BatchSchedule> item in curScheduleMap)
+            foreach (KeyValuePair<Guid, DeterministicBatchSchedule> item in curScheduleMap)
             {
                 var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);
-                BatchSchedule schedule = item.Value;
+                DeterministicBatchSchedule schedule = item.Value;
                 Task emit = dest.ReceiveBatchSchedule(schedule);
 
                 //if(actorLastBatch.ContainsKey(dest))

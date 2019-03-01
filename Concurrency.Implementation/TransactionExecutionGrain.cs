@@ -14,17 +14,23 @@ namespace Concurrency.Implementation
 {
     public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain
     {
-        public INondeterministicTransactionCoordinator ndtc;
-        public IDeterministicTransactionCoordinator dtc;
+        //public INondeterministicTransactionCoordinator ndtc;
+        //public IDeterministicTransactionCoordinator dtc;
         private int lastBatchId;
-        private Dictionary<int, BatchSchedule> batchScheduleMap;
+        private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
         private Dictionary<long, Guid> coordinatorMap;
-        private Queue<BatchSchedule> batchQueue;
+        private Queue<DeterministicBatchSchedule> batchScheduleQueue;
+        private NonDeterministicSchedule nonDetSchedule;
+        private Dictionary<int, TaskCompletionSource<Boolean>> batchCompletionMap;
+        private TaskCompletionSource<Boolean> nonDetCompletion;
         private Dictionary<int, List<TaskCompletionSource<Boolean>>> promiseMap;
         protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
         protected String myUserClassName;
+        protected int numCoordinators = 1;
+        protected Random rnd;
+        private IGlobalTransactionCoordinator myCoordinator;
 
         public TransactionExecutionGrain(ITransactionalState<TState> state){
             this.state = state;
@@ -36,22 +42,25 @@ namespace Concurrency.Implementation
         }
         public override Task OnActivateAsync()
         {
-
-            ndtc = this.GrainFactory.GetGrain<INondeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
+            rnd = new Random();
+            myCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid((UInt32)rnd.Next(0, numCoordinators)));
+            //ndtc = this.GrainFactory.GetGrain<INondeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
             //dtc = this.GrainFactory.GetGrain<IDeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
-            batchQueue = new Queue<BatchSchedule>();
-            batchScheduleMap = new Dictionary<int, BatchSchedule>();
+            batchScheduleQueue = new Queue<DeterministicBatchSchedule>();
+            batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();
 
             //Initialize the "batch" with id "-1" as completed;
             lastBatchId = -1;
-            batchScheduleMap.Add(lastBatchId, new BatchSchedule(lastBatchId, true));
+            batchScheduleMap.Add(lastBatchId, new DeterministicBatchSchedule(lastBatchId, true));
 
             promiseMap = new Dictionary<int, List<TaskCompletionSource<Boolean>>>();
             myPrimaryKey = this.GetPrimaryKey();
             //Enable the following line for logging
 
             //log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey);
-
+            batchCompletionMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
+            batchCompletionMap.Add(-1, new TaskCompletionSource<Boolean>(true));
+            nonDetCompletion = new TaskCompletionSource<bool>(false);
             coordinatorMap = new Dictionary<long, Guid>();
             return base.OnActivateAsync();
         }
@@ -62,31 +71,29 @@ namespace Concurrency.Implementation
          * On receiving the returned transaction context, start the execution of a transaction.
          * 
          */
-
         public async Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation, String startFunction, FunctionInput inputs)
         {
-            TransactionContext context = await dtc.NewTransaction(grainAccessInformation);
+            TransactionContext context = await myCoordinator.NewTransaction(grainAccessInformation);
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
             
             Task<FunctionResult> t1 = this.Execute(c1);
-            Task t2 = dtc.checkBatchCompletion(context);
+            Task t2 = myCoordinator.checkBatchCompletion(context);
             await Task.WhenAll(t1, t2);
             //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
             return t1.Result;
-
         }
 
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
-
-            TransactionContext context = await ndtc.NewTransaction();
+            TransactionContext context = await myCoordinator.NewTransaction();
             functionCallInput.context = context;
             context.coordinatorKey = this.myPrimaryKey;
             //Console.WriteLine($"Transaction {context.transactionID}: is started.\n");
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
             Task<FunctionResult> t1 = this.Execute(c1);
             await t1;
+
             //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
 
             Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
@@ -162,15 +169,28 @@ namespace Concurrency.Implementation
          *
          */
          
-        public Task ReceiveBatchSchedule(BatchSchedule schedule)
+        public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
-            //Console.WriteLine($"\n\n{this.GetType()}: Received schedule for batch {schedule.batchID}.\n\n");
-            BatchSchedule curSchedule = new BatchSchedule(schedule);
-            batchScheduleMap.Add(schedule.batchID, curSchedule);
-            batchQueue.Enqueue(curSchedule);
+            //Console.WriteLine($"\n\n{this.GetType()}: Received schedule for batch {schedule.batchID}.\n\n");            
+
+            batchScheduleMap.Add(schedule.batchID, schedule);
+            batchScheduleQueue.Enqueue(schedule);
+
+            //Create the promise of the previous batch if not present
+            if(!batchCompletionMap.ContainsKey(schedule.lastBatchID))
+            {
+                batchCompletionMap.Add(schedule.lastBatchID, new TaskCompletionSource<Boolean>(false));
+            }
+            //Create my own promise if not present
+            if (!batchCompletionMap.ContainsKey(schedule.batchID))
+            {
+                batchCompletionMap.Add(schedule.batchID, new TaskCompletionSource<Boolean>(false));
+            }
+
+
 
             //Check if this batch is at the head of the queue
-            BatchSchedule headSchedule = batchQueue.Peek();
+            DeterministicBatchSchedule headSchedule = batchScheduleQueue.Peek();
             if (headSchedule.batchID == schedule.batchID)
             {
                 //Check if there is a buffered function call in this batch which can be executed;
@@ -215,7 +235,7 @@ namespace Concurrency.Implementation
             if (batchScheduleMap.ContainsKey(bid))
             {
 
-                BatchSchedule schedule = batchQueue.Peek();
+                DeterministicBatchSchedule schedule = batchScheduleQueue.Peek();
                 if (schedule.batchID == bid)
                 {
                     nextTid = batchScheduleMap[bid].curExecTransaction();
@@ -257,7 +277,7 @@ namespace Concurrency.Implementation
             }
             else
             {
-                batchQueue.Dequeue();
+                batchScheduleQueue.Dequeue();
                 batchScheduleMap.Remove(bid);
                 //Log the state now
                 if (log != null && state != null)
@@ -268,9 +288,9 @@ namespace Concurrency.Implementation
                 Task ack = dtc.AckBatchCompletion(bid, this.myPrimaryKey);
 
                 //The schedule for this batch {$bid} has been completely executed. Check if any promise for next batch can be set.
-                if (batchQueue.Count != 0)
+                if (batchScheduleQueue.Count != 0)
                 {
-                    BatchSchedule nextSchedule = batchQueue.Peek();
+                    DeterministicBatchSchedule nextSchedule = batchScheduleQueue.Peek();
                     nextTid = nextSchedule.curExecTransaction();
                     if (promiseMap.ContainsKey(nextTid) && promiseMap[nextTid].Count != 0)
                     {

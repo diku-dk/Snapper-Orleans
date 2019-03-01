@@ -26,7 +26,7 @@ namespace Concurrency.Implementation
         private TimeSpan batchInterval = TimeSpan.FromMilliseconds(1000);
 
         //Batch Schedule
-        private Dictionary<int, Dictionary<Guid, BatchSchedule>> batchSchedulePerGrain;
+        private Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>> batchSchedulePerGrain;
         private Dictionary<int, Dictionary<Guid, String>> batchGrainClassName;
         private SortedSet<int> batchesWaitingForCommit;
        
@@ -59,7 +59,7 @@ namespace Concurrency.Implementation
             curTransactionID = 0;
 
  
-            batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, BatchSchedule>>();
+            batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             
             //actorLastBatch = new Dictionary<IDTransactionGrain, int>();
@@ -226,35 +226,35 @@ namespace Concurrency.Implementation
                 //update batch schedule
                 if (batchSchedulePerGrain.ContainsKey(context.batchID) == false)
                 {
-                    batchSchedulePerGrain.Add(context.batchID, new Dictionary<Guid, BatchSchedule>());
+                    batchSchedulePerGrain.Add(context.batchID, new Dictionary<Guid, DeterministicBatchSchedule>());
                     batchGrainClassName.Add(context.batchID, new Dictionary<Guid, String>());
                 }
 
                 //update the schedule for each grain accessed by this transaction
-                Dictionary<Guid, BatchSchedule> grainSchedule = batchSchedulePerGrain[context.batchID];
+                Dictionary<Guid, DeterministicBatchSchedule> grainSchedule = batchSchedulePerGrain[context.batchID];
                 foreach (var item in context.grainAccessInformation)
                 {
                     batchGrainClassName[context.batchID][item.Key] = item.Value.Item1;
                     if (grainSchedule.ContainsKey(item.Key) == false)
-                        grainSchedule.Add(item.Key, new BatchSchedule(context.batchID));
+                        grainSchedule.Add(item.Key, new DeterministicBatchSchedule(context.batchID));
                     grainSchedule[item.Key].AddNewTransaction(context.transactionID, item.Value.Item2);
 
                 }
                 context.grainAccessInformation.Clear();
             }
 
-            Dictionary<Guid, BatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
+            Dictionary<Guid, DeterministicBatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
             expectedAcksPerBatch.Add(curBatchID, curScheduleMap.Count);
 
             //update thelast batch ID for each grain accessed by this batch
             foreach(var item in curScheduleMap)
             {
                 Guid grain = item.Key;
-                BatchSchedule schedule = item.Value;
+                DeterministicBatchSchedule schedule = item.Value;
                 if (token.lastBatchPerGrain.ContainsKey(grain))
-                    schedule.lastBatchId = token.lastBatchPerGrain[grain];
+                    schedule.lastBatchID = token.lastBatchPerGrain[grain];
                 else
-                    schedule.lastBatchId = -1;
+                    schedule.lastBatchID = -1;
                 token.lastBatchPerGrain[grain] = schedule.batchID;
             }
 
@@ -285,10 +285,10 @@ namespace Concurrency.Implementation
             }
 
             
-            foreach (KeyValuePair<Guid, BatchSchedule> item in curScheduleMap)
+            foreach (KeyValuePair<Guid, DeterministicBatchSchedule> item in curScheduleMap)
             {
                 var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);
-                BatchSchedule schedule = item.Value;
+                DeterministicBatchSchedule schedule = item.Value;
                 Task emit = dest.ReceiveBatchSchedule(schedule);
             }
             batchGrainClassName.Remove(curBatchID);
@@ -330,6 +330,20 @@ namespace Concurrency.Implementation
                 throw new Exception("Batch Id or grain not found!");
             }
         }
+
+        public async Task<bool> checkBatchCompletion(TransactionContext context)
+        {
+            if (batchStatusMap.ContainsKey(context.batchID) == false)
+            {
+                batchStatusMap.Add(context.batchID, new TaskCompletionSource<bool>());
+            }
+
+            if (batchStatusMap[context.batchID].Task.IsCompleted == false)
+                await batchStatusMap[context.batchID].Task;
+            batchStatusMap.Remove(context.batchID);
+            return true;
+        }
+
         private async Task BroadcastCommit()
         {
             List<Task> tasks = new List<Task>();
