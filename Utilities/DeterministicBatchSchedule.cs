@@ -11,10 +11,13 @@ namespace Concurrency.Utilities
         private Dictionary<int, int> transactionAccessMap;
         private int curPos;
         private Boolean completed;
+        public Guid globalCoordinator;
         public int batchID;
-        public int lastBatchID;        
+        public int lastBatchID;
+
         public TaskCompletionSource<Boolean> prevDetBatch;
         public TaskCompletionSource<Boolean> prevNonDetBatch;
+
 
         public DeterministicBatchSchedule(int bid, int lastBid)
         {

@@ -289,6 +289,7 @@ namespace Concurrency.Implementation
             {
                 var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);
                 DeterministicBatchSchedule schedule = item.Value;
+                schedule.globalCoordinator = this.myPrimaryKey;
                 Task emit = dest.ReceiveBatchSchedule(schedule);
             }
             batchGrainClassName.Remove(curBatchID);
@@ -296,7 +297,7 @@ namespace Concurrency.Implementation
         }
 
         //Grain calls this function to ack its completion of a batch execution
-        public async Task AckTransactionCompletion(int bid, Guid executor_id)
+        public async Task AckBatchCompletion(int bid, Guid executor_id)
         {
             if (expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id))
             {

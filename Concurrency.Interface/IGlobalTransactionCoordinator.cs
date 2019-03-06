@@ -41,13 +41,6 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task PassToken(BatchToken token);
 
-        /// <summary>
-        /// Transaction coordinator of deterministic batches calls this function to notify the completion of a deterministic batch
-        /// </summary>
-        [AlwaysInterleave]
-        Task AckTransactionCompletion(int bid, Guid executor_id);
-
-
         Task SpawnCoordinator(uint myId, uint numOfCoordinators);
 
         [AlwaysInterleave]
@@ -55,5 +48,11 @@ namespace Concurrency.Interface
 
         [AlwaysInterleave]
         Task<bool> checkBatchCompletion(TransactionContext context);
+
+        /// <summary>
+        /// Actors call this function to notify coordinator that a transaction has been completed locally. 
+        /// </summary>
+        [AlwaysInterleave]
+        Task AckBatchCompletion(int bid, Guid executor_id);
     }
 }
