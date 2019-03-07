@@ -13,17 +13,10 @@ using Utilities;
 namespace Concurrency.Implementation
 {
     public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain
-    {
-        //public INondeterministicTransactionCoordinator ndtc;
-        //public IDeterministicTransactionCoordinator dtc;
-        private int lastBatchId;
+    {   
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
-        private Dictionary<long, Guid> coordinatorMap;
-        //private Queue<DeterministicBatchSchedule> batchScheduleQueue;
+        private Dictionary<long, Guid> coordinatorMap;        
         private NonDeterministicSchedule nonDetSchedule;
-        //private Dictionary<int, TaskCompletionSource<Boolean>> batchCompletionMap;
-        //private TaskCompletionSource<Boolean> nonDetCompletion;
-        //private Dictionary<int, Dictionary<int, List<TaskCompletionSource<Boolean>>>> inBatchTransactionCompletionMap;
         protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
@@ -44,17 +37,8 @@ namespace Concurrency.Implementation
         public override Task OnActivateAsync()
         {
             rnd = new Random();
-            myCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid((UInt32)rnd.Next(0, numCoordinators)));
-            //ndtc = this.GrainFactory.GetGrain<INondeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
-            //dtc = this.GrainFactory.GetGrain<IDeterministicTransactionCoordinator>(Helper.convertUInt32ToGuid(0));
-            //batchScheduleQueue = new Queue<DeterministicBatchSchedule>();
-            batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();
-
-            //Initialize the "batch" with id "-1" as completed;
-            lastBatchId = -1;
-            batchScheduleMap.Add(lastBatchId, new DeterministicBatchSchedule(lastBatchId, true));
-
-            
+            myCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid((UInt32)rnd.Next(0, numCoordinators)));            
+            batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();                      
             myPrimaryKey = this.GetPrimaryKey();
             myScheduler = new TransactionScheduler(batchScheduleMap);
             //Enable the following line for logging

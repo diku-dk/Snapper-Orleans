@@ -31,7 +31,6 @@ namespace Concurrency.Implementation
             batchCompletionMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
             batchCompletionMap.Add(-1, new TaskCompletionSource<Boolean>(true));
             nonDetCompletion = new TaskCompletionSource<bool>(false);
-
         }
 
         public void RegisterDeterministicBatchSchedule(DeterministicBatchSchedule schedule) 

@@ -47,14 +47,7 @@ namespace Concurrency.Utilities
             completed = schedule.completed;
             transactionList = new List<int>(schedule.transactionList);
             transactionAccessMap = new Dictionary<int, int>(schedule.transactionAccessMap);
-        }
-
-        //set a completed batch schedule
-        public DeterministicBatchSchedule(int bid, Boolean b)
-        {
-            batchID = bid;
-            completed = b;
-        }
+        }        
 
         public void AddNewTransaction(int tid, int num)
         {
