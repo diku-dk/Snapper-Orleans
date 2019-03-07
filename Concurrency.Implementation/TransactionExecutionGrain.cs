@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Concurrency.Interface;
 using Concurrency.Interface.Nondeterministic;
 using Concurrency.Interface.Logging;
-using Concurrency.Utilities;
+using Utilities;
 using Concurrency.Implementation.Logging;
 using Orleans;
 using Utilities;

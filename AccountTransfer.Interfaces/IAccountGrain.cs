@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Concurrency.Interface;
-using Concurrency.Utilities;
+using Utilities;
 using Orleans;
 
 namespace AccountTransfer.Interfaces

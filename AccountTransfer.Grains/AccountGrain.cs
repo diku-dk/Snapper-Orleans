@@ -6,7 +6,7 @@ using Orleans.Transactions.Abstractions;
 using AccountTransfer.Interfaces;
 using System.Collections.Generic;
 using Concurrency.Implementation;
-using Concurrency.Utilities;
+using Utilities;
 using Concurrency.Interface.Nondeterministic;
 using Concurrency.Implementation.Nondeterministic;
 using Concurrency.Implementation.Deterministic;

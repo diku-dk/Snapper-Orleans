@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Orleans.CodeGeneration;
 using Concurrency.Implementation;
-using Concurrency.Utilities;
+using Utilities;
 
 [assembly: GenerateSerializer(typeof(TPCC.Grains.WarehouseData))]
 

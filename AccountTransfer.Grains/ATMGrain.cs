@@ -5,7 +5,7 @@ using Orleans.Concurrency;
 using AccountTransfer.Interfaces;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
-using Concurrency.Utilities;
+using Utilities;
 using Concurrency.Implementation;
 using Utilities;
 

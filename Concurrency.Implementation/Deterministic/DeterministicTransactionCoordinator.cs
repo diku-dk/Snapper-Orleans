@@ -1,5 +1,5 @@
 ﻿using Concurrency.Interface;
-using Concurrency.Utilities;
+using Utilities;
 using Orleans;
 using System;
 using System.Collections.Generic;

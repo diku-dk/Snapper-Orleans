@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Concurrency.Utilities
+namespace Utilities
 {
     [Serializable]
     public class TransactionContext

@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Orleans;
 using Concurrency.Interface;
-using Concurrency.Utilities;
+using Utilities;
 
 namespace TPCC.Interfaces
 {

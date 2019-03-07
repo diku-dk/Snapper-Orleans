@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Text;
 using Concurrency.Interface;
 using Concurrency.Interface.Nondeterministic;
-using Concurrency.Utilities;
+using Utilities;
 using System.Threading.Tasks;
 
 namespace Concurrency.Implementation.Nondeterministic

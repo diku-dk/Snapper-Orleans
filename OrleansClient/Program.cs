@@ -10,7 +10,7 @@ using System.Collections.Generic;
 using AccountTransfer.Grains;
 using System.Reflection;
 using Concurrency.Interface;
-using Concurrency.Utilities;
+using Utilities;
 using System.Threading;
 using Utilities;
 using Orleans.Hosting;

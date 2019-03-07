@@ -55,7 +55,7 @@ namespace OrleansClient
 
                 List<object> input = new List<object> { fromId, toId, 100 };
                 DateTime ts1 = DateTime.Now;
-                await atm.StartTransaction(grainAccessInformation, "Transfer", new Concurrency.Utilities.FunctionInput(input));
+                await atm.StartTransaction(grainAccessInformation, "Transfer", new Utilities.FunctionInput(input));
                 DateTime ts2 = DateTime.Now;
                 sumLatency += (ts2 - ts1);
                 Console.WriteLine($"\n Transaction: {i} latency: {ts2 - ts1}.\n");

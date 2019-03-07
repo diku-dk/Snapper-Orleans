@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Concurrency.Utilities;
+using Utilities;
 using Orleans;
 using Orleans.Concurrency;
 using Utilities;
