@@ -156,7 +156,7 @@ namespace Concurrency.Implementation
             //Console.WriteLine($"\n\n{this.GetType()}: Received schedule for batch {schedule.batchID}.\n\n");        
             
             batchScheduleMap.Add(schedule.batchID, schedule);            
-            myScheduler.RegisterDeterministicBatchSchedule(schedule);
+            myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
             return Task.CompletedTask;
         }
 

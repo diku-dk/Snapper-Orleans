@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Concurrency.Utilities
+namespace Utilities
 {    
     public class DeterministicBatchSchedule
     {
@@ -14,6 +14,7 @@ namespace Concurrency.Utilities
         public Guid globalCoordinator;
         public int batchID;
         public int lastBatchID;
+        public int 
 
         public TaskCompletionSource<Boolean> prevDetBatch;
         public TaskCompletionSource<Boolean> prevNonDetBatch;
