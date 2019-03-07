@@ -198,15 +198,12 @@ namespace Concurrency.Implementation
             {
                 //Check if there is a buffered function call for this batch, if present, execute it
                 int tid = schedule.curExecTransaction();
-                if (inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid) && inBatchTransactionCompletionMap[schedule.batchID][tid].Count != 0)
+                if ( inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid) && inBatchTransactionCompletionMap[schedule.batchID][tid].Count != 0)
                 {
                     inBatchTransactionCompletionMap[schedule.batchID][tid][0].SetResult(true);
                 }
             }
-            else
-            {
-                await 
-            }
+
 
             return Task.CompletedTask;
         }
@@ -227,57 +224,15 @@ namespace Concurrency.Implementation
             
             int tid = call.funcInput.context.inBatchTransactionID;
             int bid = call.funcInput.context.batchID;
-            int nextTid;
+            // await scheduler.waitForTurn(bid, tid);
             
+            //Execute the function call;
+            var ret = await InvokeFunction(call);
 
-            
-
-
-            ret = await InvokeFunction(call);
-            //Remove the completed promise 
-            inBatchTransactionCompletionMap[bid][tid].Remove(promise);
 
             //Console.WriteLine($"\n\n{this.GetType()}:  Tx {tid} is executed... trying next Tx ... \n\n");
 
-            //Record the execution in batch schedule
-            batchScheduleMap[bid].AccessIncrement(tid);
-            //Find the next transaction to be executed in this batch;
-            nextTid = batchScheduleMap[bid].curExecTransaction();
-            //Console.WriteLine($"\n\n{this.GetType()}: nextTid is {nextTid} \n\n");
-            if (nextTid != -1)
-            {
-                if (inBatchTransactionCompletionMap[bid].ContainsKey(nextTid) && inBatchTransactionCompletionMap[bid][nextTid].Count>0)
-                {
-                    //Console.WriteLine($"\n\n{this.GetType()}: Set promise result for Tx {nextTid} \n\n");
-                    inBatchTransactionCompletionMap[bid][nextTid][0].SetResult(true);
-                }
-            }
-            else
-            {
-                //batchScheduleQueue.Dequeue();                
-                //Log the state now
-                if (log != null && state != null)
-                    await log.HandleOnCompleteInDeterministicProtocol(state, bid, batchScheduleMap[bid].globalCoordinator);
 
-                var batchCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(batchScheduleMap[bid].globalCoordinator);
-                Task ack = batchCoordinator.AckBatchCompletion(bid, myPrimaryKey);
-                batchScheduleMap.Remove(bid);
-
-                //The schedule for this batch {$bid} has been completely executed. Check if any promise for next batch can be set.
-                this.batchCompletionMap[bid].SetResult(true);
-
-                if()
-                if (batchScheduleQueue.Count != 0)
-                {
-                    DeterministicBatchSchedule nextSchedule = batchScheduleQueue.Peek();
-                    nextTid = nextSchedule.curExecTransaction();
-                    if (promiseMap.ContainsKey(nextTid) && promiseMap[nextTid].Count != 0)
-                    {
-                        promiseMap[nextTid][0].SetResult(true);
-                    }
-                }
-
-            }
 
             return new FunctionResult(ret);            
         }
