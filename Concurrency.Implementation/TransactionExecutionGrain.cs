@@ -15,8 +15,8 @@ namespace Concurrency.Implementation
     public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain
     {   
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
-        private Dictionary<long, Guid> coordinatorMap;        
-        private NonDeterministicSchedule nonDetSchedule;
+        //private Dictionary<int, NonDetBatchSchedule> nonDetBatchScheduleMap;
+        private Dictionary<long, Guid> coordinatorMap;                
         protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
@@ -38,7 +38,7 @@ namespace Concurrency.Implementation
         {
             rnd = new Random();
             myCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid((UInt32)rnd.Next(0, numCoordinators)));            
-            batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();                      
+            batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();            
             myPrimaryKey = this.GetPrimaryKey();
             myScheduler = new TransactionScheduler(batchScheduleMap);
             //Enable the following line for logging

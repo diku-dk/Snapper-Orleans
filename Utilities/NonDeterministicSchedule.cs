@@ -5,12 +5,12 @@ using System.Threading.Tasks;
 
 namespace Utilities
 {    
-    public class NonDeterministicSchedule
+    public class NonDetBatchSchedule
     {
         public HashSet<int> transactions;
         public TaskCompletionSource<Boolean> waitingForBatch;
 
-        NonDeterministicSchedule(TaskCompletionSource<Boolean> waitingForBatch, int transactionId)
+        NonDetBatchSchedule(TaskCompletionSource<Boolean> waitingForBatch, int transactionId)
         {
             transactions = new HashSet<int>();
             transactions.Add(transactionId);

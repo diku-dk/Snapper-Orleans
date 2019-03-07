@@ -17,9 +17,10 @@ namespace Concurrency.Implementation
         //private int lastBatchId;
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
         //private Dictionary<long, Guid> coordinatorMap;
-        //private Queue<DeterministicBatchSchedule> batchScheduleQueue;
-        private NonDeterministicSchedule nonDetSchedule;
+        //private Queue<DeterministicBatchSchedule> batchScheduleQueue;        
         private Dictionary<int, TaskCompletionSource<Boolean>> batchCompletionMap;
+        private Dictionary<int, NonDetBatchSchedule> nonDetBatchScheduleMap;
+        private int lastScheduledBatchId; //Includes deterministic and not-deterministic batches
         private TaskCompletionSource<Boolean> nonDetCompletion;
         private Dictionary<int, Dictionary<int, List<TaskCompletionSource<Boolean>>>> inBatchTransactionCompletionMap;
 
@@ -27,6 +28,7 @@ namespace Concurrency.Implementation
         public TransactionScheduler(Dictionary<int, DeterministicBatchSchedule> batchScheduleMap)
         {
             this.batchScheduleMap = batchScheduleMap;
+            nonDetBatchScheduleMap = new Dictionary<int, NonDetBatchSchedule>();
             inBatchTransactionCompletionMap = new Dictionary<int, Dictionary<int, List<TaskCompletionSource<bool>>>>();
             batchCompletionMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
             batchCompletionMap.Add(-1, new TaskCompletionSource<Boolean>(true));
