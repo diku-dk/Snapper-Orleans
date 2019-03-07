@@ -24,8 +24,49 @@ namespace Concurrency.Implementation
         private Dictionary<int, Dictionary<int, List<TaskCompletionSource<Boolean>>>> inBatchTransactionCompletionMap;
 
 
+        public TransactionScheduler(Dictionary<int, DeterministicBatchSchedule> batchScheduleMap)
+        {
+            this.batchScheduleMap = batchScheduleMap;
+            inBatchTransactionCompletionMap = new Dictionary<int, Dictionary<int, List<TaskCompletionSource<bool>>>>();
+            batchCompletionMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
+            batchCompletionMap.Add(-1, new TaskCompletionSource<Boolean>(true));
+            nonDetCompletion = new TaskCompletionSource<bool>(false);
+
+        }
+
+        public void RegisterDeterministicBatchSchedule(DeterministicBatchSchedule schedule) 
+        {
+            //Create the promise of the previous batch if not present
+            if (!batchCompletionMap.ContainsKey(schedule.lastBatchID))
+            {
+                batchCompletionMap.Add(schedule.lastBatchID, new TaskCompletionSource<Boolean>(false));
+            }
+            //Create my own promise if not present
+            if (!batchCompletionMap.ContainsKey(schedule.batchID))
+            {
+                batchCompletionMap.Add(schedule.batchID, new TaskCompletionSource<Boolean>(false));
+            }
+
+            //Create the in batch promise map if not present
+            if (this.inBatchTransactionCompletionMap.ContainsKey(schedule.batchID) == false)
+                this.inBatchTransactionCompletionMap.Add(schedule.batchID, new Dictionary<int, List<TaskCompletionSource<bool>>>());
+
+            //Check if this batch can be executed: 
+            //(1) check the promise status of its previous batch
+            //(2) check the promise for nonDeterministic batch
+            if (this.nonDetCompletion.Task.IsCompleted && batchCompletionMap[schedule.lastBatchID].Task.IsCompleted)
+            {
+                //Check if there is a buffered function call for this batch, if present, execute it
+                int tid = schedule.curExecTransaction();
+                if (inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid) && inBatchTransactionCompletionMap[schedule.batchID][tid].Count != 0)
+                {
+                    inBatchTransactionCompletionMap[schedule.batchID][tid][0].SetResult(true);
+                }
+            }
+        }
+
         //for deterministic transactions
-        public async void waitForTurn(int bid, int tid)
+        public async Task<int> waitForTurn(int bid, int tid)
         {
             //Check if the list of promises for this transaction exsists, if not, add it.
             if (inBatchTransactionCompletionMap.ContainsKey(bid) == false)
@@ -54,6 +95,7 @@ namespace Concurrency.Implementation
             {
                 DeterministicBatchSchedule schedule = batchScheduleMap[bid];
 
+                //TODO: XXX: Assumption right now is that all non-deterministic transactions will execute as one big batch
                 if(nonDetCompletion.Task.IsCompleted == false || batchCompletionMap[schedule.lastBatchID].Task.IsCompleted == false)
                 {
                     //If it is not the trun fir this batch, then await or its turn
@@ -74,6 +116,9 @@ namespace Concurrency.Implementation
 
             if (lastPromise.Task.IsCompleted == false)
                 await lastPromise.Task;
+
+            //count identifies the location of the promise for this turn
+            return count;
         }
 
         //For nonDeterninistic Transactions
@@ -83,51 +128,41 @@ namespace Concurrency.Implementation
         }
 
         //For deterministic transaction
-        public void ackComplete(int bid, int tid)
+        public bool ackComplete(int bid, int tid, int turnIndex)
         {
             DeterministicBatchSchedule schedule = batchScheduleMap[bid];
             schedule.AccessIncrement(tid);
-
-            //Record the execution in batch schedule
-            batchScheduleMap[bid].AccessIncrement(tid);
+            bool switchingBatches = false;
 
             //Find the next transaction to be executed in this batch;
-            int nextTid = batchScheduleMap[bid].curExecTransaction();
-            //Console.WriteLine($"\n\n{this.GetType()}: nextTid is {nextTid} \n\n");
-            if (nextTid != -1)
+            int nextTid = schedule.curExecTransaction();
+            if(tid == nextTid)
             {
-                if (inBatchTransactionCompletionMap[bid].ContainsKey(nextTid) && inBatchTransactionCompletionMap[bid][nextTid].Count > 0)
+                //Within the same batch same transaction
+                inBatchTransactionCompletionMap[bid][tid][turnIndex].SetResult(true);                
+            }
+            else if (nextTid != -1)
+            {
+                //Within the same batch but switching to another transaction
+                if (!inBatchTransactionCompletionMap[bid].ContainsKey(nextTid))
                 {
                     //Console.WriteLine($"\n\n{this.GetType()}: Set promise result for Tx {nextTid} \n\n");
-                    inBatchTransactionCompletionMap[bid][nextTid][0].SetResult(true);
+                    inBatchTransactionCompletionMap[bid].Add(nextTid, new List<TaskCompletionSource<bool>>());
+                    inBatchTransactionCompletionMap[bid][nextTid].Add(new TaskCompletionSource<bool>(false));
                 }
+                inBatchTransactionCompletionMap[bid][nextTid][0].SetResult(true);
             }
             else
             {
-                //batchScheduleQueue.Dequeue();                
-                //Log the state now
-                if (log != null && state != null)
-                    await log.HandleOnCompleteInDeterministicProtocol(state, bid, batchScheduleMap[bid].globalCoordinator);
-
-                var batchCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(batchScheduleMap[bid].globalCoordinator);
-                Task ack = batchCoordinator.AckBatchCompletion(bid, myPrimaryKey);
+                //Finished the batch, need to switch to another batch or non-deterministic transaction                
+                switchingBatches = true;
+                //Log the state now                
                 batchScheduleMap.Remove(bid);
-
                 //The schedule for this batch {$bid} has been completely executed. Check if any promise for next batch can be set.
                 this.batchCompletionMap[bid].SetResult(true);
-
-
-                if (batchScheduleQueue.Count != 0)
-                {
-                    DeterministicBatchSchedule nextSchedule = batchScheduleQueue.Peek();
-                    nextTid = nextSchedule.curExecTransaction();
-                    if (promiseMap.ContainsKey(nextTid) && promiseMap[nextTid].Count != 0)
-                    {
-                        promiseMap[nextTid][0].SetResult(true);
-                    }
-                }
-
+                //TODO: XXX Remember to garbage collect promises
             }
+            return switchingBatches;
 
         }
 

@@ -21,9 +21,9 @@ namespace Concurrency.Implementation
         private Dictionary<long, Guid> coordinatorMap;
         //private Queue<DeterministicBatchSchedule> batchScheduleQueue;
         private NonDeterministicSchedule nonDetSchedule;
-        private Dictionary<int, TaskCompletionSource<Boolean>> batchCompletionMap;
-        private TaskCompletionSource<Boolean> nonDetCompletion;
-        private Dictionary<int, Dictionary<int, List<TaskCompletionSource<Boolean>>>> inBatchTransactionCompletionMap;
+        //private Dictionary<int, TaskCompletionSource<Boolean>> batchCompletionMap;
+        //private TaskCompletionSource<Boolean> nonDetCompletion;
+        //private Dictionary<int, Dictionary<int, List<TaskCompletionSource<Boolean>>>> inBatchTransactionCompletionMap;
         protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
@@ -31,6 +31,7 @@ namespace Concurrency.Implementation
         protected int numCoordinators = 1;
         protected Random rnd;
         private IGlobalTransactionCoordinator myCoordinator;
+        private TransactionScheduler myScheduler;
 
         public TransactionExecutionGrain(ITransactionalState<TState> state){
             this.state = state;
@@ -53,14 +54,11 @@ namespace Concurrency.Implementation
             lastBatchId = -1;
             batchScheduleMap.Add(lastBatchId, new DeterministicBatchSchedule(lastBatchId, true));
 
-            inBatchTransactionCompletionMap = new Dictionary<int, Dictionary<int, List<TaskCompletionSource<bool>>>>();
+            
             myPrimaryKey = this.GetPrimaryKey();
+            myScheduler = new TransactionScheduler(batchScheduleMap);
             //Enable the following line for logging
-
             //log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey);
-            batchCompletionMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
-            batchCompletionMap.Add(-1, new TaskCompletionSource<Boolean>(true));
-            nonDetCompletion = new TaskCompletionSource<bool>(false);
             coordinatorMap = new Dictionary<long, Guid>();
             return base.OnActivateAsync();
         }
@@ -173,38 +171,8 @@ namespace Concurrency.Implementation
         {
             //Console.WriteLine($"\n\n{this.GetType()}: Received schedule for batch {schedule.batchID}.\n\n");        
             
-            batchScheduleMap.Add(schedule.batchID, schedule);
-            //batchScheduleQueue.Enqueue(schedule);
-
-            //Create the promise of the previous batch if not present
-            if(!batchCompletionMap.ContainsKey(schedule.lastBatchID))
-            {
-                batchCompletionMap.Add(schedule.lastBatchID, new TaskCompletionSource<Boolean>(false));
-            }
-            //Create my own promise if not present
-            if (!batchCompletionMap.ContainsKey(schedule.batchID))
-            {
-                batchCompletionMap.Add(schedule.batchID, new TaskCompletionSource<Boolean>(false));
-            }
-
-            //Create the in batch promise map if not present
-            if (this.inBatchTransactionCompletionMap.ContainsKey(schedule.batchID) == false)
-                this.inBatchTransactionCompletionMap.Add(schedule.batchID, new Dictionary<int, List<TaskCompletionSource<bool>>>());
-
-            //Check if this batch can be executed: 
-            //(1) check the promise status of its previous batch
-            //(2) check the promise for nonDeterministic batch
-            if(this.nonDetCompletion.Task.IsCompleted && batchCompletionMap[schedule.lastBatchID].Task.IsCompleted)
-            {
-                //Check if there is a buffered function call for this batch, if present, execute it
-                int tid = schedule.curExecTransaction();
-                if ( inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid) && inBatchTransactionCompletionMap[schedule.batchID][tid].Count != 0)
-                {
-                    inBatchTransactionCompletionMap[schedule.batchID][tid][0].SetResult(true);
-                }
-            }
-
-
+            batchScheduleMap.Add(schedule.batchID, schedule);            
+            myScheduler.RegisterDeterministicBatchSchedule(schedule);
             return Task.CompletedTask;
         }
 
@@ -224,16 +192,19 @@ namespace Concurrency.Implementation
             
             int tid = call.funcInput.context.inBatchTransactionID;
             int bid = call.funcInput.context.batchID;
-            // await scheduler.waitForTurn(bid, tid);
-            
+            var myTurnIndex = await myScheduler.waitForTurn(bid, tid);            
             //Execute the function call;
             var ret = await InvokeFunction(call);
+            if(myScheduler.ackComplete(bid, tid, myTurnIndex))
+            {
+                //The scheduler has switched batches, need to commit now
+                if (log != null && state != null)
+                    await log.HandleOnCompleteInDeterministicProtocol(state, bid, batchScheduleMap[bid].globalCoordinator);
 
-
+                var batchCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(batchScheduleMap[bid].globalCoordinator);
+                Task ack = batchCoordinator.AckBatchCompletion(bid, myPrimaryKey);
+            }
             //Console.WriteLine($"\n\n{this.GetType()}:  Tx {tid} is executed... trying next Tx ... \n\n");
-
-
-
             return new FunctionResult(ret);            
         }
 
