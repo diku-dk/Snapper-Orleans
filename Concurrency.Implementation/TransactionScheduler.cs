@@ -9,18 +9,9 @@ namespace Concurrency.Implementation
 
 
     class TransactionScheduler
-    {
-
-        //public INondeterministicTransactionCoordinator ndtc;
-        //public IDeterministicTransactionCoordinator dtc;
-        //private int lastBatchId;
+    {        
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
-        
-        //private Dictionary<long, Guid> coordinatorMap;
-        //private Queue<DeterministicBatchSchedule> batchScheduleQueue;        
-        //private Dictionary<int, ScheduleNode> batchCompletionMap;
-        private ScheduleInfo scheduleInfo;       
-        
+        private ScheduleInfo scheduleInfo;
         private int lastScheduledBatchId; //Includes deterministic and not-deterministic batches
         //private TaskCompletionSource<Boolean> nonDetCompletion;
         private Dictionary<int, Dictionary<int, List<TaskCompletionSource<Boolean>>>> inBatchTransactionCompletionMap;
@@ -30,8 +21,6 @@ namespace Concurrency.Implementation
         {
             this.batchScheduleMap = batchScheduleMap;            
             inBatchTransactionCompletionMap = new Dictionary<int, Dictionary<int, List<TaskCompletionSource<bool>>>>();
-            
-            
         }
 
         public void RegisterDeterministicBatchSchedule(int batchID) 
@@ -113,9 +102,9 @@ namespace Concurrency.Implementation
         }
 
         //For nonDeterninistic Transactions
-        public void waitForTurn(int tid)
+        public async Task waitForTurn(int tid)
         {
-
+            await scheduleInfo.insertNonDetTransaction(tid).promise.Task;
         }
 
         //For deterministic transaction
@@ -154,15 +143,13 @@ namespace Concurrency.Implementation
                 //TODO: XXX Remember to garbage collect promises
             }
             return switchingBatches;
-
         }
 
         //
         public void ackComplete(int tid)
         {
-
+            scheduleInfo.completeTransaction(tid);
         }
-
     }
 
 

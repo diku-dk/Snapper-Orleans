@@ -140,7 +140,8 @@ namespace Concurrency.Implementation
                 //Console.WriteLine($"Transaction {context.transactionID}: aborted. \n");
                 //Ensure the exception is set if the voting phase decides to abort
                 result.setException();
-            }         
+            }
+            myScheduler.ackComplete(context.transactionID);
             return result;
         }
 
@@ -165,31 +166,31 @@ namespace Concurrency.Implementation
          */
         public async Task<FunctionResult> Execute(FunctionCall call)
         {
-            //Non-deterministic exection
             if (call.funcInput.context.isDeterministic == false)
-            {
+            {//Non-deterministic exection
+                await myScheduler.waitForTurn(call.funcInput.context.transactionID);
                 FunctionResult invokeRet = await InvokeFunction(call);
                 invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
                 return invokeRet;
-            }
-
-            
-            int tid = call.funcInput.context.inBatchTransactionID;
-            int bid = call.funcInput.context.batchID;
-            var myTurnIndex = await myScheduler.waitForTurn(bid, tid);            
-            //Execute the function call;
-            var ret = await InvokeFunction(call);
-            if(myScheduler.ackComplete(bid, tid, myTurnIndex))
+            } else
             {
-                //The scheduler has switched batches, need to commit now
-                if (log != null && state != null)
-                    await log.HandleOnCompleteInDeterministicProtocol(state, bid, batchScheduleMap[bid].globalCoordinator);
+                int tid = call.funcInput.context.inBatchTransactionID;
+                int bid = call.funcInput.context.batchID;
+                var myTurnIndex = await myScheduler.waitForTurn(bid, tid);
+                //Execute the function call;
+                var ret = await InvokeFunction(call);
+                if (myScheduler.ackComplete(bid, tid, myTurnIndex))
+                {
+                    //The scheduler has switched batches, need to commit now
+                    if (log != null && state != null)
+                        await log.HandleOnCompleteInDeterministicProtocol(state, bid, batchScheduleMap[bid].globalCoordinator);
 
-                var batchCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(batchScheduleMap[bid].globalCoordinator);
-                Task ack = batchCoordinator.AckBatchCompletion(bid, myPrimaryKey);
+                    var batchCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(batchScheduleMap[bid].globalCoordinator);
+                    Task ack = batchCoordinator.AckBatchCompletion(bid, myPrimaryKey);
+                }
+                return ret;
+                //XXX: Check if this works -> return new FunctionResult(ret);
             }
-            //Console.WriteLine($"\n\n{this.GetType()}:  Tx {tid} is executed... trying next Tx ... \n\n");
-            return new FunctionResult(ret);            
         }
 
         public async Task<FunctionResult> InvokeFunction(FunctionCall call)

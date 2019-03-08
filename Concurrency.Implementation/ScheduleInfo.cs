@@ -11,6 +11,7 @@ namespace Concurrency.Implementation
         private Dictionary<int, ScheduleNode> nodes;
         private ScheduleNode tail; //Points to the last node in the doubly-linked list
         private Dictionary<int, NonDeterministicBatchSchedule> nonDetBatchScheduleMap;
+        private Dictionary<int, int> nonDetTxnToScheduleMap;
         
         public ScheduleInfo()
         {
@@ -20,22 +21,26 @@ namespace Concurrency.Implementation
             nodes.Add(-1, node);
         }
 
-        public ScheduleNode inserNonDetTransaction(int tid)
+        public ScheduleNode insertNonDetTransaction(int tid)
         {
+            if(nonDetTxnToScheduleMap.ContainsKey(tid))
+            {
+                return nodes[nonDetTxnToScheduleMap[tid]];
+            }
+            
             if (tail.isDet == true)
             {
                 ScheduleNode node = new ScheduleNode(tid, false);
                 NonDeterministicBatchSchedule schedule = new NonDeterministicBatchSchedule(tid);
+                schedule.transactions.Add(tid);
+                nonDetBatchScheduleMap.Add(tid, schedule);                
+                nodes.Add(tid, node);                
                 tail.next = node;
                 node.prev = tail;
-                tail = node;
-                nodes.Add(tid, node);
-            }
-            else
-            {
-                int id = tail.id;
-                this.nonDetBatchScheduleMap[id].AddTransaction(tid);
-            }
+                tail = node;                
+            }            
+            nonDetBatchScheduleMap[tail.id].AddTransaction(tid);
+            nonDetTxnToScheduleMap.Add(tail.id, tid);
             return tail;
         }
 
@@ -87,6 +92,40 @@ namespace Concurrency.Implementation
         public void completeDeterministicBatch(int id)
         {
             nodes[id].promise.SetResult(true);
+            removePreviousScheduleNode(id);
+        }
+
+        //IMPORTANT: Remove the node ahead of me since the next node still depends on me
+        private void removePreviousScheduleNode(int scheduleId)
+        {
+            if(!nodes.ContainsKey(scheduleId))
+            {
+                throw new Exception($"Schedule does not exist {scheduleId}");
+            }
+            var node = nodes[scheduleId];
+            var nodeToBeRemoved = node.prev;
+            if(nodeToBeRemoved.id == -1)
+            {
+                return;
+            } else
+            {
+                nodeToBeRemoved.prev.next = node;
+                node.prev = nodeToBeRemoved.prev;
+                nodes.Remove(nodeToBeRemoved.id);
+            }            
+        }
+        public void completeTransaction(int tid)
+        {
+            var scheduleId = nonDetTxnToScheduleMap[tid];
+            nonDetTxnToScheduleMap.Remove(tid);
+            var schedule = nonDetBatchScheduleMap[scheduleId];
+            if(schedule.RemoveTransaction(tid))
+            {
+                //Schedule node is completed
+                nodes[scheduleId].promise.SetResult(true);
+                removePreviousScheduleNode(scheduleId);
+                nonDetBatchScheduleMap.Remove(scheduleId);                
+            }
         }
     }
 
