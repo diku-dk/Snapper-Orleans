@@ -136,8 +136,7 @@ namespace Concurrency.Implementation
             {
                 //Finished the batch, need to switch to another batch or non-deterministic transaction                
                 switchingBatches = true;
-                //Log the state now                
-                batchScheduleMap.Remove(bid);
+                //Log the state now                                
                 //The schedule for this batch {$bid} has been completely executed. Check if any promise for next batch can be set.
                 this.scheduleInfo.completeDeterministicBatch(schedule.batchID);
                 //TODO: XXX Remember to garbage collect promises
@@ -149,6 +148,20 @@ namespace Concurrency.Implementation
         public void ackComplete(int tid)
         {
             scheduleInfo.completeTransaction(tid);
+        }
+
+        public void ackBatchCommit(int bid)
+        {
+            scheduleInfo.removePreviousNodes(bid);
+            var schedule = batchScheduleMap[batchScheduleMap[bid].lastBatchID];
+            bid = schedule.batchID;
+            while(bid != -1 && schedule != null)
+            {                
+                inBatchTransactionCompletionMap.Remove(bid);
+                batchScheduleMap.Remove(bid);
+                bid = schedule.lastBatchID;                             
+                schedule = batchScheduleMap[bid];
+            }
         }
     }
 

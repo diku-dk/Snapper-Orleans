@@ -89,12 +89,74 @@ namespace Concurrency.Implementation
             return nodes[id];
         }
 
-        public void completeDeterministicBatch(int id)
+        public HashSet<int> getBeforeSet(int tid)
         {
-            nodes[id].promise.SetResult(true);
-            removePreviousScheduleNode(id);
+            var result = new HashSet<int>();
+            var node = nodes[nonDetTxnToScheduleMap[tid]].prev;
+            while(node.id != -1)
+            {                
+                if (node.isDet)
+                    result.Add(node.id);
+
+                node = node.prev;
+            }
+            return result;
         }
 
+        public HashSet<int> getAfterSet(int tid)
+        {
+            var result = new HashSet<int>();
+            var node = nodes[nonDetTxnToScheduleMap[tid]].next;
+            bool foundAll = false;
+            while(node != null)
+            {
+                if(node.isDet)
+                {
+                    result.Add(node.id);
+                }
+                if (node == tail)
+                {
+                    foundAll = true;
+                }
+                node = node.next;                
+            }
+
+            if(!foundAll)
+            {
+                foreach(var key in nodes.Keys) {
+                    if(key > tid && nodes[key].isDet)
+                    {
+                        result.Add(key);
+                    }
+                }
+            }
+            return result;
+        }
+
+        public void completeDeterministicBatch(int id)
+        {
+            nodes[id].promise.SetResult(true);            
+        }
+
+        public void removePreviousNodes(int scheduleId)
+        {
+            var node = nodes[scheduleId];
+            var endOfChainToBeRemoved = node.prev;            
+
+            while(endOfChainToBeRemoved.id != -1)
+            {
+                nodes.Remove(endOfChainToBeRemoved.id);
+                if(!endOfChainToBeRemoved.isDet)
+                {
+                    nonDetBatchScheduleMap.Remove(endOfChainToBeRemoved.id);                    
+                }
+                endOfChainToBeRemoved = endOfChainToBeRemoved.prev;
+            }
+            node.prev = endOfChainToBeRemoved;
+            endOfChainToBeRemoved.next = node;
+        }
+
+        /*
         //IMPORTANT: Remove the node ahead of me since the next node still depends on me
         private void removePreviousScheduleNode(int scheduleId)
         {
@@ -114,6 +176,9 @@ namespace Concurrency.Implementation
                 nodes.Remove(nodeToBeRemoved.id);
             }            
         }
+        */
+
+
         public void completeTransaction(int tid)
         {
             var scheduleId = nonDetTxnToScheduleMap[tid];
@@ -123,8 +188,9 @@ namespace Concurrency.Implementation
             {
                 //Schedule node is completed
                 nodes[scheduleId].promise.SetResult(true);
-                removePreviousScheduleNode(scheduleId);
-                nonDetBatchScheduleMap.Remove(scheduleId);                
+                //Only deterministic batches trigger garbage collection
+                //removePreviousScheduleNode(scheduleId);
+                //nonDetBatchScheduleMap.Remove(scheduleId);                
             }
         }
     }
