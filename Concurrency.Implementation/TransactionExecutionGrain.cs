@@ -12,9 +12,10 @@ using Utilities;
 
 namespace Concurrency.Implementation
 {
-    public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain
+    public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain where TState : ICloneable, new()
     {   
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
+        private Dictionary<int, bool> txnTypes;
         //private Dictionary<int, NonDetBatchSchedule> nonDetBatchScheduleMap;
         private Dictionary<long, Guid> coordinatorMap;                
         protected Guid myPrimaryKey;
@@ -26,8 +27,8 @@ namespace Concurrency.Implementation
         private IGlobalTransactionCoordinator myCoordinator;
         private TransactionScheduler myScheduler;
 
-        public TransactionExecutionGrain(ITransactionalState<TState> state){
-            this.state = state;
+        public TransactionExecutionGrain(TState state){
+            this.state = new HybridState<TState>(state, txnTypes);            
         }
 
         public TransactionExecutionGrain()
