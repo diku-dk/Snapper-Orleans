@@ -49,7 +49,6 @@ namespace Concurrency.Implementation
         //Emitting status
         private Boolean isEmitTimerOn = false;
         private Boolean hasToken = false;
-        private Boolean hasEmitted = false;
         private BatchToken token;
 
         private ILoggingProtocol<String> log;
@@ -155,15 +154,8 @@ namespace Concurrency.Implementation
         {
             Console.WriteLine($"Coordinator {myId}: receives new token");
             this.hasToken = true;
+            this.token = token;
             await EmitTransaction(token);
-
-            if (this.hasEmitted)
-            {
-                //Update the token and pass it to the neighbour coordinator
-                token.lastBatchID = this.curBatchID - 1;
-                token.lastTransactionID = this.curTransactionID - 1;
-                this.hasEmitted = false;
-            }
                        
         }
 
@@ -192,7 +184,6 @@ namespace Concurrency.Implementation
             int myCurEmitSeq = this.curEmitSeq;
             await EmitBatch(token);
 
-            token.lastBatchID = this.curBatchID;
             if (nonDeterministicEmitSize.ContainsKey(myCurEmitSeq))
                 token.lastTransactionID = this.curTransactionID + nonDeterministicEmitSize[myCurEmitSeq];
             else
@@ -201,7 +192,6 @@ namespace Concurrency.Implementation
             Console.WriteLine($"Coordinator {myId}: pass token to coordinator {neighbourId}");
             neighbour.PassToken(token);
 
-
             if (emitPromiseMap.ContainsKey(myCurEmitSeq))
             {
                 emitPromiseMap[myCurEmitSeq].SetResult(true);
@@ -209,7 +199,7 @@ namespace Concurrency.Implementation
 
             this.isEmitTimerOn = false;
             this.hasToken = false;
-            this.hasEmitted = true;
+            this.token = null;
 
             return;
         }
@@ -231,7 +221,7 @@ namespace Concurrency.Implementation
             //Return if there is no deterministic transactions waiting for emit
             if (shouldEmit == false)
                 return;
-
+            
             foreach(TransactionContext context in transactionList)
             {
                 context.batchID = curBatchID;
@@ -273,6 +263,7 @@ namespace Concurrency.Implementation
                     schedule.lastBatchID = -1;
                 token.lastBatchPerGrain[grain] = schedule.batchID;
             }
+            token.lastBatchID = this.curBatchID;
 
             //garbage collection
             if(this.highestCommittedBatchID > token.highestCommittedBatchID)
@@ -407,7 +398,7 @@ namespace Concurrency.Implementation
             {
                 System.Threading.Thread.Sleep(2000);
                 BatchToken token = new BatchToken(-1, -1);
-                EmitTransaction(token);
+                PassToken(token);
             }
             this.myId = myId;
             this.neighbourId = neighbourId;
