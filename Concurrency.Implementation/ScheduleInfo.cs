@@ -17,6 +17,7 @@ namespace Concurrency.Implementation
         {
             nodes = new Dictionary<int, ScheduleNode>();
             ScheduleNode node = new ScheduleNode(-1, true);
+            node.promise.SetResult(true);
             tail = node;
             nodes.Add(-1, node);
         }

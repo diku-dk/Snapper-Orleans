@@ -58,8 +58,8 @@ namespace Concurrency.Implementation
 
         public override Task OnActivateAsync()
         {
-            curBatchID = 0;
-            curTransactionID = 0;
+            curBatchID = -1;
+            curTransactionID = -1;
 
  
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
@@ -74,7 +74,7 @@ namespace Concurrency.Implementation
             //log = new Simple2PCLoggingProtocol<String>(this.GetType().ToString(), myPrimaryKey);
             disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
 
-
+            this.batchesWaitingForCommit = new SortedSet<int>();
             curEmitSeq = 0;
             emitPromiseMap = new Dictionary<int, TaskCompletionSource<bool>>(); 
             nonDeterministicEmitSize = new Dictionary<int, int>();
@@ -106,6 +106,8 @@ namespace Concurrency.Implementation
             {
                 await emitting.Task;
             }
+
+            Console.WriteLine($"Coordinator {myId}: emits context for batch ID {deterministicTransactionRequests[myEmitSeq][index].batchID}, transaction ID {deterministicTransactionRequests[myEmitSeq][index].transactionID}");
             return deterministicTransactionRequests[myEmitSeq][index];
         }
 
@@ -141,8 +143,6 @@ namespace Concurrency.Implementation
                 nonDeterministicEmitSize.Remove(myEmitSeq);
                 emitPromiseMap.Remove(myEmitSeq);
             }
-
-
             //Console.WriteLine($"Coordinator: received Transaction {tid}");
             return context;
         }
@@ -152,11 +152,10 @@ namespace Concurrency.Implementation
          */
         public async Task PassToken(BatchToken token)
         {
-            Console.WriteLine($"Coordinator {myId}: receives new token");
+            //Console.WriteLine($"Coordinator {myId}: receives new token, batch ID {token.lastBatchID}, transaction ID {token.lastTransactionID}");
             this.hasToken = true;
             this.token = token;
-            await EmitTransaction(token);
-                       
+            await EmitTransaction(token);             
         }
 
         /**
@@ -167,29 +166,24 @@ namespace Concurrency.Implementation
 
             if(obj == null)
             {
-
                 this.isEmitTimerOn = true;
                 if (this.hasToken == false)
                     return;
             }
             else if(! this.isEmitTimerOn)
             {
-
                 this.hasToken = true;
                 this.token = (BatchToken)obj;
                 return;
             }
-           
 
             int myCurEmitSeq = this.curEmitSeq;
             await EmitBatch(token);
 
             if (nonDeterministicEmitSize.ContainsKey(myCurEmitSeq))
                 token.lastTransactionID = this.curTransactionID + nonDeterministicEmitSize[myCurEmitSeq];
-            else
-                token.lastTransactionID = this.curTransactionID;
 
-            Console.WriteLine($"Coordinator {myId}: pass token to coordinator {neighbourId}");
+            //Console.WriteLine($"Coordinator {myId}: pass token to coordinator {neighbourId}");
             neighbour.PassToken(token);
 
             if (emitPromiseMap.ContainsKey(myCurEmitSeq))
@@ -200,8 +194,6 @@ namespace Concurrency.Implementation
             this.isEmitTimerOn = false;
             this.hasToken = false;
             this.token = null;
-
-            return;
         }
 
         /**
@@ -212,8 +204,7 @@ namespace Concurrency.Implementation
             int myEmitSequence = this.curEmitSeq++;
             txSeqInBatch = 0;
             int inBatchTransactionID = 0;
-            curBatchID = token.lastBatchID + 1;
-            curTransactionID = token.lastTransactionID + 1;
+;
 
             List<TransactionContext> transactionList;
             Boolean shouldEmit = deterministicTransactionRequests.TryGetValue(myEmitSequence, out transactionList);
@@ -221,8 +212,11 @@ namespace Concurrency.Implementation
             //Return if there is no deterministic transactions waiting for emit
             if (shouldEmit == false)
                 return;
-            
-            foreach(TransactionContext context in transactionList)
+
+            curBatchID = token.lastBatchID + 1;
+            curTransactionID = token.lastTransactionID + 1;
+
+            foreach (TransactionContext context in transactionList)
             {
                 context.batchID = curBatchID;
                 context.transactionID = curTransactionID;
@@ -243,7 +237,7 @@ namespace Concurrency.Implementation
                     batchGrainClassName[context.batchID][item.Key] = item.Value.Item1;
                     if (grainSchedule.ContainsKey(item.Key) == false)
                         grainSchedule.Add(item.Key, new DeterministicBatchSchedule(context.batchID));
-                    grainSchedule[item.Key].AddNewTransaction(context.transactionID, item.Value.Item2);
+                    grainSchedule[item.Key].AddNewTransaction(context.inBatchTransactionID, item.Value.Item2);
 
                 }
                 context.grainAccessInformation.Clear();
@@ -264,6 +258,8 @@ namespace Concurrency.Implementation
                 token.lastBatchPerGrain[grain] = schedule.batchID;
             }
             token.lastBatchID = this.curBatchID;
+            token.lastTransactionID = this.curTransactionID;
+
 
             //garbage collection
             if(this.highestCommittedBatchID > token.highestCommittedBatchID)
@@ -300,12 +296,13 @@ namespace Concurrency.Implementation
                 Task emit = dest.ReceiveBatchSchedule(schedule);
             }
             batchGrainClassName.Remove(curBatchID);
-            //Console.WriteLine($"Coordinator: sent schedule for batch {curBatchID} to {curScheduleMap.Count} grains.");
+            Console.WriteLine($"\n Coordinator {this.myId}: sent schedule for batch {curBatchID} to {curScheduleMap.Count} grains.");
         }
 
         //Grain calls this function to ack its completion of a batch execution
         public async Task AckBatchCompletion(int bid, Guid executor_id)
         {
+            Console.WriteLine($"\n Coordinator: {myId} receives completion ack for batch {bid} from {executor_id}, expecting {expectedAcksPerBatch[bid]} acks. {batchSchedulePerGrain[bid].ContainsKey(executor_id)}");
             if (expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id))
             {
                 expectedAcksPerBatch[bid]--;
@@ -330,12 +327,12 @@ namespace Concurrency.Implementation
                     batchGrainClassName.Remove(bid);
 
                     batchStatusMap[bid].SetResult(true);
-                    Console.WriteLine($"Coordinator: batch {bid} has been committed.");
+                    Console.WriteLine($"\n Coordinator: batch {bid} has been committed.");
                 }
             }
             else
             {
-                throw new Exception("Batch Id or grain not found!");
+                throw new Exception("\n Batch Id or grain not found!");
             }
         }
 
@@ -354,6 +351,7 @@ namespace Concurrency.Implementation
 
         private async Task BroadcastCommit()
         {
+
             List<Task> tasks = new List<Task>();
             foreach (var coordinator in this.coordinatorList)
             {
@@ -364,25 +362,34 @@ namespace Concurrency.Implementation
 
         public async Task NotifyCommit(int bid)
         {
+            Console.WriteLine($"\n Coordinator {this.myId} receives commit notification for {bid}");
+
             if (bid > this.highestCommittedBatchID)
                 this.highestCommittedBatchID = bid;
 
             Boolean commitOccur = false;
-            while(this.batchesWaitingForCommit.Count != 0 && batchesWaitingForCommit.Min == highestCommittedBatchID + 1)
+            Console.WriteLine($"\n Coordinator {this.myId} in positin A");
+            while (this.batchesWaitingForCommit.Count != 0 && batchesWaitingForCommit.Min == highestCommittedBatchID + 1)
             {
                 //commit
+                Console.WriteLine($"\n Coordinator {this.myId} in the while loop");
                 this.highestCommittedBatchID++;
                 batchesWaitingForCommit.Remove(batchesWaitingForCommit.Min);
                 commitOccur = true;
 
             }
+            Console.WriteLine($"\n Coordinator {this.myId} in positin B");
             if (commitOccur == true)
             {
                 if (log != null)
                     await log.HandleOnCommitInDeterministicProtocol(this.highestCommittedBatchID);
+                Console.WriteLine($"\n Coordinator {this.myId} calls BroadcastCommit() recursively");
                 await BroadcastCommit();
             }
+            Console.WriteLine($"\n Coordinator {this.myId} finished processing commit notification for batch {bid}");
+            
         }
+
         public async Task SpawnCoordinator(uint myId, uint numofCoordinators)
         {
             uint neighbourId = (myId + 1) % numofCoordinators;
@@ -402,7 +409,7 @@ namespace Concurrency.Implementation
             }
             this.myId = myId;
             this.neighbourId = neighbourId;
-            Console.WriteLine($"Coordinator {myId}: is initialized, my next neighbour is coordinator {neighbourId}");
+            Console.WriteLine($"\n Coordinator {myId}: is initialized, my next neighbour is coordinator {neighbourId}");
         }
     }
 }

@@ -20,7 +20,7 @@ namespace Concurrency.Implementation
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
         protected String myUserClassName;
-        protected int numCoordinators = 1;
+        protected int numCoordinators = 2;
         protected Random rnd;
         private IGlobalTransactionCoordinator myCoordinator;
         private TransactionScheduler myScheduler;
@@ -155,8 +155,7 @@ namespace Concurrency.Implementation
          
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
-            //Console.WriteLine($"\n\n{this.GetType()}: Received schedule for batch {schedule.batchID}.\n\n");        
-            
+            Console.WriteLine($"\n\n{this.GetType()}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}.\n\n");        
             batchScheduleMap.Add(schedule.batchID, schedule);            
             myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
             return Task.CompletedTask;
@@ -177,7 +176,9 @@ namespace Concurrency.Implementation
             {
                 int tid = call.funcInput.context.inBatchTransactionID;
                 int bid = call.funcInput.context.batchID;
+                Console.WriteLine($"\n\n{this.GetType()}: is waiting for its turn to execute {bid} : {tid}.\n\n");
                 var myTurnIndex = await myScheduler.waitForTurn(bid, tid);
+                Console.WriteLine($"\n\n{this.GetType()}: got its turn to execute {bid} : {tid}.\n\n");
                 //Execute the function call;
                 var ret = await InvokeFunction(call);
                 if (myScheduler.ackComplete(bid, tid, myTurnIndex))
@@ -186,8 +187,8 @@ namespace Concurrency.Implementation
                     if (log != null && state != null)
                         await log.HandleOnCompleteInDeterministicProtocol(state, bid, batchScheduleMap[bid].globalCoordinator);
 
-                    var batchCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(batchScheduleMap[bid].globalCoordinator);
-                    Task ack = batchCoordinator.AckBatchCompletion(bid, myPrimaryKey);
+                    var coordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(batchScheduleMap[bid].globalCoordinator);
+                    Task ack = coordinator.AckBatchCompletion(bid, myPrimaryKey);
                 }
                 return ret;
                 //XXX: Check if this works -> return new FunctionResult(ret);

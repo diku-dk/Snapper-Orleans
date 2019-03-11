@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using AccountTransfer.Grains;
 using System.Reflection;
 using Concurrency.Interface;
+using Utilities;
 
 namespace OrleansClient
 {
@@ -39,6 +40,44 @@ namespace OrleansClient
                 tasks.Add(coordinator.SpawnCoordinator(i, numOfCoordinator));                   
             }
             await Task.WhenAll(tasks);
+        }
+
+        public async Task SingleDetTransaction()
+        {
+            IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(1));
+            IAccountGrain toAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(2));
+            IATMGrain atm = client.GetGrain<IATMGrain>(Helper.convertUInt32ToGuid(3));
+
+            Guid fromId = fromAccount.GetPrimaryKey();
+            Guid toId = toAccount.GetPrimaryKey();
+            Guid atmId = atm.GetPrimaryKey();
+
+            var grainAccessInformation = new Dictionary<Guid, Tuple<String, int>>();
+            grainAccessInformation.Add(fromId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
+            grainAccessInformation.Add(toId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
+            grainAccessInformation.Add(atmId, new Tuple<string, int>("AccountTransfer.Grains.ATMGrain", 1));
+
+            var args = new TransferInput(1, 2, 10);
+            FunctionInput input = new FunctionInput(args);
+
+            //Deterministic Transactions
+
+            try
+            {
+                Task t1 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
+                Task t2 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
+                Task t3 = atm.StartTransaction(grainAccessInformation, "transfer", input);
+
+                await Task.WhenAll(t1, t2, t3);
+                //await t1;
+            
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"\n\n {e.ToString()}\n\n");
+            }
+
+
         }
 
     }

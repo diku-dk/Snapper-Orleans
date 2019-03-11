@@ -21,6 +21,7 @@ namespace Concurrency.Implementation
         {
             this.batchScheduleMap = batchScheduleMap;            
             inBatchTransactionCompletionMap = new Dictionary<int, Dictionary<int, List<TaskCompletionSource<bool>>>>();
+            scheduleInfo = new ScheduleInfo();
         }
 
         public void RegisterDeterministicBatchSchedule(int batchID) 
@@ -40,6 +41,8 @@ namespace Concurrency.Implementation
             {
                 //Check if there is a buffered function call for this batch, if present, execute it
                 int tid = schedule.curExecTransaction();
+                Console.WriteLine($"\n{this.GetType()}: next transaction to be executed is {tid}.\n");
+
                 if (inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid) && inBatchTransactionCompletionMap[schedule.batchID][tid].Count != 0)
                 {
                     inBatchTransactionCompletionMap[schedule.batchID][tid][0].SetResult(true);
@@ -79,7 +82,7 @@ namespace Concurrency.Implementation
                 //TODO: XXX: Assumption right now is that all non-deterministic transactions will execute as one big batch
                 if(scheduleInfo.find(schedule.lastBatchID).promise.Task.IsCompleted == false)
                 {
-                    //If it is not the trun fir this batch, then await or its turn
+                    //If it is not the trun for this batch, then await or its turn
                     await scheduleInfo.find(schedule.lastBatchID).promise.Task;
                 }
                 //Check if this transaction cen be executed
