@@ -233,7 +233,7 @@ namespace TPCC.Grains
 
 
     [Serializable]
-    public class WarehouseData
+    public class WarehouseData : ICloneable
     {
         public Warehouse warehouseRecord;
         public Dictionary<UInt32, District> districtRecords;
@@ -245,5 +245,29 @@ namespace TPCC.Grains
         public Dictionary<Tuple<UInt32, String>, List<Tuple<String, UInt32>>> customerNameRecords;
         public Dictionary<UInt32, Item> itemRecords;
         public Dictionary<UInt32, Stock> stockRecords;
+
+        public WarehouseData()
+        {
+
+        }
+
+        public WarehouseData(WarehouseData warehouse)
+        {
+            this.warehouseRecord = warehouse.warehouseRecord;
+            this.districtRecords = warehouse.districtRecords;
+            this.customerRecords = warehouse.customerRecords;
+            this.orderRecords = warehouse.orderRecords;
+            this.newOrders = warehouse.newOrders;
+            this.orderLineRecords = warehouse.orderLineRecords;
+            this.historyRecords = warehouse.historyRecords;
+            this.customerNameRecords = warehouse.customerNameRecords;
+            this.itemRecords = warehouse.itemRecords;
+            this.stockRecords = warehouse.stockRecords;
+        }
+
+        object ICloneable.Clone()
+        {
+            return new WarehouseData(this);
+        }
     }
 }

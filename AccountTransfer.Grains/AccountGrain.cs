@@ -34,24 +34,9 @@ namespace AccountTransfer.Grains
 
     public class AccountGrain : TransactionExecutionGrain<Balance>, IAccountGrain
     {
-        public AccountGrain()
+        public AccountGrain() : base (new Balance(), "AccountTransfer.Grains.AccountGrain")
         {
-            int type = 0;
-            this.myUserClassName = "AccountTransfer.Grains.AccountGrain";
-            Balance balance = new Balance();
-            if (type == 0)
-            {
-                state = new TimestampTransactionalState<Balance>(balance);
-
-            }
-            else if (type == 1)
-            {
-                state = new S2PLTransactionalState<Balance>(balance);
-            }
-            else if (type == 2)
-            {
-                state = new DeterministicTransactionalState<Balance>(balance);
-            }      
+            ;
         }
 
         public async Task<FunctionResult> Deposit(FunctionInput fin)
@@ -61,7 +46,7 @@ namespace AccountTransfer.Grains
             FunctionResult ret = new FunctionResult();
             try
             {
-                Balance balance = await state.ReadWrite(context.transactionID);
+                Balance balance = await state.ReadWrite(context);
                 var amount = (float)input;
                 balance.value += amount;
                 //Console.WriteLine($"\n\n After deposit of Tx: {context.transactionID}, {this.myPrimaryKey} balance: {balance.value}.\n\n");
@@ -82,7 +67,7 @@ namespace AccountTransfer.Grains
             FunctionResult ret = new FunctionResult();
             try
             {
-                Balance balance = await state.ReadWrite(context.transactionID);
+                Balance balance = await state.ReadWrite(context);
                 var amount = (float)input;
                 balance.value -= amount;
                 //Console.WriteLine($"\n\n After withdraw of Tx: {context.transactionID}, {this.myPrimaryKey} balance: {balance.value}.\n\n");
@@ -102,7 +87,7 @@ namespace AccountTransfer.Grains
             float v = -1;
             try
             {
-                Balance balance = await state.ReadWrite(context.transactionID);
+                Balance balance = await state.ReadWrite(context);
                 v = balance.value;
             }
             catch (Exception)

@@ -3,17 +3,18 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using Utilities;
 
 namespace Concurrency.Interface.Nondeterministic
 {
     public interface ITransactionalState<TState>
     {
 
-        Task<TState> Read(long tid);
+        Task<TState> Read(TransactionContext ctx);
 
-        Task<TState> ReadWrite(long tid);
+        Task<TState> ReadWrite(TransactionContext ctx);
 
-        Task Write(long tid);
+        Task Write(TransactionContext ctx);
 
         [AlwaysInterleave]
         Task<bool> Prepare(long tid);

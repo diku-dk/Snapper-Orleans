@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Utilities;
 
 namespace Concurrency.Implementation.Nondeterministic
 {
@@ -59,22 +60,22 @@ namespace Concurrency.Implementation.Nondeterministic
             return activeState;
         }
 
-        public Task<TState> Read(long tid)
+        public Task<TState> Read(TransactionContext ctx)
         {
             // Use a single lock for now
-            return AccessState(tid);
+            return AccessState(ctx.transactionID);
         }
 
-        public Task<TState> ReadWrite(long tid)
+        public Task<TState> ReadWrite(TransactionContext ctx)
         {
             // Use a single lock right now
-            return AccessState(tid);
+            return AccessState(ctx.transactionID);
         }
 
-        public Task Write(long tid)
+        public Task Write(TransactionContext ctx)
         {
             // Use a single lock right now
-            return AccessState(tid);
+            return AccessState(ctx.transactionID);
         }
         
         public Task<bool> Prepare(long tid)

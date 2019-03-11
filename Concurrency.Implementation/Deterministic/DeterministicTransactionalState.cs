@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using Utilities;
 
 namespace Concurrency.Implementation.Deterministic
 {
@@ -29,17 +30,17 @@ namespace Concurrency.Implementation.Deterministic
             throw new NotImplementedException();
         }
 
-        public Task<TState> Read(long tid)
+        public Task<TState> Read(TransactionContext ctx)
         {
             return Task.FromResult(state);
         }
 
-        public Task<TState> ReadWrite(long tid)
+        public Task<TState> ReadWrite(TransactionContext ctx)
         {
             return Task.FromResult(state);
         }
 
-        public Task Write(long tid)
+        public Task Write(TransactionContext ctx)
         {
             throw new NotImplementedException();
         }

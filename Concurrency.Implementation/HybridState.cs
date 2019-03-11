@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using Concurrency.Interface.Nondeterministic;
+using Utilities;
 
 namespace Concurrency.Implementation
 {
@@ -11,108 +12,77 @@ namespace Concurrency.Implementation
         private ITransactionalState<TState> deterministicConcurrencyControl;
         private ITransactionalState<TState> nonDeterministicConcurrencyControl;
         private TState myState;
-        private Dictionary<long, bool> myTxnTypesMap;
 
-        public HybridState(TState state, Dictionary<long, bool> txnTypes)
+        public HybridState(TState state)
         {
-            this.myState = state;
-            this.myTxnTypesMap = txnTypes;
+            this.myState = state;            
             deterministicConcurrencyControl = new Deterministic.DeterministicTransactionalState<TState>(state);
             //nonDeterministicConcurrencyControl = new Nondeterministic.S2PLTransactionalState<TState>(state);
             nonDeterministicConcurrencyControl = new Nondeterministic.TimestampTransactionalState<TState>(state);
         }
         Task ITransactionalState<TState>.Abort(long tid)
         {
-            if(this.myTxnTypesMap[tid])
-            {
-                return deterministicConcurrencyControl.Abort(tid);
-            } else
-            {
-                return nonDeterministicConcurrencyControl.Abort(tid);
-            }            
+            //XXX: Should not be called for deterministic transactions
+            return nonDeterministicConcurrencyControl.Abort(tid);                        
         }
 
         Task ITransactionalState<TState>.Commit(long tid)
         {
-            if (this.myTxnTypesMap[tid])
-            {
-                return deterministicConcurrencyControl.Commit(tid);
-            }
-            else
-            {
-                return nonDeterministicConcurrencyControl.Commit(tid);
-            }
+            //XXX: Should not be called for deterministic transactions                        
+            return nonDeterministicConcurrencyControl.Commit(tid);            
         }
 
-        TState ITransactionalState<TState>.GetCommittedState(long tid)
+        TState ITransactionalState<TState>.GetCommittedState(long bid)
         {
-            if (this.myTxnTypesMap[tid])
-            {
-                return deterministicConcurrencyControl.GetCommittedState(tid);
-            }
-            else
-            {
-                return nonDeterministicConcurrencyControl.GetCommittedState(tid);
-            }
+            //XXX: Should not be called for non-deterministic transactions                        
+            return deterministicConcurrencyControl.GetCommittedState(bid);
         }
 
         TState ITransactionalState<TState>.GetPreparedState(long tid)
         {
-            if (this.myTxnTypesMap[tid])
-            {
-                return deterministicConcurrencyControl.GetPreparedState(tid);
-            }
-            else
-            {
-                return nonDeterministicConcurrencyControl.GetPreparedState(tid);
-            }
+            //XXX: Should not be called for deterministic transactions
+            return nonDeterministicConcurrencyControl.GetPreparedState(tid);
         }
 
         Task<bool> ITransactionalState<TState>.Prepare(long tid)
         {
-            if (this.myTxnTypesMap[tid])
+            //XXX: Should not be called for deterministic transactions
+            return nonDeterministicConcurrencyControl.Prepare(tid);            
+        }
+
+        Task<TState> ITransactionalState<TState>.Read(TransactionContext ctx)
+        {
+            if (ctx.isDeterministic)
             {
-                return deterministicConcurrencyControl.Prepare(tid);
+                return deterministicConcurrencyControl.Read(ctx);
             }
             else
             {
-                return nonDeterministicConcurrencyControl.Prepare(tid);
+                return nonDeterministicConcurrencyControl.Read(ctx);
             }
         }
 
-        Task<TState> ITransactionalState<TState>.Read(long tid)
+        Task<TState> ITransactionalState<TState>.ReadWrite(TransactionContext ctx)
         {
-            if (this.myTxnTypesMap[tid])
+            if (ctx.isDeterministic)
             {
-                return deterministicConcurrencyControl.Read(tid);
+                return deterministicConcurrencyControl.ReadWrite(ctx);
             }
             else
             {
-                return nonDeterministicConcurrencyControl.Read(tid);
+                return nonDeterministicConcurrencyControl.ReadWrite(ctx);
             }
         }
 
-        Task<TState> ITransactionalState<TState>.ReadWrite(long tid)
+        Task ITransactionalState<TState>.Write(TransactionContext ctx)
         {
-            if (this.myTxnTypesMap[tid])
+            if (ctx.isDeterministic)
             {
-                return deterministicConcurrencyControl.ReadWrite(tid);
+                return deterministicConcurrencyControl.Write(ctx);
             }
             else
             {
-                return nonDeterministicConcurrencyControl.ReadWrite(tid);
-            }
-        }
-
-        Task ITransactionalState<TState>.Write(long tid)
-        {
-            if (this.myTxnTypesMap[tid])
-            {
-                return deterministicConcurrencyControl.Write(tid);
-            }
-            else
-            {
-                return nonDeterministicConcurrencyControl.Write(tid);
+                return nonDeterministicConcurrencyControl.Write(ctx);
             }
         }
     }

@@ -14,9 +14,7 @@ namespace Concurrency.Implementation
 {
     public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain where TState : ICloneable, new()
     {   
-        private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
-        private Dictionary<int, bool> txnTypes;
-        //private Dictionary<int, NonDetBatchSchedule> nonDetBatchScheduleMap;
+        private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;        
         private Dictionary<long, Guid> coordinatorMap;                
         protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
@@ -27,8 +25,9 @@ namespace Concurrency.Implementation
         private IGlobalTransactionCoordinator myCoordinator;
         private TransactionScheduler myScheduler;
 
-        public TransactionExecutionGrain(TState state){
-            this.state = new HybridState<TState>(state, txnTypes);            
+        public TransactionExecutionGrain(TState state, String myUserClassName){
+            this.state = new HybridState<TState>(state);
+            this.myUserClassName = myUserClassName;
         }
 
         public TransactionExecutionGrain()
@@ -56,6 +55,7 @@ namespace Concurrency.Implementation
          */
         public async Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation, String startFunction, FunctionInput inputs)
         {
+            
             TransactionContext context = await myCoordinator.NewTransaction(grainAccessInformation);
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
@@ -209,9 +209,9 @@ namespace Concurrency.Implementation
             return t.Result;
         }
 
-        private void Cleanup(long bid)
+        private void Cleanup(long tid)
         {
-            coordinatorMap.Remove(bid);
+            coordinatorMap.Remove(tid);
         }
 
         public async Task Abort(long tid)

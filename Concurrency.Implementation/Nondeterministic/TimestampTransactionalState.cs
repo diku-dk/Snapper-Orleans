@@ -42,10 +42,11 @@ namespace Concurrency.Implementation.Nondeterministic
             transactionMap = new Dictionary<long, Node<TransactionStateInfo>>();
 
         }
-        public Task<TState> ReadWrite(long tid)
+        public Task<TState> ReadWrite(TransactionContext ctx)
         {
             long rts, wts, depTid;
             TState state;
+            var tid = ctx.transactionID;
             
             //Traverse the transaction list from the tail, find the first unaborted transaction and read its state.
             Node<TransactionStateInfo> lastNode = transactionList.tail;
@@ -173,13 +174,13 @@ namespace Concurrency.Implementation.Nondeterministic
             return Task.CompletedTask;
         }
 
-        public Task<TState> Read(long tid)
+        public Task<TState> Read(TransactionContext ctx)
         {
 
             //Should we return a copy of copy, as we don't wanna user to update this state
             return Task.FromResult<TState>(this.commitedState);
         }
-        public Task Write(long tid)
+        public Task Write(TransactionContext ctx)
         {
             return Task.CompletedTask;
         }

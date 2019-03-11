@@ -12,6 +12,11 @@ namespace TPCC.Grains
 {
     public class WarehouseGrain : TransactionExecutionGrain<WarehouseData>, IWarehouseGrain
     {
+        public WarehouseGrain() : base(new WarehouseData(),"TPCC.Grains.WarehouseGrain")
+        {
+            ;
+        }
+
         async Task<FunctionResult> IWarehouseGrain.NewOrder(FunctionInput functionInput)
         {
             var myResult = new FunctionResult();
@@ -30,7 +35,7 @@ namespace TPCC.Grains
             }
             try
             {
-                var myState = await state.ReadWrite(functionInput.context.transactionID);
+                var myState = await state.ReadWrite(functionInput.context);
                 //Get customer information
                 var customerKey = new Tuple<UInt32, UInt32>(input.districtId, input.customerId);
                 var customer = myState.customerRecords[customerKey];
@@ -59,7 +64,7 @@ namespace TPCC.Grains
                         try
                         {
                             //Need to check permission from scheduler every time I context switch
-                            myState = await state.ReadWrite(functionInput.context.transactionID);
+                            myState = await state.ReadWrite(functionInput.context);
                             //Add order line entries
                             UInt16 orderLineCounter = 1;
                             foreach (var aStockItemUpdateResult in ((StockUpdateResult)stockUpdateResult.resultObject).stockItemUpdates)
@@ -95,7 +100,7 @@ namespace TPCC.Grains
             {
                 var input = (StockUpdateInput)functionInput.inputObject;
                 var result = new StockUpdateResult();
-                var myState = await state.ReadWrite(functionInput.context.transactionID);
+                var myState = await state.ReadWrite(functionInput.context);
                 foreach (var itemOrdered in input.ordersPerItem)
                 {
                     var item = myState.itemRecords[itemOrdered.Key];
@@ -181,7 +186,7 @@ namespace TPCC.Grains
             }
             try
             {
-                var myState = await state.ReadWrite(functionInput.context.transactionID);
+                var myState = await state.ReadWrite(functionInput.context);
                 //Update warehouse payment
                 myState.warehouseRecord.ytd += paymentInformation.paymentAmount;
                 total += myState.warehouseRecord.ytd;
@@ -218,7 +223,7 @@ namespace TPCC.Grains
             }
             try
             {
-                var myState = await state.ReadWrite(functionInput.context.transactionID);
+                var myState = await state.ReadWrite(functionInput.context);
                 var customer = myState.customerRecords[new Tuple<UInt32, UInt32>(paymentInformation.districtId, paymentInformation.customerId)];
                 customer.balance -= paymentInformation.paymentAmount;
                 customer.ytdPayment += paymentInformation.paymentAmount;
@@ -244,7 +249,7 @@ namespace TPCC.Grains
             var myResult = new FunctionResult();
             try
             {
-                var myState = await state.ReadWrite(functionInput.context.transactionID);
+                var myState = await state.ReadWrite(functionInput.context);
                 //Not strictly the same as the original since it requires the customer names to be sorted but will do for now
                 var customersWithSameLastName = myState.customerNameRecords[new Tuple<UInt32, String>(input.districtId, input.customerLastName)];
                 myResult.setResult(customersWithSameLastName[customersWithSameLastName.Count / 2].Item2);
