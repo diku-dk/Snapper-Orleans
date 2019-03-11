@@ -50,8 +50,12 @@ namespace Concurrency.Implementation
         private Boolean isEmitTimerOn = false;
         private Boolean hasToken = false;
         private Boolean hasEmitted = false;
+        private BatchToken token;
 
         private ILoggingProtocol<String> log;
+
+        //For test only
+        private uint myId, neighbourId; 
 
         public override Task OnActivateAsync()
         {
@@ -149,6 +153,7 @@ namespace Concurrency.Implementation
          */
         public async Task PassToken(BatchToken token)
         {
+            Console.WriteLine($"Coordinator {myId}: receives new token");
             this.hasToken = true;
             await EmitTransaction(token);
 
@@ -167,22 +172,33 @@ namespace Concurrency.Implementation
          */
         async Task EmitTransaction(Object obj)
         {
-            BatchToken token = (BatchToken)obj;
-            if (hasToken == false && token == null)
+
+            if(obj == null)
             {
+
                 this.isEmitTimerOn = true;
-                return;
+                if (this.hasToken == false)
+                    return;
             }
-            else if(this.isEmitTimerOn == false)
+            else if(! this.isEmitTimerOn)
             {
+
+                this.hasToken = true;
+                this.token = (BatchToken)obj;
                 return;
             }
+           
 
             int myCurEmitSeq = this.curEmitSeq;
             await EmitBatch(token);
 
             token.lastBatchID = this.curBatchID;
-            token.lastTransactionID = this.curTransactionID + nonDeterministicEmitSize[myCurEmitSeq];
+            if (nonDeterministicEmitSize.ContainsKey(myCurEmitSeq))
+                token.lastTransactionID = this.curTransactionID + nonDeterministicEmitSize[myCurEmitSeq];
+            else
+                token.lastTransactionID = this.curTransactionID;
+
+            Console.WriteLine($"Coordinator {myId}: pass token to coordinator {neighbourId}");
             neighbour.PassToken(token);
 
 
@@ -393,6 +409,9 @@ namespace Concurrency.Implementation
                 BatchToken token = new BatchToken(-1, -1);
                 EmitTransaction(token);
             }
+            this.myId = myId;
+            this.neighbourId = neighbourId;
+            Console.WriteLine($"Coordinator {myId}: is initialized, my next neighbour is coordinator {neighbourId}");
         }
     }
 }

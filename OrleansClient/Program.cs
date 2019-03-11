@@ -40,8 +40,8 @@ namespace OrleansClient
         {
             try
             {
-                //using (var client = await StartClientWithRetries())
-                using (var client = await StartClientWithRetriesToCluster())
+                using (var client = await StartClientWithRetries())
+                //using (var client = await StartClientWithRetriesToCluster())
                 {
                     await DoClientWork(client);
                     Console.ReadKey();
@@ -146,19 +146,24 @@ namespace OrleansClient
             return client;
         }
 
-        private static async Task RunPerformanceTestOnThroughput(IClusterClient client)
-        {            
-            TestThroughput test = new TestThroughput(n1, n2);
-            if(initActor)
-                await test.initializeGrain(client);
-            await test.DoTest(client, N, false);
-
-        }
 
         private static async Task DoClientWork(IClusterClient client)
         {
-            await RunPerformanceTestOnThroughput(client);
+
+            var Test = new GlobalCoordinatorTest(2, client);
+            await Test.SpawnCoordinator();
+            //await RunPerformanceTestOnThroughput(client);
             //await TestTransaction(client);
+        }
+
+        
+        private static async Task RunPerformanceTestOnThroughput(IClusterClient client)
+        {
+            TestThroughput test = new TestThroughput(n1, n2);
+            if (initActor)
+                await test.initializeGrain(client);
+            await test.DoTest(client, N, false);
+
         }
 
         private static async Task TestTransaction(IClusterClient client)

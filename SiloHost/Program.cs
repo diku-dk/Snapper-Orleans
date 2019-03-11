@@ -23,8 +23,8 @@ namespace OrleansSiloHost
         {
             try
             {
-                //var host = await StartSilo();
-                var host = await StartClusterSilo();
+                var host = await StartSilo();
+                //var host = await StartClusterSilo();
                 Console.WriteLine("Press Enter to terminate...");
                 Console.ReadLine();
 
