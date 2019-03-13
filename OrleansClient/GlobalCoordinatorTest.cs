@@ -66,9 +66,10 @@ namespace OrleansClient
             {
                 Task t1 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
                 Task t2 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
-                Task t3 = atm.StartTransaction(grainAccessInformation, "transfer", input);
+                Task t3 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
 
                 await Task.WhenAll(t1, t2, t3);
+                
                 //await t1;
             
             }
