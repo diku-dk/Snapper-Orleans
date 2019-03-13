@@ -7,8 +7,12 @@ using System.Threading;
 using Orleans;
 using Orleans.Runtime;
 using Orleans.Configuration;
+using Orleans.Hosting;
 using Microsoft.Extensions.Logging;
 using AccountTransfer.Interfaces;
+using AccountTransfer.Grains;
+using Concurrency.Implementation;
+using System.Net;
 
 namespace Test
 {
@@ -16,11 +20,34 @@ namespace Test
     {        
         private IClusterClient client;
         private static readonly int maxAttempts = 10;
-        
+        private ISiloHost host;
+
+        private async Task StartSilo()
+        {
+            var builder = new SiloHostBuilder()
+                .UseLocalhostClustering()
+                .Configure<ClusterOptions>(options =>
+                {
+                    options.ClusterId = "dev";
+                    options.ServiceId = "AccountTransferApp";
+
+
+                })
+                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
+                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(GlobalTransactionCoordinator).Assembly).WithReferences())                
+                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(ATMGrain).Assembly).WithReferences())
+                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+
+            host = builder.Build();
+            await host.StartAsync();            
+        }
+
         public async Task<IClusterClient> StartClientWithRetries()
         {
             if (client == null)
             {
+                await StartSilo();
                 int attempt = 0;
                 while (true)
                 {

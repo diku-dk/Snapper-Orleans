@@ -12,7 +12,7 @@ namespace Concurrency.Implementation
     {        
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
         private ScheduleInfo scheduleInfo;
-        private int lastScheduledBatchId; //Includes deterministic and not-deterministic batches
+        //private int lastScheduledBatchId; //Includes deterministic and not-deterministic batches
         //private TaskCompletionSource<Boolean> nonDetCompletion;
         private Dictionary<int, Dictionary<int, List<TaskCompletionSource<Boolean>>>> inBatchTransactionCompletionMap;
 

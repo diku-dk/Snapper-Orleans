@@ -91,7 +91,8 @@ namespace OrleansClient
         public async Task ConcurrentDetTransaction()
         {
             TestThroughput test = new TestThroughput(10, 10);
-            await test.DoTest(client, 1000, true);
+            //await test.DoTest(client, 1000, true);
+            await test.DoTest(client, 1, false);
 
         }
 

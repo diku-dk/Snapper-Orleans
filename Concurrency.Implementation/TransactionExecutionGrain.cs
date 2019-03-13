@@ -69,77 +69,84 @@ namespace Concurrency.Implementation
 
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
-            TransactionContext context = await myCoordinator.NewTransaction();
-            functionCallInput.context = context;
-            context.coordinatorKey = this.myPrimaryKey;
-            //Console.WriteLine($"Transaction {context.transactionID}: is started.\n");
-            FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
-            Task<FunctionResult> t1 = this.Execute(c1);
-            await t1;
-            //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
-            Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
-            FunctionResult result = new FunctionResult(t1.Result.resultObject);            
-            bool hasException = t1.Result.hasException();
-            bool canCommit = !hasException;
-            if (!hasException)
+            FunctionResult result = null;
+            try
             {
-                // Prepare Phase
-                HashSet<Guid> participants = new HashSet<Guid>();
-                participants.UnionWith(grainIDsInTransaction.Keys);
-                Task logTask = Task.CompletedTask;
-                if (log != null)
-                    logTask = log.HandleBeforePrepareIn2PC(context.transactionID, context.coordinatorKey, participants);
+                TransactionContext context = await myCoordinator.NewTransaction();
+                functionCallInput.context = context;
+                context.coordinatorKey = this.myPrimaryKey;
+                //Console.WriteLine($"Transaction {context.transactionID}: is started.\n");
+                FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
+                Task<FunctionResult> t1 = this.Execute(c1);
+                await t1;
+                //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
+                Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
+                result = new FunctionResult(t1.Result.resultObject);
+                bool hasException = t1.Result.hasException();
+                bool canCommit = !hasException;
+                if (!hasException)
+                {
+                    // Prepare Phase
+                    HashSet<Guid> participants = new HashSet<Guid>();
+                    participants.UnionWith(grainIDsInTransaction.Keys);
+                    Task logTask = Task.CompletedTask;
+                    if (log != null)
+                        logTask = log.HandleBeforePrepareIn2PC(context.transactionID, context.coordinatorKey, participants);
 
-                List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
-                foreach (var grain in grainIDsInTransaction)
-                {
-                    prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(context.transactionID));
-                }
-                await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
- 
-                foreach (Task<Boolean> vote in prepareResult)
-                {
-                    if (vote.Result == false)
+                    List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
+                    foreach (var grain in grainIDsInTransaction)
                     {
-                        canCommit = false;
-                        break;
+                        prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(context.transactionID));
+                    }
+                    await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
+
+                    foreach (Task<Boolean> vote in prepareResult)
+                    {
+                        if (vote.Result == false)
+                        {
+                            canCommit = false;
+                            break;
+                        }
                     }
                 }
-            }           
 
-            // Commit / Abort Phase
-            List<Task> commitTasks = new List<Task>();
-            List<Task> abortTasks = new List<Task>();
-            if (canCommit)
-            {
-                if(log != null)
-                    commitTasks.Add(log.HandleOnCommitIn2PC(state, context.transactionID, coordinatorMap[context.transactionID]));
-                //Console.WriteLine($"Transaction {context.transactionID}: prepared to commit. \n");
-                foreach (var grain in grainIDsInTransaction)
+                // Commit / Abort Phase
+                List<Task> commitTasks = new List<Task>();
+                List<Task> abortTasks = new List<Task>();
+                if (canCommit)
                 {
-                    commitTasks.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
-                }
+                    if (log != null)
+                        commitTasks.Add(log.HandleOnCommitIn2PC(state, context.transactionID, coordinatorMap[context.transactionID]));
+                    //Console.WriteLine($"Transaction {context.transactionID}: prepared to commit. \n");
+                    foreach (var grain in grainIDsInTransaction)
+                    {
+                        commitTasks.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(context.transactionID));
+                    }
 
-                await Task.WhenAll(commitTasks);
-                //Console.WriteLine($"Transaction {context.transactionID}: committed. \n");
-            }
-            else
-            {   
-                //Presume Abort
-                //if(log != null)
+                    await Task.WhenAll(commitTasks);
+                    //Console.WriteLine($"Transaction {context.transactionID}: committed. \n");
+                }
+                else
+                {
+                    //Presume Abort
+                    //if(log != null)
                     //abortTasks.Add(log.HandleOnAbortIn2PC(state, context.transactionID, coordinatorMap[context.transactionID]));
 
-                //Console.WriteLine($"Transaction {context.transactionID}: prepared to abort. \n");
-                foreach (var grain in grainIDsInTransaction)
-                {
-                    abortTasks.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
+                    //Console.WriteLine($"Transaction {context.transactionID}: prepared to abort. \n");
+                    foreach (var grain in grainIDsInTransaction)
+                    {
+                        abortTasks.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(context.transactionID));
+                    }
+                    await Task.WhenAll(abortTasks);
+                    //Console.WriteLine($"Transaction {context.transactionID}: aborted. \n");
+                    //Ensure the exception is set if the voting phase decides to abort
+                    result.setException();
                 }
-                await Task.WhenAll(abortTasks);
-                //Console.WriteLine($"Transaction {context.transactionID}: aborted. \n");
-                //Ensure the exception is set if the voting phase decides to abort
-                result.setException();
+                myScheduler.ackComplete(context.transactionID);
+            } catch (Exception e)
+            {
+                Console.WriteLine($"Exception(StartTransaction)::{this.myPrimaryKey}: exception {e.Message}");
             }
-            myScheduler.ackComplete(context.transactionID);
             return result;
         }
 

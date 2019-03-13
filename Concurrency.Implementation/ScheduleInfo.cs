@@ -17,6 +17,8 @@ namespace Concurrency.Implementation
         {
             nodes = new Dictionary<int, ScheduleNode>();
             ScheduleNode node = new ScheduleNode(-1, true);
+            nonDetBatchScheduleMap = new Dictionary<int, NonDeterministicBatchSchedule>();
+            nonDetTxnToScheduleMap = new Dictionary<int, int>();
             node.promise.SetResult(true);
             tail = node;
             nodes.Add(-1, node);
@@ -32,8 +34,7 @@ namespace Concurrency.Implementation
             if (tail.isDet == true)
             {
                 ScheduleNode node = new ScheduleNode(tid, false);
-                NonDeterministicBatchSchedule schedule = new NonDeterministicBatchSchedule(tid);
-                schedule.transactions.Add(tid);
+                NonDeterministicBatchSchedule schedule = new NonDeterministicBatchSchedule(tid);                
                 nonDetBatchScheduleMap.Add(tid, schedule);                
                 nodes.Add(tid, node);                
                 tail.next = node;
@@ -42,7 +43,7 @@ namespace Concurrency.Implementation
             }            
             nonDetBatchScheduleMap[tail.id].AddTransaction(tid);
             nonDetTxnToScheduleMap.Add(tail.id, tid);
-            return tail;
+            return tail.prev;
         }
 
         public void insertDetBatch(DeterministicBatchSchedule schedule)

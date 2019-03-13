@@ -115,33 +115,41 @@ namespace Concurrency.Implementation
          */
         public async Task<TransactionContext> NewTransaction()
         {
-            TaskCompletionSource<bool> emitting;
-            int myEmitSeq = this.curEmitSeq;
-            if (!emitPromiseMap.ContainsKey(myEmitSeq))
+            TransactionContext context = null;
+            try
             {
-                emitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
-                this.nonDeterministicEmitSize.Add(myEmitSeq, 0);
-            }       
-            emitting = emitPromiseMap[myEmitSeq];
-            nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] + 1;
+                TaskCompletionSource<bool> emitting;
+                int myEmitSeq = this.curEmitSeq;
+                if (!emitPromiseMap.ContainsKey(myEmitSeq))
+                {
+                    emitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
+                    this.nonDeterministicEmitSize.Add(myEmitSeq, 0);
+                }
+                emitting = emitPromiseMap[myEmitSeq];
+                nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] + 1;
 
-            if (emitting.Task.IsCompleted != true)
-            {
-                await emitting.Task;
-            }
-            int tid = this.curTransactionID++;
-            TransactionContext context = new TransactionContext(tid, myPrimaryKey);
+                if (emitting.Task.IsCompleted != true)
+                {
+                    await emitting.Task;
+                }
+                int tid = this.curTransactionID++;
+                context = new TransactionContext(tid, myPrimaryKey);
 
-            //Check if the emitting of the current non-deterministic batch is completed, if so, 
-            //set the token promise and increment the curNondeterministicBatchID.
-            nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] - 1;
-            if(nonDeterministicEmitSize[myEmitSeq] == 0)
-            {
+                //Check if the emitting of the current non-deterministic batch is completed, if so, 
+                //set the token promise and increment the curNondeterministicBatchID.
+                nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] - 1;
+                if (nonDeterministicEmitSize[myEmitSeq] == 0)
+                {
+
+                    nonDeterministicEmitSize.Remove(myEmitSeq);
+                    emitPromiseMap.Remove(myEmitSeq);
+                }
+                //Console.WriteLine($"Coordinator: received Transaction {tid}");
                 
-                nonDeterministicEmitSize.Remove(myEmitSeq);
-                emitPromiseMap.Remove(myEmitSeq);
+            } catch (Exception e)
+            {
+                Console.WriteLine($"Exception :: Coordinator {myId}: receives new non deterministic transaction {e.Message}");
             }
-            //Console.WriteLine($"Coordinator: received Transaction {tid}");
             return context;
         }
 
@@ -179,7 +187,10 @@ namespace Concurrency.Implementation
             await EmitBatch(token);
 
             if (nonDeterministicEmitSize.ContainsKey(myCurEmitSeq))
-                token.lastTransactionID = this.curTransactionID + nonDeterministicEmitSize[myCurEmitSeq];
+            {                
+                curTransactionID = token.lastTransactionID + 1;
+                token.lastTransactionID = this.curTransactionID + nonDeterministicEmitSize[myCurEmitSeq] - 1;
+            }
 
             //Console.WriteLine($"Coordinator {myId}: pass token to coordinator {neighbourId}");
             neighbour.PassToken(token);
