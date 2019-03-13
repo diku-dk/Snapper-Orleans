@@ -150,9 +150,9 @@ namespace OrleansClient
         private static async Task DoClientWork(IClusterClient client)
         {
 
-            var Test = new GlobalCoordinatorTest(2, client);
+            var Test = new GlobalCoordinatorTest(5, client);
             await Test.SpawnCoordinator();
-            await Test.SingleDetTransaction();
+            await Test.ConcurrentDetTransaction();
             //await RunPerformanceTestOnThroughput(client);
             //await TestTransaction(client);
         }

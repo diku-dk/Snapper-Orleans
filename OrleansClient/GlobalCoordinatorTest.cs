@@ -69,15 +69,29 @@ namespace OrleansClient
                 Task t3 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
 
                 await Task.WhenAll(t1, t2, t3);
-                
+                System.Threading.Thread.Sleep(2000);
+
+                t1 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
+                t2 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
+                t3 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
+
+                await Task.WhenAll(t1, t2, t3);
+
                 //await t1;
-            
+
             }
             catch (Exception e)
             {
                 Console.WriteLine($"\n\n {e.ToString()}\n\n");
             }
 
+
+        }
+
+        public async Task ConcurrentDetTransaction()
+        {
+            TestThroughput test = new TestThroughput(10, 10);
+            await test.DoTest(client, 1000, true);
 
         }
 

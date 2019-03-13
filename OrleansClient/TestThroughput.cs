@@ -77,6 +77,7 @@ namespace OrleansClient
                         IATMGrain atm = client.GetGrain<IATMGrain>(atmId);
                         var args = new TransferInput(grains[1], grains[2], 10);
                         FunctionInput input = new FunctionInput(args);
+                        System.Threading.Thread.Sleep(10);
                         tasks.Add(atm.StartTransaction(grainAccessInformation, "Transfer", input));
                     }
                     else
@@ -101,14 +102,6 @@ namespace OrleansClient
                 }
                 Console.WriteLine($"\n\n {count} transactions committed, Execution Time: {ts2 - ts1}.\n\n");
 
-                //float sum = 0;
-                //for (uint i = n1 + 1; i <= n1 + n2; i++)
-                //{
-                //    IAccountGrain account = client.GetGrain<IAccountGrain>((Helper.convertUInt32ToGuid(i)));
-                //    Task<FunctionResult> t = account.StartTransaction("GetBalance", new FunctionInput());
-                //    sum += (float)t.Result.resultObject;
-                //}
-                //Console.WriteLine($"After Execution, sum of valances {sum}, expecting {n2 * 1000}\n");
             }
             catch(Exception e)
             {

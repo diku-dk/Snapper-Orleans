@@ -37,11 +37,12 @@ namespace Concurrency.Implementation
             //Check if this batch can be executed: 
             //(1) check the promise status of its previous batch
             //(2) check the promise for nonDeterministic batch
-            if (scheduleInfo.find(schedule.lastBatchID).promise.Task.IsCompleted)
+            bool canContinue = scheduleInfo.find(schedule.lastBatchID).promise.Task.IsCompleted;
+            if(canContinue)
             {
                 //Check if there is a buffered function call for this batch, if present, execute it
                 int tid = schedule.curExecTransaction();
-                Console.WriteLine($"\n{this.GetType()}: next transaction to be executed is {tid}.\n");
+                //Console.WriteLine($"\n{this.GetType()}: next transaction to be executed is {tid}.\n");
 
                 if (inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid) && inBatchTransactionCompletionMap[schedule.batchID][tid].Count != 0)
                 {

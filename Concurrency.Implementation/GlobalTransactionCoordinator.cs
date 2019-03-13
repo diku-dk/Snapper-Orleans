@@ -106,8 +106,6 @@ namespace Concurrency.Implementation
             {
                 await emitting.Task;
             }
-
-            Console.WriteLine($"Coordinator {myId}: emits context for batch ID {deterministicTransactionRequests[myEmitSeq][index].batchID}, transaction ID {deterministicTransactionRequests[myEmitSeq][index].transactionID}");
             return deterministicTransactionRequests[myEmitSeq][index];
         }
 
@@ -222,7 +220,6 @@ namespace Concurrency.Implementation
                 context.transactionID = curTransactionID;
                 context.inBatchTransactionID = inBatchTransactionID++;
 
-
                 //update batch schedule
                 if (batchSchedulePerGrain.ContainsKey(context.batchID) == false)
                 {
@@ -232,6 +229,7 @@ namespace Concurrency.Implementation
 
                 //update the schedule for each grain accessed by this transaction
                 Dictionary<Guid, DeterministicBatchSchedule> grainSchedule = batchSchedulePerGrain[context.batchID];
+
                 foreach (var item in context.grainAccessInformation)
                 {
                     batchGrainClassName[context.batchID][item.Key] = item.Value.Item1;
@@ -287,7 +285,6 @@ namespace Concurrency.Implementation
                 await log.HandleOnPrepareInDeterministicProtocol(curBatchID, participants);
             }
 
-            
             foreach (KeyValuePair<Guid, DeterministicBatchSchedule> item in curScheduleMap)
             {
                 var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);
@@ -296,7 +293,7 @@ namespace Concurrency.Implementation
                 Task emit = dest.ReceiveBatchSchedule(schedule);
             }
             batchGrainClassName.Remove(curBatchID);
-            Console.WriteLine($"\n Coordinator {this.myId}: sent schedule for batch {curBatchID} to {curScheduleMap.Count} grains.");
+            Console.WriteLine($"\n Coordinator {this.myId}: sent schedule for batch {curBatchID}, which contains {inBatchTransactionID} transactions.");
         }
 
         //Grain calls this function to ack its completion of a batch execution
@@ -362,28 +359,23 @@ namespace Concurrency.Implementation
 
         public async Task NotifyCommit(int bid)
         {
-            Console.WriteLine($"\n Coordinator {this.myId} receives commit notification for {bid}");
-
             if (bid > this.highestCommittedBatchID)
                 this.highestCommittedBatchID = bid;
 
             Boolean commitOccur = false;
-            Console.WriteLine($"\n Coordinator {this.myId} in positin A");
+            
             while (this.batchesWaitingForCommit.Count != 0 && batchesWaitingForCommit.Min == highestCommittedBatchID + 1)
             {
                 //commit
-                Console.WriteLine($"\n Coordinator {this.myId} in the while loop");
                 this.highestCommittedBatchID++;
                 batchesWaitingForCommit.Remove(batchesWaitingForCommit.Min);
                 commitOccur = true;
-
             }
-            Console.WriteLine($"\n Coordinator {this.myId} in positin B");
+            
             if (commitOccur == true)
             {
                 if (log != null)
                     await log.HandleOnCommitInDeterministicProtocol(this.highestCommittedBatchID);
-                Console.WriteLine($"\n Coordinator {this.myId} calls BroadcastCommit() recursively");
                 await BroadcastCommit();
             }
             Console.WriteLine($"\n Coordinator {this.myId} finished processing commit notification for batch {bid}");

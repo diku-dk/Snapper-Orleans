@@ -18,7 +18,7 @@ namespace Test.GrainTests
         readonly uint numOfCoordinators = 10;
 
         [TestInitialize]
-        public async void bootStrap()
+        public async Task bootStrap()
         {
             client = await config.StartClientWithRetries();
             var tasks = new List<Task>();
@@ -31,10 +31,6 @@ namespace Test.GrainTests
             await Task.WhenAll(tasks);
         }
 
-        public void TestHybridSequentialTransfer()
-        {
-            throw new AssertFailedException("Unimplemented");
-        }
 
         private async void TestTransfers(int numTransfers=1, bool sequential=true)
         {
@@ -42,7 +38,7 @@ namespace Test.GrainTests
         }
         
         [TestMethod]
-        public async void TestSingleDetTransfer()
+        public async Task TestSingleDetTransfer()
         {
             IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(1));
             IAccountGrain toAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(2));
@@ -64,7 +60,8 @@ namespace Test.GrainTests
             var t1 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
             var t2 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
             var t3 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
-            await Task.WhenAll(t1, t2, t3);                
+            await Task.WhenAll(t1, t2, t3);
+            Console.Read();
         }
 
         [TestMethod]

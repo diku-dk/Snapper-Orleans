@@ -20,7 +20,7 @@ namespace Concurrency.Implementation
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
         protected String myUserClassName;
-        protected int numCoordinators = 2;
+        protected int numCoordinators = 5;
         protected Random rnd;
         private IGlobalTransactionCoordinator myCoordinator;
         private TransactionScheduler myScheduler;
@@ -76,11 +76,8 @@ namespace Concurrency.Implementation
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
             Task<FunctionResult> t1 = this.Execute(c1);
             await t1;
-
             //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
-
             Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
-
             FunctionResult result = new FunctionResult(t1.Result.resultObject);            
             bool hasException = t1.Result.hasException();
             bool canCommit = !hasException;
@@ -155,7 +152,7 @@ namespace Concurrency.Implementation
          
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
-            Console.WriteLine($"\n\n{this.GetType()}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}.\n\n");        
+            Console.WriteLine($"\n{this.myPrimaryKey}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}");        
             batchScheduleMap.Add(schedule.batchID, schedule);            
             myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
             return Task.CompletedTask;
@@ -176,9 +173,10 @@ namespace Concurrency.Implementation
             {
                 int tid = call.funcInput.context.inBatchTransactionID;
                 int bid = call.funcInput.context.batchID;
-                Console.WriteLine($"\n\n{this.GetType()}: is waiting for its turn to execute {bid} : {tid}.\n\n");
+                //Console.WriteLine($"\n\n{this.GetType()}: is waiting for its turn to execute {bid} : {tid}.\n\n");
+                //Console.WriteLine($"Grain {this.myPrimaryKey}, transaction {bid}:{tid} is waiting for its turn.");
                 var myTurnIndex = await myScheduler.waitForTurn(bid, tid);
-                Console.WriteLine($"\n\n{this.GetType()}: got its turn to execute {bid} : {tid}.\n\n");
+                //Console.WriteLine($"Grain {this.myPrimaryKey}, transaction {bid}:{tid} can start executing.");
                 //Execute the function call;
                 var ret = await InvokeFunction(call);
                 if (myScheduler.ackComplete(bid, tid, myTurnIndex))
