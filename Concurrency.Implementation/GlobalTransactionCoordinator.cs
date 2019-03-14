@@ -144,7 +144,7 @@ namespace Concurrency.Implementation
                     nonDeterministicEmitSize.Remove(myEmitSeq);
                     emitPromiseMap.Remove(myEmitSeq);
                 }
-                //Console.WriteLine($"Coordinator: received Transaction {tid}");
+                Console.WriteLine($"Coordinator {myId}: emitted non-det transaction {tid}");
                 
             } catch (Exception e)
             {

@@ -28,7 +28,7 @@ namespace Concurrency.Implementation
         {
             if(nonDetTxnToScheduleMap.ContainsKey(tid))
             {
-                return nodes[nonDetTxnToScheduleMap[tid]];
+                return nodes[nonDetTxnToScheduleMap[tid]].prev;
             }
             
             if (tail.isDet == true)
@@ -42,7 +42,7 @@ namespace Concurrency.Implementation
                 tail = node;                
             }            
             nonDetBatchScheduleMap[tail.id].AddTransaction(tid);
-            nonDetTxnToScheduleMap.Add(tail.id, tid);
+            nonDetTxnToScheduleMap.Add(tid, tail.id);
             return tail.prev;
         }
 

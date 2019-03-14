@@ -145,7 +145,7 @@ namespace Concurrency.Implementation
                 myScheduler.ackComplete(context.transactionID);
             } catch (Exception e)
             {
-                Console.WriteLine($"Exception(StartTransaction)::{this.myPrimaryKey}: exception {e.Message}");
+                Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: exception {e.Message}");
             }
             return result;
         }
@@ -159,7 +159,7 @@ namespace Concurrency.Implementation
          
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
-            Console.WriteLine($"\n{this.myPrimaryKey}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}");        
+            Console.WriteLine($"\n {this.myPrimaryKey}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}");        
             batchScheduleMap.Add(schedule.batchID, schedule);            
             myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
             return Task.CompletedTask;
@@ -172,9 +172,18 @@ namespace Concurrency.Implementation
         {
             if (call.funcInput.context.isDeterministic == false)
             {//Non-deterministic exection
-                await myScheduler.waitForTurn(call.funcInput.context.transactionID);
-                FunctionResult invokeRet = await InvokeFunction(call);
-                invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
+                FunctionResult invokeRet = null;
+                try
+                {
+                    await myScheduler.waitForTurn(call.funcInput.context.transactionID);
+                    invokeRet = await InvokeFunction(call);
+                }
+                catch(Exception e)
+                {
+                    Console.WriteLine($"\n Exception::InvokeFunction: {e.Message.ToString()}");
+                }
+                if(!invokeRet.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey))
+                    invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
                 return invokeRet;
             } else
             {
