@@ -24,7 +24,7 @@ namespace Concurrency.Implementation
             scheduleInfo = new ScheduleInfo();
         }
 
-        public void RegisterDeterministicBatchSchedule(int batchID) 
+        public async void RegisterDeterministicBatchSchedule(int batchID) 
         {
             var schedule = batchScheduleMap[batchID];
             //Create the promise of the previous batch if not present
@@ -37,17 +37,15 @@ namespace Concurrency.Implementation
             //Check if this batch can be executed: 
             //(1) check the promise status of its previous batch
             //(2) check the promise for nonDeterministic batch
-            bool canContinue = scheduleInfo.find(schedule.lastBatchID).promise.Task.IsCompleted;
-            if(canContinue)
-            {
-                //Check if there is a buffered function call for this batch, if present, execute it
-                int tid = schedule.curExecTransaction();
-                //Console.WriteLine($"\n{this.GetType()}: next transaction to be executed is {tid}.\n");
+            await scheduleInfo.find(schedule.lastBatchID).promise.Task;
 
-                if (inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid) && inBatchTransactionCompletionMap[schedule.batchID][tid].Count != 0)
-                {
-                    inBatchTransactionCompletionMap[schedule.batchID][tid][0].SetResult(true);
-                }
+            //Check if there is a buffered function call for this batch, if present, execute it
+            int tid = schedule.curExecTransaction();
+            //Console.WriteLine($"\n{this.GetType()}: next transaction to be executed is {tid}.\n");
+            if (inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid) && inBatchTransactionCompletionMap[schedule.batchID][tid].Count != 0)
+            {
+                if (inBatchTransactionCompletionMap[schedule.batchID][tid][0].Task.IsCompleted == false)
+                       inBatchTransactionCompletionMap[schedule.batchID][tid][0].SetResult(true);
             }
         }
 
@@ -69,12 +67,11 @@ namespace Concurrency.Implementation
             //This function call waits for the last promise in the list
             int count = inBatchTransactionCompletionMap[bid][tid].Count;
             var lastPromise = inBatchTransactionCompletionMap[bid][tid][count - 1];
+            //Console.WriteLine($"Transaction {bid}:{tid} is waiting for turn {count - 1}");
 
             //Promise created for the current execution, which is waited by the next function call
             var myPromise = new TaskCompletionSource<Boolean>();
             inBatchTransactionCompletionMap[bid][tid].Add(myPromise);
-
-            int nextTid;
 
             //Check if this call can be executed;
             if (batchScheduleMap.ContainsKey(bid))
@@ -83,24 +80,28 @@ namespace Concurrency.Implementation
                 //TODO: XXX: Assumption right now is that all non-deterministic transactions will execute as one big batch
                 if(scheduleInfo.find(schedule.lastBatchID).promise.Task.IsCompleted == false)
                 {
+
                     //If it is not the trun for this batch, then await or its turn
+                    //Console.WriteLine($"Transaction {bid}:{tid}, waiting for batch {schedule.lastBatchID}.");
                     await scheduleInfo.find(schedule.lastBatchID).promise.Task;
+                    //Console.WriteLine($"Transaction {bid}:{tid} passed point A");
                 }
                 //Check if this transaction cen be executed
-                nextTid = batchScheduleMap[bid].curExecTransaction();
+                int nextTid = batchScheduleMap[bid].curExecTransaction();
                 if (tid == nextTid)
                 {
                     //Console.WriteLine($"\n\n{this.GetType()}: Set Promise for Tx: {tid} in batch {bid} within Execute(). \n\n");
-
                     //Set the promise for the first function call of this Transaction if it is not
-                    if (inBatchTransactionCompletionMap[bid][tid][0].Task.IsCompleted == false)
+                    if (inBatchTransactionCompletionMap[bid][tid][0].Task.IsCompleted == false) { 
                         inBatchTransactionCompletionMap[bid][tid][0].SetResult(true);
+                        //Console.WriteLine($"Transaction {bid}:{tid} set turn {0} as true.");
+                    }
                 }
             }
 
             if (lastPromise.Task.IsCompleted == false)
                 await lastPromise.Task;
-
+            //Console.WriteLine($"Transaction {bid}:{tid} passed point B");
             //count identifies the location of the promise for this turn
             return count;
         }
@@ -123,7 +124,9 @@ namespace Concurrency.Implementation
             if(tid == nextTid)
             {
                 //Within the same batch same transaction
-                inBatchTransactionCompletionMap[bid][tid][turnIndex].SetResult(true);                
+
+                inBatchTransactionCompletionMap[bid][tid][turnIndex].SetResult(true);
+                //Console.WriteLine($"Transaction {bid}:{tid} sets turn {turnIndex} as true.");
             }
             else if (nextTid != -1)
             {
@@ -134,6 +137,7 @@ namespace Concurrency.Implementation
                     inBatchTransactionCompletionMap[bid].Add(nextTid, new List<TaskCompletionSource<bool>>());
                     inBatchTransactionCompletionMap[bid][nextTid].Add(new TaskCompletionSource<bool>(false));
                 }
+                //Console.WriteLine($"Transaction {bid}:{nextTid} sets turn {0} as true.");
                 inBatchTransactionCompletionMap[bid][nextTid][0].SetResult(true);
             }
             else
@@ -142,13 +146,13 @@ namespace Concurrency.Implementation
                 switchingBatches = true;
                 //Log the state now                                
                 //The schedule for this batch {$bid} has been completely executed. Check if any promise for next batch can be set.
-                this.scheduleInfo.completeDeterministicBatch(schedule.batchID);
+                this.scheduleInfo.completeDeterministicBatch(bid);
                 //TODO: XXX Remember to garbage collect promises
             }
             return switchingBatches;
         }
 
-        //
+        //Called to notify the completion of non-deterministic transaction
         public void ackComplete(int tid)
         {
             scheduleInfo.completeTransaction(tid);

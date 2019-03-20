@@ -59,7 +59,6 @@ namespace Concurrency.Implementation
             TransactionContext context = await myCoordinator.NewTransaction(grainAccessInformation);
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
-            
             Task<FunctionResult> t1 = this.Execute(c1);
             Task t2 = myCoordinator.checkBatchCompletion(context);
             await Task.WhenAll(t1, t2);
@@ -159,7 +158,7 @@ namespace Concurrency.Implementation
          
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
-            Console.WriteLine($"\n {this.myPrimaryKey}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}");        
+            //Console.WriteLine($"\n {this.myPrimaryKey}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}");        
             batchScheduleMap.Add(schedule.batchID, schedule);            
             myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
             return Task.CompletedTask;
@@ -170,6 +169,7 @@ namespace Concurrency.Implementation
          */
         public async Task<FunctionResult> Execute(FunctionCall call)
         {
+
             if (call.funcInput.context.isDeterministic == false)
             {//Non-deterministic exection
                 FunctionResult invokeRet = null;
@@ -185,11 +185,11 @@ namespace Concurrency.Implementation
                 if(!invokeRet.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey))
                     invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
                 return invokeRet;
-            } else
+            }
+            else
             {
                 int tid = call.funcInput.context.inBatchTransactionID;
                 int bid = call.funcInput.context.batchID;
-                //Console.WriteLine($"\n\n{this.GetType()}: is waiting for its turn to execute {bid} : {tid}.\n\n");
                 //Console.WriteLine($"Grain {this.myPrimaryKey}, transaction {bid}:{tid} is waiting for its turn.");
                 var myTurnIndex = await myScheduler.waitForTurn(bid, tid);
                 //Console.WriteLine($"Grain {this.myPrimaryKey}, transaction {bid}:{tid} can start executing.");

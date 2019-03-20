@@ -152,6 +152,7 @@ namespace OrleansClient
 
             var Test = new GlobalCoordinatorTest(5, client);
             await Test.SpawnCoordinator();
+            //await Test.MultiATMDetTransaction(100);
             await Test.ConcurrentDetTransaction();
             //await RunPerformanceTestOnThroughput(client);
             //await TestTransaction(client);

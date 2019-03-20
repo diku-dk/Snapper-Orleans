@@ -69,9 +69,13 @@ namespace Concurrency.Implementation
                 }
                 else
                 {
+                    Console.WriteLine($"Exception::insertDetBatch: {prevNode.id} has {prevNode.next.id} as its next !!! ");
                     ScheduleNode prevNext = prevNode.next;
-                    prevNext.next = node;
-                    node.prev = prevNext;
+                    prevNode.next = node;
+                    node.prev = prevNode;
+
+                    prevNext.prev = node;
+                    node.next = prevNext;
                 }
             }
             else

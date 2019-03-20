@@ -77,8 +77,9 @@ namespace OrleansClient
                         IATMGrain atm = client.GetGrain<IATMGrain>(atmId);
                         var args = new TransferInput(grains[1], grains[2], 10);
                         FunctionInput input = new FunctionInput(args);
-                        System.Threading.Thread.Sleep(10);
+                        //System.Threading.Thread.Sleep(10);
                         tasks.Add(atm.StartTransaction(grainAccessInformation, "Transfer", input));
+                        //await atm.StartTransaction(grainAccessInformation, "Transfer", input);
                     }
                     else
                     {

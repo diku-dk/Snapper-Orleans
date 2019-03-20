@@ -47,8 +47,15 @@ namespace OrleansSiloHost
                 {
                     options.ClusterId = "dev";
                     options.ServiceId = "AccountTransferApp";
-                   
-                    
+
+
+                })
+                .Configure<GrainCollectionOptions>(options =>
+                {
+                    // Set the value of CollectionAge to 10 minutes for all grain
+                    options.CollectionAge = TimeSpan.FromMinutes(1000);
+                    // Override the value of CollectionAge to 5 minutes for MyGrainImplementation
+                    //options.ClassSpecificCollectionAge[typeof(MyGrainImplementation).FullName] = TimeSpan.FromMinutes(5);
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(DeterministicTransactionCoordinator).Assembly).WithReferences())
