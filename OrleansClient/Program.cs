@@ -161,7 +161,7 @@ namespace OrleansClient
         
         private static async Task RunPerformanceTestOnThroughput(IClusterClient client)
         {
-            TestThroughput test = new TestThroughput(n1, n2);
+            TestThroughput test = new TestThroughput(n2);
             if (initActor)
                 await test.initializeGrain(client);
             await test.DoTest(client, N, false);
@@ -173,17 +173,14 @@ namespace OrleansClient
             bool sequential = true;
             int numTransfer = 100;
             IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(1));
-            IAccountGrain toAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(2));
-            IATMGrain atm = client.GetGrain<IATMGrain>(Helper.convertUInt32ToGuid(3));
+            IAccountGrain toAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(2));            
 
             Guid fromId = fromAccount.GetPrimaryKey();
             Guid toId = toAccount.GetPrimaryKey();
-            Guid atmId = atm.GetPrimaryKey();
 
             var grainAccessInformation = new Dictionary<Guid, Tuple<String, int>>();
             grainAccessInformation.Add(fromId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
-            grainAccessInformation.Add(toId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
-            grainAccessInformation.Add(atmId, new Tuple<string, int>("AccountTransfer.Grains.ATMGrain", 1));
+            grainAccessInformation.Add(toId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));            
 
             var args = new TransferInput(1, 2, 10);
             FunctionInput input = new FunctionInput(args);
@@ -206,7 +203,7 @@ namespace OrleansClient
                 List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
                 for (int i = 0; i < numTransfer; i++)
                 {
-                    var task = atm.StartTransaction("Transfer", input);
+                    var task = fromAccount.StartTransaction("Transfer", input);
                     tasks.Add(task);
                     if (sequential)
                     {
