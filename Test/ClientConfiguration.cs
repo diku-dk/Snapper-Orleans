@@ -46,7 +46,7 @@ namespace Test
         {
             if (client == null)
             {
-                await StartSilo();
+                //await StartSilo();
                 int attempt = 0;
                 while (true)
                 {

@@ -186,7 +186,6 @@ namespace OrleansClient
 
             try
             {
-
                 Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", input);
                 await t1;                
                 Task<FunctionResult> t2 = toAccount.StartTransaction("GetBalance", input);

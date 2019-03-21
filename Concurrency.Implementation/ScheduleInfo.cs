@@ -41,7 +41,14 @@ namespace Concurrency.Implementation
                 tail.next = node;
                 node.prev = tail;
                 tail = node;                
-            }            
+            } else
+            {
+                //Join the non-det tail, replace the promise
+                if(tail.promise.Task.IsCompleted)
+                {
+                    tail.promise = new TaskCompletionSource<bool>();
+                }
+            }
             nonDetBatchScheduleMap[tail.id].AddTransaction(tid);
             nonDetTxnToScheduleMap.Add(tid, tail.id);
             return tail.prev;
