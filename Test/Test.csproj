@@ -271,7 +271,6 @@
     <Compile Include="GrainTests\AccountGrainTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SystemTests\ScheduleListInsertionTest.cs" />
-    <Compile Include="SystemTests\temp.cs" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

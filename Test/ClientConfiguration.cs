@@ -35,7 +35,6 @@ namespace Test
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(GlobalTransactionCoordinator).Assembly).WithReferences())                
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(ATMGrain).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
                 .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 

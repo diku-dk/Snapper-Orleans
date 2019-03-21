@@ -50,33 +50,23 @@ namespace Test.GrainTests
         [TestMethod]
         public async Task TestSingleDetTransfer()
         {
-            Console.WriteLine("Event 1");
             IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(1));
             IAccountGrain toAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(2));
-            IATMGrain atm = client.GetGrain<IATMGrain>(Helper.convertUInt32ToGuid(3));
-            Console.WriteLine("Event 2");
 
             Guid fromId = fromAccount.GetPrimaryKey();
             Guid toId = toAccount.GetPrimaryKey();
-            Guid atmId = atm.GetPrimaryKey();
-            Console.WriteLine("Event 3");
+
             var grainAccessInformation = new Dictionary<Guid, Tuple<String, int>>();
             grainAccessInformation.Add(fromId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
             grainAccessInformation.Add(toId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
-            grainAccessInformation.Add(atmId, new Tuple<string, int>("AccountTransfer.Grains.ATMGrain", 1));
-            Console.WriteLine("Event 4");
             var args = new TransferInput(1, 2, 10);
             FunctionInput input = new FunctionInput(args);
 
             //Deterministic Transactions
-            var t1 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
-            Console.WriteLine("Event 5");
-            var t2 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
-            Console.WriteLine("Event 6");
-            var t3 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
-            Console.WriteLine("Event 7");
+            var t1 = fromAccount.StartTransaction(grainAccessInformation, "Transfer", input);
+            var t2 = fromAccount.StartTransaction(grainAccessInformation, "Transfer", input);
+            var t3 = fromAccount.StartTransaction(grainAccessInformation, "Transfer", input);
             await Task.WhenAll(t1, t2, t3);
-            Console.WriteLine("Event 7");            
         }
 
         [TestMethod]
