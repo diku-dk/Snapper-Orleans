@@ -20,7 +20,7 @@ namespace Test.GrainTests
         readonly int maxAccounts = 1000;
         readonly int maxTransferAmount = 10;
         readonly int numSequentialTransfers = 10;
-        readonly int numConcurrentTransfers = 1000;
+        readonly int numConcurrentTransfers = 100;
 
         [TestMethod]
         public void test()
@@ -95,6 +95,10 @@ namespace Test.GrainTests
             await Task.WhenAll(balanceTasks);
             foreach(var aBalanceTaskInfo in balanceTaskInfo)
             {
+                if(aBalanceTaskInfo.Item2.Result.hasException())
+                {
+                    Assert.Fail();
+                }
                 Assert.IsFalse(aBalanceTaskInfo.Item2.Result.hasException());
                 accountBalances[aBalanceTaskInfo.Item1] = (float)aBalanceTaskInfo.Item2.Result.resultObject;
             }

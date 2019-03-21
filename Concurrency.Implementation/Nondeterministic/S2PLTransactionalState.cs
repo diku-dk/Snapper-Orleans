@@ -8,24 +8,22 @@ using Utilities;
 
 namespace Concurrency.Implementation.Nondeterministic
 {
-    public class S2PLTransactionalState<TState> : ITransactionalState<TState> where TState : ICloneable, new()
+    public class S2PLTransactionalState<TState> : INonDetTransactionalState<TState> where TState : ICloneable, new()
     {
-        // In-memory version of the persistent state.
-        private TState committedState;
+        // In-memory version of the persistent state.        
         private TState activeState;
         private bool lockTaken;        
         private long lockTakenByTid;        
         private SemaphoreSlim stateLock;        
 
-        public S2PLTransactionalState(TState s)
+        public S2PLTransactionalState()
         {
-            committedState = s;
             lockTaken = false;
             lockTakenByTid = 0;            
             stateLock = new SemaphoreSlim(1);
         }
 
-        private async Task<TState> AccessState(long tid)
+        private async Task<TState> AccessState(long tid, TState committedState)
         {
             if (lockTaken)
             {
@@ -60,24 +58,18 @@ namespace Concurrency.Implementation.Nondeterministic
             return activeState;
         }
 
-        public Task<TState> Read(TransactionContext ctx)
+        public Task<TState> Read(TransactionContext ctx, TState committedState)
         {
             // Use a single lock for now
-            return AccessState(ctx.transactionID);
+            return AccessState(ctx.transactionID, committedState);
         }
 
-        public Task<TState> ReadWrite(TransactionContext ctx)
+        public Task<TState> ReadWrite(TransactionContext ctx, TState committedState)
         {
             // Use a single lock right now
-            return AccessState(ctx.transactionID);
+            return AccessState(ctx.transactionID, committedState);
         }
-
-        public Task Write(TransactionContext ctx)
-        {
-            // Use a single lock right now
-            return AccessState(ctx.transactionID);
-        }
-        
+                
         public Task<bool> Prepare(long tid)
         {            
             return Task.FromResult(lockTaken && lockTakenByTid == tid);            
@@ -90,36 +82,29 @@ namespace Concurrency.Implementation.Nondeterministic
             stateLock.Release();
         }
 
-        public Task Commit(long tid)
+        public TState Commit(long tid)
         {
             if (lockTaken && lockTakenByTid == tid)
-            {
-                committedState = activeState;
+            {                
                 CleanUp();
             } else
             {
                 //Nothing really to do but should not have received the commit call
             }
-            return Task.CompletedTask;
+            return activeState;
         }
 
-        public Task Abort(long tid)
+        public void Abort(long tid)
         {
             if (lockTaken && lockTakenByTid == tid)
             {
                 CleanUp();
             }
-            return Task.CompletedTask;
         }
 
         public TState GetPreparedState(long tid)
         {
             return activeState;
-        }
-
-        public TState GetCommittedState(long tid)
-        {
-            return committedState;
         }
     }
 }

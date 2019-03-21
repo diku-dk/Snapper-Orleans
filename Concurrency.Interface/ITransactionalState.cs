@@ -9,12 +9,9 @@ namespace Concurrency.Interface.Nondeterministic
 {
     public interface ITransactionalState<TState>
     {
-
         Task<TState> Read(TransactionContext ctx);
 
         Task<TState> ReadWrite(TransactionContext ctx);
-
-        Task Write(TransactionContext ctx);
 
         [AlwaysInterleave]
         Task<bool> Prepare(long tid);

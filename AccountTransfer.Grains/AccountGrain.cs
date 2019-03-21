@@ -17,14 +17,14 @@ namespace AccountTransfer.Grains
     public class Balance : ICloneable
 
     {
-        public float value = 1000;
+        public float value;
         public Balance(Balance balance)
         {
             this.value = balance.value;
         }
         public Balance()
         {
-            this.value = 1000;
+            this.value = 100000;
         }
         object ICloneable.Clone()
         {
@@ -87,10 +87,10 @@ namespace AccountTransfer.Grains
             float v = -1;
             try
             {
-                Balance balance = await state.ReadWrite(context);
+                Balance balance = await state.Read(context);
                 v = balance.value;
             }
-            catch (Exception)
+            catch (Exception e)
             {
                 ret.setException();
             }

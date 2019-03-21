@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using Concurrency.Interface.Deterministic;
 using Concurrency.Interface.Nondeterministic;
 using Utilities;
 
@@ -9,56 +10,53 @@ namespace Concurrency.Implementation
 {
     public class HybridState<TState> : ITransactionalState<TState> where TState : ICloneable, new()
     {        
-        private ITransactionalState<TState> deterministicConcurrencyControl;
-        private ITransactionalState<TState> nonDeterministicConcurrencyControl;
+        private IDetTransactionalState<TState> detStateManager;
+        private INonDetTransactionalState<TState> nonDetStateManager;
         private TState myState;
 
         public HybridState(TState state)
         {
             this.myState = state;            
-            deterministicConcurrencyControl = new Deterministic.DeterministicTransactionalState<TState>(state);
-            //nonDeterministicConcurrencyControl = new Nondeterministic.S2PLTransactionalState<TState>(state);
-            nonDeterministicConcurrencyControl = new Nondeterministic.TimestampTransactionalState<TState>(state);
+            detStateManager = new Deterministic.DeterministicTransactionalState<TState>();
+            //nonDetStateManager = new Nondeterministic.S2PLTransactionalState<TState>();
+            nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
         }
         Task ITransactionalState<TState>.Abort(long tid)
-        {
-            //XXX: Should not be called for deterministic transactions
-            return nonDeterministicConcurrencyControl.Abort(tid);                        
+        {            
+            nonDetStateManager.Abort(tid);
+            return Task.CompletedTask;                        
         }
 
         Task ITransactionalState<TState>.Commit(long tid)
-        {
-            //XXX: Should not be called for deterministic transactions                        
-            return nonDeterministicConcurrencyControl.Commit(tid);            
+        {            
+            myState = nonDetStateManager.Commit(tid);
+            return Task.CompletedTask;
         }
 
         TState ITransactionalState<TState>.GetCommittedState(long bid)
         {
-            //XXX: Should not be called for non-deterministic transactions                        
-            return deterministicConcurrencyControl.GetCommittedState(bid);
+            return myState;
         }
 
         TState ITransactionalState<TState>.GetPreparedState(long tid)
-        {
-            //XXX: Should not be called for deterministic transactions
-            return nonDeterministicConcurrencyControl.GetPreparedState(tid);
+        {            
+            return nonDetStateManager.GetPreparedState(tid);
         }
 
         Task<bool> ITransactionalState<TState>.Prepare(long tid)
         {
-            //XXX: Should not be called for deterministic transactions
-            return nonDeterministicConcurrencyControl.Prepare(tid);            
+            return nonDetStateManager.Prepare(tid);            
         }
 
         Task<TState> ITransactionalState<TState>.Read(TransactionContext ctx)
         {
             if (ctx.isDeterministic)
             {
-                return deterministicConcurrencyControl.Read(ctx);
+                return detStateManager.Read(ctx, myState);
             }
             else
             {
-                return nonDeterministicConcurrencyControl.Read(ctx);
+                return nonDetStateManager.Read(ctx, myState);
             }
         }
 
@@ -66,23 +64,11 @@ namespace Concurrency.Implementation
         {
             if (ctx.isDeterministic)
             {
-                return deterministicConcurrencyControl.ReadWrite(ctx);
+                return detStateManager.ReadWrite(ctx, myState);
             }
             else
             {
-                return nonDeterministicConcurrencyControl.ReadWrite(ctx);
-            }
-        }
-
-        Task ITransactionalState<TState>.Write(TransactionContext ctx)
-        {
-            if (ctx.isDeterministic)
-            {
-                return deterministicConcurrencyControl.Write(ctx);
-            }
-            else
-            {
-                return nonDeterministicConcurrencyControl.Write(ctx);
+                return nonDetStateManager.ReadWrite(ctx, myState);
             }
         }
     }

@@ -7,10 +7,9 @@ using Utilities;
 
 namespace Concurrency.Implementation.Nondeterministic
 {
-    public class TimestampTransactionalState<TState> : ITransactionalState<TState> where TState : ICloneable, new()
+    public class TimestampTransactionalState<TState> : INonDetTransactionalState<TState> where TState : ICloneable, new()
     {
-
-        private TState commitedState;
+        
         private long readTs;
         private long writeTs;
         private long commitTransactionId;
@@ -22,18 +21,6 @@ namespace Concurrency.Implementation.Nondeterministic
 
         public TimestampTransactionalState()
         {
-            commitedState = new TState();
-            readTs = -1;
-            writeTs = -1;
-            commitTransactionId = -1;
-
-            transactionList = new DLinkedList<TransactionStateInfo>();
-            transactionMap = new Dictionary<long, Node<TransactionStateInfo>>();
-        }
-
-        public TimestampTransactionalState(TState s)
-        {
-            commitedState = s;
             readTs = -1;
             writeTs = -1;
             commitTransactionId = -1;
@@ -42,7 +29,7 @@ namespace Concurrency.Implementation.Nondeterministic
             transactionMap = new Dictionary<long, Node<TransactionStateInfo>>();
 
         }
-        public Task<TState> ReadWrite(TransactionContext ctx)
+        public Task<TState> ReadWrite(TransactionContext ctx, TState committedState)
         {
             long rts, wts, depTid;
             TState state;
@@ -67,7 +54,7 @@ namespace Concurrency.Implementation.Nondeterministic
             }
             else
             {
-                state = commitedState;
+                state = committedState;
                 rts = readTs;
                 wts = writeTs;
                 depTid = commitTransactionId;
@@ -145,7 +132,7 @@ namespace Concurrency.Implementation.Nondeterministic
             }
         }
 
-        public Task Commit(long tid)
+        public TState Commit(long tid)
         {
             Node<TransactionStateInfo> node = transactionMap[tid];
             node.data.status = Status.Committed;
@@ -154,36 +141,32 @@ namespace Concurrency.Implementation.Nondeterministic
             
             //Update commit information
             this.commitTransactionId = tid;
-            this.commitedState = node.data.state;
+            var commitedState = node.data.state;
             this.readTs = node.data.rts;
             this.writeTs = node.data.wts;
 
             //Clean the transaction list
             CleanUp(node);
 
-            return Task.CompletedTask;
+            return commitedState;
         }
 
-        public Task Abort(long tid)
+        public void Abort(long tid)
         {
             Node<TransactionStateInfo> node = transactionMap[tid];
             node.data.status = Status.Aborted;
 
             //Set the promise of transaction tid, such that transactions depending on it can prepare.
             node.data.ExecutionPromise.SetResult(true);
-            return Task.CompletedTask;
         }
 
-        public Task<TState> Read(TransactionContext ctx)
+        public Task<TState> Read(TransactionContext ctx, TState committedState)
         {
 
             //Should we return a copy of copy, as we don't wanna user to update this state
-            return Task.FromResult<TState>(this.commitedState);
+            return Task.FromResult<TState>(committedState);
         }
-        public Task Write(TransactionContext ctx)
-        {
-            return Task.CompletedTask;
-        }
+
 
         public enum Status
         {
@@ -231,11 +214,6 @@ namespace Concurrency.Implementation.Nondeterministic
         {
             return this.transactionMap[tid].data.state;
                 
-        }
-
-        public TState GetCommittedState(long tid)
-        {
-            return this.commitedState;
         }
     }
 }

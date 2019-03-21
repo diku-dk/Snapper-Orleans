@@ -1,4 +1,5 @@
 ﻿using Concurrency.Interface.Nondeterministic;
+using Concurrency.Interface.Deterministic;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -7,52 +8,16 @@ using Utilities;
 
 namespace Concurrency.Implementation.Deterministic
 {
-    public class DeterministicTransactionalState<TState> : ITransactionalState<TState> where TState : ICloneable, new()
+    public class DeterministicTransactionalState<TState> : IDetTransactionalState<TState> where TState : ICloneable, new()
     {
-        private TState state;
-
-        public DeterministicTransactionalState(TState s)
-        {
-            state = s;
-        }
-        public Task Abort(long tid)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task Commit(long tid)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<bool> Prepare(long tid)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<TState> Read(TransactionContext ctx)
+        public Task<TState> Read(TransactionContext ctx, TState state)
         {
             return Task.FromResult(state);
         }
 
-        public Task<TState> ReadWrite(TransactionContext ctx)
+        public Task<TState> ReadWrite(TransactionContext ctx, TState state)
         {
             return Task.FromResult(state);
-        }
-
-        public Task Write(TransactionContext ctx)
-        {
-            throw new NotImplementedException();
-        }
-
-        public TState GetPreparedState(long tid)
-        {
-            return state;
-        }
-
-        public TState GetCommittedState(long tid)
-        {
-            return state;
         }
     }
 }
