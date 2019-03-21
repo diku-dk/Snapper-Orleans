@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Utilities;
 using Concurrency.Interface.Logging;
 using System.Timers;
+using System.Diagnostics;
 
 namespace Concurrency.Implementation
 {
@@ -23,7 +24,7 @@ namespace Concurrency.Implementation
         //Timer
         private IDisposable disposable;
         private TimeSpan waitingTime = TimeSpan.FromSeconds(2);
-        private TimeSpan batchInterval = TimeSpan.FromMilliseconds(5000);
+        private TimeSpan batchInterval = TimeSpan.FromMilliseconds(1000);
 
         //Batch Schedule
         private Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>> batchSchedulePerGrain;
@@ -263,6 +264,7 @@ namespace Concurrency.Implementation
                     schedule.lastBatchID = token.lastBatchPerGrain[grain];
                 else
                     schedule.lastBatchID = -1;
+                Debug.Assert(schedule.batchID > schedule.lastBatchID);
                 token.lastBatchPerGrain[grain] = schedule.batchID;
             }
             token.lastBatchID = this.curBatchID;

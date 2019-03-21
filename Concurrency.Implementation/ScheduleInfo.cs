@@ -1,17 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
 using Utilities;
 
 namespace Concurrency.Implementation
 {
-    class ScheduleInfo
+    public class ScheduleInfo
     {
-        private Dictionary<int, ScheduleNode> nodes;
-        private ScheduleNode tail; //Points to the last node in the doubly-linked list
-        private Dictionary<int, NonDeterministicBatchSchedule> nonDetBatchScheduleMap;
-        private Dictionary<int, int> nonDetTxnToScheduleMap;
+        public Dictionary<int, ScheduleNode> nodes;
+        public ScheduleNode tail; //Points to the last node in the doubly-linked list
+        public Dictionary<int, NonDeterministicBatchSchedule> nonDetBatchScheduleMap;
+        public Dictionary<int, int> nonDetTxnToScheduleMap;
         
         public ScheduleInfo()
         {
@@ -24,7 +25,7 @@ namespace Concurrency.Implementation
             nodes.Add(-1, node);
         }
 
-        public ScheduleNode insertNonDetTransaction(int tid)
+        public ScheduleNode InsertNonDetTransaction(int tid)
         {
             if(nonDetTxnToScheduleMap.ContainsKey(tid))
             {
@@ -69,13 +70,18 @@ namespace Concurrency.Implementation
                 }
                 else
                 {
-                    Console.WriteLine($"Exception::insertDetBatch: {prevNode.id} has {prevNode.next.id} as its next !!! ");
-                    ScheduleNode prevNext = prevNode.next;
-                    prevNode.next = node;
-                    node.prev = prevNode;
-
-                    prevNext.prev = node;
-                    node.next = prevNext;
+                    Debug.Assert(prevNode.id == -1);
+                    //Remove nodes connected with -1
+                    ScheduleNode next = nodes[-1].next;
+                    while(next != null)
+                    {
+                        Debug.Assert(next.id < schedule.batchID);
+                        nodes.Remove(next.id);
+                        next = next.next;
+                    }
+                    //Connect node -1 with the inserted node
+                    nodes[-1].next = node;
+                    node.prev = nodes[-1];
                 }
             }
             else
@@ -201,7 +207,7 @@ namespace Concurrency.Implementation
         }
     }
 
-    class ScheduleNode
+    public class ScheduleNode
     {
         public int id;
         public bool isDet = false;

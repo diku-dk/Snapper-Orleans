@@ -190,9 +190,7 @@ namespace Concurrency.Implementation
             {
                 int tid = call.funcInput.context.inBatchTransactionID;
                 int bid = call.funcInput.context.batchID;
-                //Console.WriteLine($"Grain {this.myPrimaryKey}, transaction {bid}:{tid} is waiting for its turn.");
                 var myTurnIndex = await myScheduler.waitForTurn(bid, tid);
-                //Console.WriteLine($"Grain {this.myPrimaryKey}, transaction {bid}:{tid} can start executing.");
                 //Execute the function call;
                 var ret = await InvokeFunction(call);
                 if (myScheduler.ackComplete(bid, tid, myTurnIndex))

@@ -14,6 +14,8 @@ using Utilities;
 using System.Threading;
 using Utilities;
 using Orleans.Hosting;
+using Concurrency.Implementation;
+using System.Linq;
 
 namespace OrleansClient
 {
@@ -27,14 +29,18 @@ namespace OrleansClient
         static Boolean initActor;
         static int Main(string[] args)
         {
- 
 
+
+            
             n1 = Convert.ToUInt32(args[0]);
             n2 = Convert.ToUInt32(args[1]);
             N = Convert.ToInt32(args[2]);
             initActor = Convert.ToBoolean(args[3]);
             return RunMainAsync().Result;
         }
+
+
+
 
         private static async Task<int> RunMainAsync()
         {
@@ -149,24 +155,15 @@ namespace OrleansClient
 
         private static async Task DoClientWork(IClusterClient client)
         {
+            //TestOutOfOrderBatchArrival();
 
             var Test = new GlobalCoordinatorTest(5, client);
             await Test.SpawnCoordinator();
-            //await Test.MultiATMDetTransaction(100);
             await Test.ConcurrentDetTransaction();
-            //await RunPerformanceTestOnThroughput(client);
-            //await TestTransaction(client);
+
         }
 
         
-        private static async Task RunPerformanceTestOnThroughput(IClusterClient client)
-        {
-            TestThroughput test = new TestThroughput(n1, n2);
-            if (initActor)
-                await test.initializeGrain(client);
-            await test.DoTest(client, N, false);
-
-        }
 
         private static async Task TestTransaction(IClusterClient client)
         {

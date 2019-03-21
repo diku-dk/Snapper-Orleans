@@ -109,7 +109,7 @@ namespace Concurrency.Implementation
         //For nonDeterninistic Transactions
         public async Task waitForTurn(int tid)
         {
-            await scheduleInfo.insertNonDetTransaction(tid).promise.Task;
+            await scheduleInfo.InsertNonDetTransaction(tid).promise.Task;
         }
 
         //For deterministic transaction
