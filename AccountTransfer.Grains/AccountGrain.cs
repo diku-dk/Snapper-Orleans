@@ -105,9 +105,10 @@ namespace AccountTransfer.Grains
             //Invoke the destination deposit
             IAccountGrain toAccount = this.GrainFactory.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(input.destinationAccount));
             FunctionInput input_1 = new FunctionInput(fin, input.transferAmount);
+
             FunctionCall c = new FunctionCall(typeof(AccountGrain), "Deposit", input_1);
 
-            FunctionResult ret = await Withdraw(fin);                        
+            FunctionResult ret = await Withdraw(input_1);                        
             FunctionResult result = new FunctionResult();
             ret.mergeWithFunctionResult(ret);                        
             //Console.WriteLine($"\n\n ATm transfer from : {input.sourceAccount} to {input.destinationAccount}. \n\n");

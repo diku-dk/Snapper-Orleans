@@ -9,7 +9,6 @@ namespace Utilities
     {
         public int batchID { get; set; }
         public int transactionID { get; set; }
-        public int inBatchTransactionID;
 
         public Status status;
 

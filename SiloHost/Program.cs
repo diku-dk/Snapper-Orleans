@@ -60,7 +60,6 @@ namespace OrleansSiloHost
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(DeterministicTransactionCoordinator).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(NondeterministicTransactionCoordinator).Assembly).WithReferences())
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(ATMGrain).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
                 .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
             
@@ -92,7 +91,6 @@ namespace OrleansSiloHost
                 .UseDynamoDBClustering(dynamoDBOptions)
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(DeterministicTransactionCoordinator).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(NondeterministicTransactionCoordinator).Assembly).WithReferences())
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(ATMGrain).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
                 .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 

@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Text;
 using Utilities;
 using System.Threading.Tasks;
-using Utilities;
 using Concurrency.Interface.Logging;
 using System.Timers;
 using System.Diagnostics;
@@ -15,7 +14,6 @@ namespace Concurrency.Implementation
     public class GlobalTransactionCoordinator : Grain, IGlobalTransactionCoordinator
 
     {
-        private int curBatchID { get; set; }
         private int curTransactionID { get; set; }
         protected Guid myPrimaryKey;
         private IGlobalTransactionCoordinator neighbour;
@@ -58,10 +56,7 @@ namespace Concurrency.Implementation
 
         public override Task OnActivateAsync()
         {
-            curBatchID = -1;
             curTransactionID = -1;
-
- 
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             
@@ -222,14 +217,13 @@ namespace Concurrency.Implementation
                 return;
 
             curEmitSeq++;
-            curBatchID = token.lastBatchID + 1;
             curTransactionID = token.lastTransactionID + 1;
+            int curBatchID = curTransactionID;
 
             foreach (TransactionContext context in transactionList)
             {
                 context.batchID = curBatchID;
-                context.transactionID = curTransactionID;
-                context.inBatchTransactionID = inBatchTransactionID++;
+                context.transactionID = curTransactionID++;
 
                 //update batch schedule
                 if (batchSchedulePerGrain.ContainsKey(context.batchID) == false)
@@ -246,7 +240,7 @@ namespace Concurrency.Implementation
                     batchGrainClassName[context.batchID][item.Key] = item.Value.Item1;
                     if (grainSchedule.ContainsKey(item.Key) == false)
                         grainSchedule.Add(item.Key, new DeterministicBatchSchedule(context.batchID));
-                    grainSchedule[item.Key].AddNewTransaction(context.inBatchTransactionID, item.Value.Item2);
+                    grainSchedule[item.Key].AddNewTransaction(context.transactionID, item.Value.Item2);
 
                 }
                 context.grainAccessInformation.Clear();
@@ -267,7 +261,7 @@ namespace Concurrency.Implementation
                 Debug.Assert(schedule.batchID > schedule.lastBatchID);
                 token.lastBatchPerGrain[grain] = schedule.batchID;
             }
-            token.lastBatchID = this.curBatchID;
+            token.lastBatchID = curBatchID;
             token.lastTransactionID = this.curTransactionID;
 
 
