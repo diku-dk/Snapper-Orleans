@@ -188,7 +188,7 @@ namespace Concurrency.Implementation
             }
             else
             {
-                int tid = call.funcInput.context.inBatchTransactionID;
+                int tid = call.funcInput.context.transactionID;
                 int bid = call.funcInput.context.batchID;
                 var myTurnIndex = await myScheduler.waitForTurn(bid, tid);
                 //Execute the function call;

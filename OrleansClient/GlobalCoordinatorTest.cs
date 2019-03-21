@@ -47,7 +47,7 @@ namespace OrleansClient
         {
             TestThroughput test = new TestThroughput(20);
             //for(int i=0; i<10; i++)
-                await test.DoTest(client, 1, true);
+                await test.DoTest(client, 10000, true);
             //await test.DoTest(client, 1000, false);
 
         }
