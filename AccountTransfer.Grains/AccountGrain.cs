@@ -98,6 +98,45 @@ namespace AccountTransfer.Grains
             return ret;
         }
 
+        public async Task<FunctionResult> Transfer(FunctionInput fin)
+        {
+            TransactionContext context = fin.context;
+            var input = (TransferInput)fin.inputObject;
+            //Invoke the destination deposit
+            IAccountGrain toAccount = this.GrainFactory.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(input.destinationAccount));
+            FunctionInput input_1 = new FunctionInput(fin, input.transferAmount);
+            FunctionCall c = new FunctionCall(typeof(AccountGrain), "Deposit", input_1);
+
+            FunctionResult ret = await Withdraw(fin);                        
+            FunctionResult result = new FunctionResult();
+            ret.mergeWithFunctionResult(ret);                        
+            //Console.WriteLine($"\n\n ATm transfer from : {input.sourceAccount} to {input.destinationAccount}. \n\n");
+            ret = await toAccount.Execute(c);
+            result.mergeWithFunctionResult(ret);
+            return result;
+        }
+
+        public async Task<FunctionResult> TransferOneToMulti(FunctionInput functionInput)
+        {
+            TransactionContext context = functionInput.context;
+            var input = (TransferOneToMultiInput)functionInput.inputObject;
+            var resultTasks = new List<Task<FunctionResult>>();
+            //Fire destination deposits
+            foreach (var destinationAccount in input.destinationAccounts)
+            {
+                resultTasks.Add(this.GrainFactory.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(destinationAccount)).Execute(new FunctionCall(typeof(AccountGrain), "Deposit", new FunctionInput(functionInput, input.transferAmount))));
+            }
+
+            FunctionResult ret = await Withdraw(functionInput);            
+            FunctionResult myResult = new FunctionResult();
+            myResult.mergeWithFunctionResult(ret);            
+            var results = await Task.WhenAll(resultTasks);            
+            foreach (var result in results)
+            {
+                myResult.mergeWithFunctionResult(result);
+            }
+            return myResult;
+        }
         public Task<int> ActivateGrain()
         {
             return Task.FromResult(1);

@@ -14,8 +14,6 @@ using Utilities;
 using System.Threading;
 using Utilities;
 using Orleans.Hosting;
-using Concurrency.Implementation;
-using System.Linq;
 
 namespace OrleansClient
 {
@@ -29,18 +27,14 @@ namespace OrleansClient
         static Boolean initActor;
         static int Main(string[] args)
         {
+ 
 
-
-            
             n1 = Convert.ToUInt32(args[0]);
             n2 = Convert.ToUInt32(args[1]);
             N = Convert.ToInt32(args[2]);
             initActor = Convert.ToBoolean(args[3]);
             return RunMainAsync().Result;
         }
-
-
-
 
         private static async Task<int> RunMainAsync()
         {
@@ -155,32 +149,38 @@ namespace OrleansClient
 
         private static async Task DoClientWork(IClusterClient client)
         {
-            //TestOutOfOrderBatchArrival();
 
             var Test = new GlobalCoordinatorTest(5, client);
             await Test.SpawnCoordinator();
+            //await Test.MultiATMDetTransaction(100);
             await Test.ConcurrentDetTransaction();
-
+            //await RunPerformanceTestOnThroughput(client);
+            //await TestTransaction(client);
         }
 
         
+        private static async Task RunPerformanceTestOnThroughput(IClusterClient client)
+        {
+            TestThroughput test = new TestThroughput(n2);
+            if (initActor)
+                await test.initializeGrain(client);
+            await test.DoTest(client, N, false);
+
+        }
 
         private static async Task TestTransaction(IClusterClient client)
         {
             bool sequential = true;
             int numTransfer = 100;
             IAccountGrain fromAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(1));
-            IAccountGrain toAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(2));
-            IATMGrain atm = client.GetGrain<IATMGrain>(Helper.convertUInt32ToGuid(3));
+            IAccountGrain toAccount = client.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(2));            
 
             Guid fromId = fromAccount.GetPrimaryKey();
             Guid toId = toAccount.GetPrimaryKey();
-            Guid atmId = atm.GetPrimaryKey();
 
             var grainAccessInformation = new Dictionary<Guid, Tuple<String, int>>();
             grainAccessInformation.Add(fromId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
-            grainAccessInformation.Add(toId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
-            grainAccessInformation.Add(atmId, new Tuple<string, int>("AccountTransfer.Grains.ATMGrain", 1));
+            grainAccessInformation.Add(toId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));            
 
             var args = new TransferInput(1, 2, 10);
             FunctionInput input = new FunctionInput(args);
@@ -203,7 +203,7 @@ namespace OrleansClient
                 List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
                 for (int i = 0; i < numTransfer; i++)
                 {
-                    var task = atm.StartTransaction("Transfer", input);
+                    var task = fromAccount.StartTransaction("Transfer", input);
                     tasks.Add(task);
                     if (sequential)
                     {
