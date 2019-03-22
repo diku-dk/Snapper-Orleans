@@ -95,10 +95,6 @@ namespace Test.GrainTests
             await Task.WhenAll(balanceTasks);
             foreach(var aBalanceTaskInfo in balanceTaskInfo)
             {
-                if(aBalanceTaskInfo.Item2.Result.hasException())
-                {
-                    Assert.Fail();
-                }
                 Assert.IsFalse(aBalanceTaskInfo.Item2.Result.hasException());
                 accountBalances[aBalanceTaskInfo.Item1] = (float)aBalanceTaskInfo.Item2.Result.resultObject;
             }
@@ -139,11 +135,14 @@ namespace Test.GrainTests
                 await Task.WhenAll(tasks);
             }
             foreach(var aTaskInfo in taskInfo)
-            {
-                if(!aTaskInfo.Item4.Result.hasException())
+            {                
+                if(!aTaskInfo.Item4.Result.hasException() && !sequential)
                 {
                     accountBalances[aTaskInfo.Item1] -= aTaskInfo.Item3;
                     accountBalances[aTaskInfo.Item2] += aTaskInfo.Item3;                    
+                } else
+                {
+                    Assert.Fail();
                 }
             }
 
