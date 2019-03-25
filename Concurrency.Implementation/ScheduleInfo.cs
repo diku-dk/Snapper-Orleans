@@ -75,20 +75,42 @@ namespace Concurrency.Implementation
                     prevNode.next = node;
                     node.prev = prevNode;
                 }
+                else if(prevNode.id != -1)
+                {
+                    //There could only be one non-det node between prevNode and the inserted Node
+                    Debug.Assert(prevNode.next.isDet == false);
+                    if (prevNode.next.promise.Task.IsCompleted){
+                        nodes.Remove(prevNode.next.id);
+                        prevNode.next = node;
+                        node.prev = prevNode;
+                    }
+                    else
+                    {
+                        prevNode.next.next = node;
+                        node.prev = prevNode.next;
+                    }
+                }
                 else
                 {
-                    Debug.Assert(prevNode.id == -1);
-                    //Remove nodes connected with -1
-                    ScheduleNode next = nodes[-1].next;
-                    while(next != null)
+                    ScheduleNode toConnect = prevNode.next;
+                    while(toConnect != null)
                     {
-                        Debug.Assert(next.id < schedule.batchID);
-                        nodes.Remove(next.id);
-                        next = next.next;
+                        if (toConnect.isDet || toConnect.promise.Task.IsCompleted)
+                        {
+                            Debug.Assert(!(toConnect.isDet == false && toConnect.promise.Task.IsCompleted == false && toConnect.next != null));
+                            nodes.Remove(toConnect.id);
+                        }
+                        else
+                        {
+                            Debug.Assert(toConnect.next == null);
+                            break;
+                        }
+                        toConnect = toConnect.next;
                     }
-                    //Connect node -1 with the inserted node
-                    nodes[-1].next = node;
-                    node.prev = nodes[-1];
+                    if (toConnect == null)
+                        toConnect = prevNode;
+                    toConnect.next = node;
+                    node.prev = toConnect;
                 }
             }
             else
@@ -103,9 +125,10 @@ namespace Concurrency.Implementation
             
         }
 
-        public ScheduleNode find(int id)
+        public TaskCompletionSource<Boolean> getDependingPromise(int id)
         {
-            return nodes[id];
+            Debug.Assert(nodes[id].prev != null);
+            return nodes[id].prev.promise;
         }
 
         public HashSet<int> getBeforeSet(int tid)

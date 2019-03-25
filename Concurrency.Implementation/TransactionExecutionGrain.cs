@@ -8,7 +8,6 @@ using Concurrency.Interface.Logging;
 using Utilities;
 using Concurrency.Implementation.Logging;
 using Orleans;
-using Utilities;
 
 namespace Concurrency.Implementation
 {
@@ -69,9 +68,10 @@ namespace Concurrency.Implementation
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
             FunctionResult result = null;
+            TransactionContext context = null;
             try
             {
-                TransactionContext context = await myCoordinator.NewTransaction();
+                context = await myCoordinator.NewTransaction();
                 functionCallInput.context = context;
                 context.coordinatorKey = this.myPrimaryKey;
                 //Console.WriteLine($"Transaction {context.transactionID}: is started.\n");
@@ -93,6 +93,8 @@ namespace Concurrency.Implementation
                         logTask = log.HandleBeforePrepareIn2PC(context.transactionID, context.coordinatorKey, participants);
 
                     List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
+
+                    Console.WriteLine($"Transaction {context.transactionID} send prepare messages to {grainIDsInTransaction.Count} grains. \n");
                     foreach (var grain in grainIDsInTransaction)
                     {
                         prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(context.transactionID));
@@ -141,10 +143,11 @@ namespace Concurrency.Implementation
                     //Ensure the exception is set if the voting phase decides to abort
                     result.setException();
                 }
-                myScheduler.ackComplete(context.transactionID);
+                //myScheduler.ackComplete(context.transactionID);
             } catch (Exception e)
             {
-                Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: exception {e.Message}");
+                Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: transaction {context.transactionID} exception {e.Message}");
+                
             }
             return result;
         }
@@ -238,8 +241,8 @@ namespace Concurrency.Implementation
 
             //Presume Abort
             //if (log != null)
-                //tasks.Add(log.HandleOnAbortIn2PC(state, tid, coordinatorMap[tid]));
-
+            //tasks.Add(log.HandleOnAbortIn2PC(state, tid, coordinatorMap[tid]));
+            myScheduler.ackComplete((int)tid);
             Cleanup(tid);
             await Task.WhenAll(tasks);
         }
@@ -255,7 +258,7 @@ namespace Concurrency.Implementation
             tasks.Add(this.state.Commit(tid));
             if (log != null)
                 tasks.Add(log.HandleOnCommitIn2PC(state, tid, coordinatorMap[tid]));
-
+            myScheduler.ackComplete((int)tid);
             Cleanup(tid);
             await Task.WhenAll(tasks);
         }

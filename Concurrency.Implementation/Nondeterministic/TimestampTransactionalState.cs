@@ -64,7 +64,7 @@ namespace Concurrency.Implementation.Nondeterministic
             if (tid < wts)
             {
                 transactionMap.Add(tid, new Node<TransactionStateInfo>(new TransactionStateInfo(tid, Status.Aborted)));
-                throw new Exception($"Read: Transaction {tid} is aborted as its timestamp is smaller than write timestamp {wts}.");
+                //throw new Exception($"Read: Transaction {tid} is aborted as its timestamp is smaller than write timestamp {wts}.");
             }
 
             //update read timestamp;
@@ -74,7 +74,7 @@ namespace Concurrency.Implementation.Nondeterministic
             if (tid < rts)
             {
                 transactionMap.Add(tid, new Node<TransactionStateInfo>(new TransactionStateInfo(tid, Status.Aborted)));
-                throw new Exception($"Write: Transaction {tid} is aborted as its timestamp is smaller than read timestamp {rts}.");
+                //throw new Exception($"Write: Transaction {tid} is aborted as its timestamp is smaller than read timestamp {rts}.");
             }
 
             //Clone the state of the depending transaction

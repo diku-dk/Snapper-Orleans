@@ -52,7 +52,8 @@ namespace Concurrency.Implementation
         private ILoggingProtocol<String> log;
 
         //For test only
-        private uint myId, neighbourId; 
+        private uint myId, neighbourId;
+        private Boolean spawned = false;
 
         public override Task OnActivateAsync()
         {
@@ -206,8 +207,6 @@ namespace Concurrency.Implementation
         async Task EmitBatch(BatchToken token)
         {
             int myEmitSequence = this.curEmitSeq;
-            int inBatchTransactionID = 0;
-;
 
             List<TransactionContext> transactionList;
             Boolean shouldEmit = deterministicTransactionRequests.TryGetValue(myEmitSequence, out transactionList);
@@ -262,8 +261,7 @@ namespace Concurrency.Implementation
                 token.lastBatchPerGrain[grain] = schedule.batchID;
             }
             token.lastBatchID = curBatchID;
-            token.lastTransactionID = this.curTransactionID;
-
+            token.lastTransactionID = this.curTransactionID - 1;
 
             //garbage collection
             if(this.highestCommittedBatchID > token.highestCommittedBatchID)
@@ -299,13 +297,14 @@ namespace Concurrency.Implementation
                 Task emit = dest.ReceiveBatchSchedule(schedule);
             }
             batchGrainClassName.Remove(curBatchID);
-            //Console.WriteLine($"\n Coordinator {this.myId}: sent schedule for batch {curBatchID}, which contains {inBatchTransactionID} transactions.");
+            //Console.WriteLine($"\n Coordinator {this.myId}: sent schedule for batch {curBatchID}, which contains {transactionList.Count} transactions.");
         }
 
         //Grain calls this function to ack its completion of a batch execution
         public async Task AckBatchCompletion(int bid, Guid executor_id)
         {
             //Console.WriteLine($"\n Coordinator: {myId} receives completion ack for batch {bid} from {executor_id}, expecting {expectedAcksPerBatch[bid]} acks. {batchSchedulePerGrain[bid].ContainsKey(executor_id)}");
+            Debug.Assert(expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id));
             if (expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id))
             {
                 expectedAcksPerBatch[bid]--;
@@ -333,10 +332,7 @@ namespace Concurrency.Implementation
                     Console.WriteLine($"\n Coordinator: batch {bid} has been committed.");
                 }
             }
-            else
-            {
-                throw new Exception("\n GlobalCoordinator::AckBatchCompletion()   Batch Id or grain not found!");
-            }
+     
         }
 
         public async Task<bool> checkBatchCompletion(TransactionContext context)
@@ -390,6 +386,11 @@ namespace Concurrency.Implementation
 
         public async Task SpawnCoordinator(uint myId, uint numofCoordinators)
         {
+            if (this.spawned)
+                return;
+            else
+                this.spawned = true;
+
             uint neighbourId = (myId + 1) % numofCoordinators;
             neighbour = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid(neighbourId));
             coordinatorList = new List<IGlobalTransactionCoordinator>();

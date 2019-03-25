@@ -37,7 +37,7 @@ namespace Concurrency.Implementation
             //Check if this batch can be executed: 
             //(1) check the promise status of its previous batch
             //(2) check the promise for nonDeterministic batch
-            await scheduleInfo.find(schedule.lastBatchID).promise.Task;
+            await scheduleInfo.getDependingPromise(schedule.batchID).Task;
 
             //Check if there is a buffered function call for this batch, if present, execute it
             int tid = schedule.curExecTransaction();
@@ -78,12 +78,11 @@ namespace Concurrency.Implementation
             {
                 DeterministicBatchSchedule schedule = batchScheduleMap[bid];
                 //TODO: XXX: Assumption right now is that all non-deterministic transactions will execute as one big batch
-                if(scheduleInfo.find(schedule.lastBatchID).promise.Task.IsCompleted == false)
+                if(scheduleInfo.getDependingPromise(schedule.batchID).Task.IsCompleted == false)
                 {
-
                     //If it is not the trun for this batch, then await or its turn
                     //Console.WriteLine($"Transaction {bid}:{tid}, waiting for batch {schedule.lastBatchID}.");
-                    await scheduleInfo.find(schedule.lastBatchID).promise.Task;
+                    await scheduleInfo.getDependingPromise(schedule.batchID).Task;
                     //Console.WriteLine($"Transaction {bid}:{tid} passed point A");
                 }
                 //Check if this transaction cen be executed

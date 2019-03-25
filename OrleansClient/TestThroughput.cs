@@ -11,7 +11,6 @@ using AccountTransfer.Grains;
 using System.Reflection;
 using Concurrency.Interface;
 using Utilities;
-using Utilities;
 
 namespace OrleansClient
 {

@@ -61,7 +61,7 @@ namespace OrleansSiloHost
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(DeterministicTransactionCoordinator).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(NondeterministicTransactionCoordinator).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Warning));
             
             var host = builder.Build();
             await host.StartAsync();

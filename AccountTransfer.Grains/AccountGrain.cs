@@ -87,7 +87,7 @@ namespace AccountTransfer.Grains
             float v = -1;
             try
             {
-                Balance balance = await state.Read(context);
+                Balance balance = await state.ReadWrite(context);
                 v = balance.value;
             }
             catch (Exception e)
