@@ -161,7 +161,10 @@ namespace Concurrency.Implementation.Nondeterministic
             CleanUp(node);
             //Clean ReadMap
             if (readDependencyMap.ContainsKey(tid))
+            {
                 readDependencyMap.Remove(tid);
+                return null;
+            }
 
             return new Optional<TState>(commitedState);
         }
