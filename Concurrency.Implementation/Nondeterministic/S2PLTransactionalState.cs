@@ -13,7 +13,7 @@ namespace Concurrency.Implementation.Nondeterministic
         // In-memory version of the persistent state.        
         private TState activeState;
         private bool lockTaken;        
-        private long lockTakenByTid;        
+        private int lockTakenByTid;        
         private SemaphoreSlim stateLock;        
 
         public S2PLTransactionalState()
@@ -23,7 +23,7 @@ namespace Concurrency.Implementation.Nondeterministic
             stateLock = new SemaphoreSlim(1);
         }
 
-        private async Task<TState> AccessState(long tid, TState committedState)
+        private async Task<TState> AccessState(int tid, TState committedState)
         {
             if (lockTaken)
             {
@@ -70,7 +70,7 @@ namespace Concurrency.Implementation.Nondeterministic
             return AccessState(ctx.transactionID, committedState);
         }
                 
-        public Task<bool> Prepare(long tid)
+        public Task<bool> Prepare(int tid)
         {            
             return Task.FromResult(lockTaken && lockTakenByTid == tid);            
         }
@@ -82,7 +82,7 @@ namespace Concurrency.Implementation.Nondeterministic
             stateLock.Release();
         }
 
-        public TState Commit(long tid)
+        public TState Commit(int tid)
         {
             if (lockTaken && lockTakenByTid == tid)
             {                
@@ -94,7 +94,7 @@ namespace Concurrency.Implementation.Nondeterministic
             return activeState;
         }
 
-        public void Abort(long tid)
+        public void Abort(int tid)
         {
             if (lockTaken && lockTakenByTid == tid)
             {
@@ -102,7 +102,7 @@ namespace Concurrency.Implementation.Nondeterministic
             }
         }
 
-        public TState GetPreparedState(long tid)
+        public TState GetPreparedState(int tid)
         {
             return activeState;
         }

@@ -21,29 +21,29 @@ namespace Concurrency.Implementation
             //nonDetStateManager = new Nondeterministic.S2PLTransactionalState<TState>();
             nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
         }
-        Task ITransactionalState<TState>.Abort(long tid)
+        Task ITransactionalState<TState>.Abort(int tid)
         {            
             nonDetStateManager.Abort(tid);
             return Task.CompletedTask;                        
         }
 
-        Task ITransactionalState<TState>.Commit(long tid)
+        Task ITransactionalState<TState>.Commit(int tid)
         {            
             myState = nonDetStateManager.Commit(tid);
             return Task.CompletedTask;
         }
 
-        TState ITransactionalState<TState>.GetCommittedState(long bid)
+        TState ITransactionalState<TState>.GetCommittedState(int bid)
         {
             return myState;
         }
 
-        TState ITransactionalState<TState>.GetPreparedState(long tid)
+        TState ITransactionalState<TState>.GetPreparedState(int tid)
         {            
             return nonDetStateManager.GetPreparedState(tid);
         }
 
-        Task<bool> ITransactionalState<TState>.Prepare(long tid)
+        Task<bool> ITransactionalState<TState>.Prepare(int tid)
         {
             return nonDetStateManager.Prepare(tid);            
         }

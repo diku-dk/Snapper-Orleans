@@ -14,12 +14,12 @@ namespace Concurrency.Interface.Nondeterministic
         Task<TState> ReadWrite(TransactionContext ctx, TState committedState);
 
         [AlwaysInterleave]
-        Task<bool> Prepare(long tid);
+        Task<bool> Prepare(int tid);
                 
-        TState Commit(long tid);
+        TState Commit(int tid);
         
-        void Abort(long tid);
+        void Abort(int tid);
 
-        TState GetPreparedState(long tid);
+        TState GetPreparedState(int tid);
     }
 }

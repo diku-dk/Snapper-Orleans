@@ -8,12 +8,12 @@ namespace Concurrency.Implementation.Logging
     [Serializable]
     class LogParticipant
     {
-        public long sequenceNumber;
+        public int sequenceNumber;
         public Guid coordinatorKey;
-        public long txn_id;
+        public int txn_id;
         public HashSet<Guid> participants;
 
-        public LogParticipant(long sequenceNumber, Guid coordinatorKey, long txn_id, HashSet<Guid> grains)
+        public LogParticipant(int sequenceNumber, Guid coordinatorKey, int txn_id, HashSet<Guid> grains)
         {
             this.sequenceNumber = sequenceNumber;
             this.coordinatorKey = coordinatorKey;

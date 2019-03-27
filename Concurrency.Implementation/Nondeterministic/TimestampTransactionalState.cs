@@ -10,14 +10,14 @@ namespace Concurrency.Implementation.Nondeterministic
     public class TimestampTransactionalState<TState> : INonDetTransactionalState<TState> where TState : ICloneable, new()
     {
         
-        private long readTs;
-        private long writeTs;
-        private long commitTransactionId;
+        private int readTs;
+        private int writeTs;
+        private int commitTransactionId;
 
         //The dependancy list of transactions, node_{i} depends on node_{i-1}.
         private DLinkedList<TransactionStateInfo> transactionList;
         //Key: transaction id
-        private Dictionary<long, Node<TransactionStateInfo>> transactionMap;
+        private Dictionary<int, Node<TransactionStateInfo>> transactionMap;
 
         public TimestampTransactionalState()
         {
@@ -26,12 +26,12 @@ namespace Concurrency.Implementation.Nondeterministic
             commitTransactionId = -1;
 
             transactionList = new DLinkedList<TransactionStateInfo>();
-            transactionMap = new Dictionary<long, Node<TransactionStateInfo>>();
+            transactionMap = new Dictionary<int, Node<TransactionStateInfo>>();
 
         }
         public Task<TState> ReadWrite(TransactionContext ctx, TState committedState)
         {
-            long rts, wts, depTid;
+            int rts, wts, depTid;
             TState state;
             var tid = ctx.transactionID;
             
@@ -89,14 +89,14 @@ namespace Concurrency.Implementation.Nondeterministic
             return Task.FromResult<TState>(copy);
         }
 
-        public async Task<bool> Prepare(long tid)
+        public async Task<bool> Prepare(int tid)
         {
             if (transactionMap[tid].data.status.Equals(Status.Aborted))
                 return false;
             else
             {
                 //Vote "yes" if it depends commited state.
-                long depTid = transactionMap[tid].data.depTid;
+                int depTid = transactionMap[tid].data.depTid;
                 if (depTid <= this.commitTransactionId)
                     return true;
                 else
@@ -132,7 +132,7 @@ namespace Concurrency.Implementation.Nondeterministic
             }
         }
 
-        public TState Commit(long tid)
+        public TState Commit(int tid)
         {
             Node<TransactionStateInfo> node = transactionMap[tid];
             node.data.status = Status.Committed;
@@ -151,7 +151,7 @@ namespace Concurrency.Implementation.Nondeterministic
             return commitedState;
         }
 
-        public void Abort(long tid)
+        public void Abort(int tid)
         {
             Node<TransactionStateInfo> node = transactionMap[tid];
             node.data.status = Status.Aborted;
@@ -179,18 +179,18 @@ namespace Concurrency.Implementation.Nondeterministic
         private class TransactionStateInfo
         {
 
-            public long tid { get; set; }
+            public int tid { get; set; }
             public Status status { get; set; }
 
             public TState state { get; set; }
-            public long rts { get; set; }
-            public long wts { get; set; }
+            public int rts { get; set; }
+            public int wts { get; set; }
 
-            public long depTid { get; set; }
+            public int depTid { get; set; }
 
             public TaskCompletionSource<Boolean> ExecutionPromise { get; set; }
 
-            public TransactionStateInfo(long tid, long depTid, long rts, long wts, Status status, TState copy)
+            public TransactionStateInfo(int tid, int depTid, int rts, int wts, Status status, TState copy)
             {
                 this.tid = tid;
                 this.depTid = depTid;
@@ -201,7 +201,7 @@ namespace Concurrency.Implementation.Nondeterministic
                 ExecutionPromise = new TaskCompletionSource<Boolean>();
             }
 
-            public TransactionStateInfo(long tid, Status status)
+            public TransactionStateInfo(int tid, Status status)
             {
                 this.tid = tid;
                 this.status = status;
@@ -210,7 +210,7 @@ namespace Concurrency.Implementation.Nondeterministic
 
         }
 
-        public TState GetPreparedState(long tid)
+        public TState GetPreparedState(int tid)
         {
             return this.transactionMap[tid].data.state;
                 

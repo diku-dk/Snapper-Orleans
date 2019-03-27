@@ -30,7 +30,7 @@ namespace Concurrency.Implementation.Logging
         async Task IKeyValueStorageWrapper.Write(byte[] key, byte[] value)
         {
             var success = false;
-            long tries = 0;
+            int tries = 0;
             FileStream file = null;
             long fileLength = 0;
             await instanceLock.WaitAsync();

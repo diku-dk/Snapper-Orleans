@@ -35,13 +35,13 @@ namespace Concurrency.Interface
         Task<FunctionResult> Execute(FunctionCall call);
 
         [AlwaysInterleave]
-        Task<bool> Prepare(long tid);
+        Task<bool> Prepare(int tid);
 
         [AlwaysInterleave]
-        Task Commit(long tid);
+        Task Commit(int tid);
 
         [AlwaysInterleave]
-        Task Abort(long tid);
+        Task Abort(int tid);
 
     }
 }

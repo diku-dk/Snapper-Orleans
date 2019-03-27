@@ -14,7 +14,7 @@ namespace Concurrency.Implementation
     public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain where TState : ICloneable, new()
     {   
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;        
-        private Dictionary<long, Guid> coordinatorMap;                
+        private Dictionary<int, Guid> coordinatorMap;                
         protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
@@ -42,7 +42,7 @@ namespace Concurrency.Implementation
             myScheduler = new TransactionScheduler(batchScheduleMap);
             //Enable the following line for logging
             //log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey);
-            coordinatorMap = new Dictionary<long, Guid>();
+            coordinatorMap = new Dictionary<int, Guid>();
             return base.OnActivateAsync();
         }
 
@@ -225,12 +225,12 @@ namespace Concurrency.Implementation
             return t.Result;
         }
 
-        private void Cleanup(long tid)
+        private void Cleanup(int tid)
         {
             coordinatorMap.Remove(tid);
         }
 
-        public async Task Abort(long tid)
+        public async Task Abort(int tid)
         {
             //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Abort message for transaction {tid}. \n\n");
             if (state == null)
@@ -247,7 +247,7 @@ namespace Concurrency.Implementation
             await Task.WhenAll(tasks);
         }
 
-        public async Task Commit(long tid)
+        public async Task Commit(int tid)
         {
             //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Commit message for transaction {tid}. \n\n");
             if (state == null)
@@ -266,7 +266,7 @@ namespace Concurrency.Implementation
         /**
          * Stateless grain always vote "yes" for 2PC.
          */
-        public async Task<bool> Prepare(long tid)
+        public async Task<bool> Prepare(int tid)
         {
             //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Prepare message for transaction {tid}. \n\n");
 
