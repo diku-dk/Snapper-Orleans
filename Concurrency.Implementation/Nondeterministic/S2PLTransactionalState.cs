@@ -1,6 +1,7 @@
 ﻿using Concurrency.Interface.Nondeterministic;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,94 +13,197 @@ namespace Concurrency.Implementation.Nondeterministic
     {
         // In-memory version of the persistent state.        
         private TState activeState;
-        private bool lockTaken;        
-        private int lockTakenByTid;        
-        private SemaphoreSlim stateLock;        
+        private bool writeLockTaken;        
+        private int writeLockTakenByTid;        
+        private SemaphoreSlim writeSemaphore;
+        private SemaphoreSlim readSemaphore;
+        private SortedSet<int> readers;
 
         public S2PLTransactionalState()
         {
-            lockTaken = false;
-            lockTakenByTid = 0;            
-            stateLock = new SemaphoreSlim(1);
+            writeLockTaken = false;
+            writeLockTakenByTid = -1;            
+            writeSemaphore = new SemaphoreSlim(1);
+            readSemaphore = new SemaphoreSlim(1);
+            readers = new SortedSet<int>();
         }
 
         private async Task<TState> AccessState(int tid, TState committedState)
         {
-            if (lockTaken)
+            if (writeLockTaken)
             {
-                if (lockTakenByTid == tid)
+                if (writeLockTakenByTid == tid)
                 {
                     //Do nothing since this is another interleaved execution;
                 }
                 else
                 {   //Check the wait-die protocol
-                    if (tid < lockTakenByTid)
+                    if (tid < writeLockTakenByTid)
                     {
                         //The following request is for queuing of transactions rather than a critical section
-                        await stateLock.WaitAsync();
-                        lockTaken = true;
-                        lockTakenByTid = tid;
+                        await writeSemaphore.WaitAsync();
+                        writeLockTaken = true;
+                        writeLockTakenByTid = tid;
                         activeState = (TState)committedState.Clone();
                     }
                     else
                     {
                         //abort the transaction                        
-                        throw new Exception($"Txn {tid} is aborted to avoid deadlock since its tid is larger than txn {lockTakenByTid} that holds the lock");                        
+                        throw new Exception($"Txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the lock");                        
                     }
                 }
             }
             else
             {
-                await stateLock.WaitAsync(); // This should never block but required to make subsequent waits block
-                lockTaken = true;
-                lockTakenByTid = tid;
+                await writeSemaphore.WaitAsync(); // This should never block but required to make subsequent waits block
+                writeLockTaken = true;
+                writeLockTakenByTid = tid;
                 activeState = (TState)committedState.Clone();
             }
             return activeState;
         }
 
-        public Task<TState> Read(TransactionContext ctx, TState committedState)
+        public async Task<TState> Read(TransactionContext ctx, TState committedState)
         {
-            // Use a single lock for now
-            return AccessState(ctx.transactionID, committedState);
+            var tid = ctx.transactionID;
+            if(writeLockTaken)
+            {
+                if(writeLockTakenByTid == tid)
+                {
+                    //No lock downgrade, just return the active copy
+                    Debug.Assert(activeState != null);
+                    return activeState;
+                } else
+                {
+                    if (tid < writeLockTakenByTid)
+                    {
+                        readers.Add(tid);
+                        //Wait for writer
+                        await readSemaphore.WaitAsync();                        
+                        return committedState;
+                    } else
+                    {
+                        throw new Exception($"Reader txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
+                    }                 
+                }
+            } else
+            {
+                readers.Add(tid);
+                if (readers.Count == 1)
+                {
+                    //First reader downs the semaphore
+                    await writeSemaphore.WaitAsync(); //This should not block but is used to block subsequent writers                    
+                }
+                return committedState;
+            }
         }
 
-        public Task<TState> ReadWrite(TransactionContext ctx, TState committedState)
+        public async Task<TState> ReadWrite(TransactionContext ctx, TState committedState)
         {
-            // Use a single lock right now
-            return AccessState(ctx.transactionID, committedState);
+            var tid = ctx.transactionID;
+            if (writeLockTaken)
+            {
+                if (writeLockTakenByTid == tid)
+                {
+                    //Do nothing since this is another interleaved execution;
+                    Debug.Assert(activeState != null);
+                }
+                else
+                {   //Check the wait-die protocol
+                    if (tid < writeLockTakenByTid)
+                    {
+                        //Wait for other writer
+                        await writeSemaphore.WaitAsync();
+                        writeLockTaken = true;
+                        writeLockTakenByTid = tid;
+                        activeState = (TState)committedState.Clone();
+                    }
+                    else
+                    {
+                        //abort the transaction                        
+                        throw new Exception($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
+                    }
+                }
+            }
+            else
+            {
+                //Check for readers
+                if(readers.Count == 0)
+                {
+                    await writeSemaphore.WaitAsync(); // This should never block but required to make subsequent writers block
+                    await readSemaphore.WaitAsync(); //This should never block but required to make subsequent readers block
+                    writeLockTaken = true;
+                    writeLockTakenByTid = tid;
+                    activeState = (TState)committedState.Clone();
+                } else if (readers.Count == 1 && readers.Contains(tid))
+                {
+                    //Upgrade myself to a write lock
+                    readers.Remove(tid);
+                    Debug.Assert(activeState != null);
+                } else
+                {
+                    if(tid < readers.Max)
+                    {
+                        //Wait for readers to release the lock
+                        await writeSemaphore.WaitAsync();
+                        writeLockTaken = true;
+                        writeLockTakenByTid = tid;
+                        activeState = (TState)committedState.Clone();
+                    } else
+                    {
+                        throw new Exception($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {readers.Max} that holds the read lock");
+                    }
+                }
+            }
+            return activeState;
         }
                 
         public Task<bool> Prepare(int tid)
         {            
-            return Task.FromResult(lockTaken && lockTakenByTid == tid);            
+            return Task.FromResult((writeLockTaken && writeLockTakenByTid == tid) || readers.Contains(tid));            
         }
 
-        private void CleanUp()
+        private void CleanUpAndSignal(int tid)
         {
-            lockTaken = false;
-            lockTakenByTid = 0;            
-            stateLock.Release();
-        }
-
-        public TState Commit(int tid)
-        {
-            if (lockTaken && lockTakenByTid == tid)
-            {                
-                CleanUp();
-            } else
+            if (writeLockTaken && writeLockTakenByTid == tid)
             {
-                //Nothing really to do but should not have received the commit call
+                writeLockTaken = false;
+                writeLockTakenByTid = -1;
+                //Privilege readers over writers
+                if (readers.Count > 0)
+                {
+                    //Release all readers
+                    //Assumes one transaction can only have one outstanding call to Read/ReadWrite
+                    readSemaphore.Release(readers.Count);
+                }
+                else
+                {
+                    writeSemaphore.Release();
+                }
             }
-            return activeState;
+            else if (readers.Contains(tid))
+            {
+                readers.Remove(tid);
+                if (readers.Count == 0)
+                {
+                    //Release one writer
+                    writeSemaphore.Release();
+                }
+            }
+        }
+
+        public Optional<TState> Commit(int tid)
+        {
+            //XXX: This should not return anything actually
+            var reader = readers.Contains(tid);
+            CleanUpAndSignal(tid);            
+            var result = reader ? null : new Optional<TState>(activeState);
+            return result;
         }
 
         public void Abort(int tid)
         {
-            if (lockTaken && lockTakenByTid == tid)
-            {
-                CleanUp();
-            }
+            CleanUpAndSignal(tid);
         }
 
         public TState GetPreparedState(int tid)

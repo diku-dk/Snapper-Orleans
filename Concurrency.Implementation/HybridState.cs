@@ -28,8 +28,13 @@ namespace Concurrency.Implementation
         }
 
         Task ITransactionalState<TState>.Commit(int tid)
-        {            
-            myState = nonDetStateManager.Commit(tid);
+        {
+            var result = nonDetStateManager.Commit(tid);
+            if(result != null && result.isSet())
+            {
+                //Update state from write transaction
+                myState = result.getValue();
+            }
             return Task.CompletedTask;
         }
 
