@@ -132,7 +132,7 @@ namespace Concurrency.Implementation.Nondeterministic
             }
         }
 
-        public TState Commit(int tid)
+        public Optional<TState> Commit(int tid)
         {
             Node<TransactionStateInfo> node = transactionMap[tid];
             node.data.status = Status.Committed;
@@ -148,7 +148,7 @@ namespace Concurrency.Implementation.Nondeterministic
             //Clean the transaction list
             CleanUp(node);
 
-            return commitedState;
+            return new Optional<TState>(commitedState);
         }
 
         public void Abort(int tid)

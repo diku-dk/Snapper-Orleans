@@ -16,7 +16,7 @@ namespace Concurrency.Interface.Nondeterministic
         [AlwaysInterleave]
         Task<bool> Prepare(int tid);
                 
-        TState Commit(int tid);
+        Optional<TState> Commit(int tid);
         
         void Abort(int tid);
 
