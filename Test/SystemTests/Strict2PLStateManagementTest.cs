@@ -13,7 +13,7 @@ using Utilities;
 namespace Test.SystemTests
 {
     [TestClass]
-    public class StateManagementTest
+    public class Strict2PLStateManagementTest
     {
         ITransactionalState<KeyValueState> state;
 
@@ -42,16 +42,12 @@ namespace Test.SystemTests
             ctx.isDeterministic = false;
             var task = state.Read(ctx);
             Assert.IsTrue(task.IsCompleted);
-            await task;
             task = state.Read(ctx);
             Assert.IsTrue(task.IsCompleted);
-            await task;
             task = state.ReadWrite(ctx);
             Assert.IsTrue(task.IsCompleted);
-            await task;
             task = state.ReadWrite(ctx);
             Assert.IsTrue(task.IsCompleted);
-            await task;
             await state.Abort(ctx.transactionID);
         }
 

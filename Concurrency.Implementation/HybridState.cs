@@ -19,8 +19,8 @@ namespace Concurrency.Implementation
         {
             this.myState = state;            
             detStateManager = new Deterministic.DeterministicTransactionalState<TState>();
-            nonDetStateManager = new Nondeterministic.S2PLTransactionalState<TState>();
-            //nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
+            //nonDetStateManager = new Nondeterministic.S2PLTransactionalState<TState>();
+            nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
         }
 
         Task ITransactionalState<TState>.Abort(int tid)
