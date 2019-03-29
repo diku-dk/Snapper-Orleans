@@ -37,16 +37,17 @@ namespace Concurrency.Implementation.Nondeterministic
             int rts, wts, depTid;
             TState state;
             var tid = ctx.transactionID;
-            
-            //Traverse the transaction list from the tail, find the first unaborted transaction and read its state.
-            Node<TransactionStateInfo> lastNode = transactionList.tail;
-            while (lastNode != null)
+
+            if (transactionMap.ContainsKey(tid))
             {
-                if (lastNode.data.status.Equals(Status.Aborted))
-                    lastNode = lastNode.prev;
-                else
-                    break;
+                if(transactionMap[tid].data.status == Status.Aborted)
+                    throw new Exception($"ReadWrite: Transaction {tid} has been aborted.");
+                return Task.FromResult<TState>(transactionMap[tid].data.state);
             }
+
+            //Traverse the transaction list from the tail, find the first unaborted transaction and read its state.
+            Node<TransactionStateInfo> lastNode = findLastNonAbortedTransaction();
+
             if (lastNode != null)
             {
                 TransactionStateInfo dependState = lastNode.data;
@@ -114,13 +115,19 @@ namespace Concurrency.Implementation.Nondeterministic
 
             if (readDependencyMap.ContainsKey(ctx.transactionID) == false)
             {
-                if (ctx.transactionID < this.commitTransactionId)
-                    throw new Exception($"Txn {ctx.transactionID} is aborted to since the tid of this Read operation is smaller than the committed tid {this.commitTransactionId}");
+                Node<TransactionStateInfo> lastNode = findLastNonAbortedTransaction();
+                if (lastNode == null)
+                {
+                   if( ctx.transactionID < this.commitTransactionId)
+                    throw new Exception($"Txn {ctx.transactionID} is aborted to since the tid of this Read operation is smaller than the committed tid {commitTransactionId}");
+                }
+                else if(ctx.transactionID < lastNode.data.tid)
+                    throw new Exception($"Txn {ctx.transactionID} is aborted to since the tid of this Read operation is smaller than the last write {lastNode.data.tid}");
                 readDependencyMap.Add(ctx.transactionID, this.commitTransactionId);
             }
             else
             {
-                if (readDependencyMap[ctx.transactionID] < this.commitTransactionId)
+                if (readDependencyMap[ctx.transactionID] != this.commitTransactionId)
                     throw new Exception($"Txn {ctx.transactionID} is aborted to avoid reading inconsistent committed states");
             }
             return Task.FromResult<TState>(committedState);
@@ -153,6 +160,18 @@ namespace Concurrency.Implementation.Nondeterministic
             
         }
 
+        private Node<TransactionStateInfo> findLastNonAbortedTransaction()
+        {
+            Node<TransactionStateInfo> lastNode = transactionList.tail;
+            while (lastNode != null)
+            {
+                if (lastNode.data.status.Equals(Status.Aborted))
+                    lastNode = lastNode.prev;
+                else
+                    break;
+            }
+            return lastNode;
+        }
         //Clear committed/aborted transactions before the committed transaction.
         private void CleanUp(Node<TransactionStateInfo> node)
         {   
@@ -211,8 +230,6 @@ namespace Concurrency.Implementation.Nondeterministic
                 node.data.ExecutionPromise.SetResult(true);
             }
         }
-
-
 
         public enum Status
         {
