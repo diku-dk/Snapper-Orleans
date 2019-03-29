@@ -49,7 +49,7 @@ namespace OrleansClient
             //for(int i=0; i<10; i++)
                 
             await test.DoTest(client, 100, false);
-            await test.DoTest(client, 100, true);
+            //await test.DoTest(client, 100, true);
 
         }
 

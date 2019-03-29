@@ -17,10 +17,10 @@ namespace Test.GrainTests
         IClusterClient client;
         Random rand = new Random();
         readonly uint numOfCoordinators = 10;
-        readonly int maxAccounts = 1000;
+        readonly int maxAccounts = 10;
         readonly int maxTransferAmount = 10;
         readonly int numSequentialTransfers = 10;
-        readonly int numConcurrentTransfers = 1000;
+        readonly int numConcurrentTransfers = 100;
 
         [TestMethod]
         public void test()
@@ -79,29 +79,30 @@ namespace Test.GrainTests
             var accountBalances = new Dictionary<Guid, float>();
             var balanceTaskInfo = new List<Tuple<Guid, Task<FunctionResult>>>();
             var balanceTasks = new List<Task<FunctionResult>>();
-            //foreach (var transferInfoTuple in transferInformation)
-            //{
-            //    var fromId = Helper.convertUInt32ToGuid(transferInfoTuple.Item1);
-            //    var toId = Helper.convertUInt32ToGuid(transferInfoTuple.Item2);
-            //    var fromAccount = client.GetGrain<IAccountGrain>(fromId);
-            //    var toAccount = client.GetGrain<IAccountGrain>(toId);                
-            //    Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", new FunctionInput());
-            //    balanceTaskInfo.Add(new Tuple<Guid, Task<FunctionResult>>(fromId, t1));
-            //    balanceTasks.Add(t1);
-            //    Task<FunctionResult> t2 = toAccount.StartTransaction("GetBalance", new FunctionInput());
-            //    balanceTaskInfo.Add(new Tuple<Guid, Task<FunctionResult>>(toId, t2));
-            //    balanceTasks.Add(t2);
-            //}
-            //await Task.WhenAll(balanceTasks);
-            //foreach(var aBalanceTaskInfo in balanceTaskInfo)
-            //{
-            //    if(aBalanceTaskInfo.Item2.Result.hasException())
-            //    {
-            //        Assert.Fail();
-            //    }
-            //    Assert.IsFalse(aBalanceTaskInfo.Item2.Result.hasException());
-            //    accountBalances[aBalanceTaskInfo.Item1] = (float)aBalanceTaskInfo.Item2.Result.resultObject;
-            //}
+
+            foreach (var transferInfoTuple in transferInformation)
+            {
+                var fromId = Helper.convertUInt32ToGuid(transferInfoTuple.Item1);
+                var toId = Helper.convertUInt32ToGuid(transferInfoTuple.Item2);
+                var fromAccount = client.GetGrain<IAccountGrain>(fromId);
+                var toAccount = client.GetGrain<IAccountGrain>(toId);
+                Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", new FunctionInput());
+                balanceTaskInfo.Add(new Tuple<Guid, Task<FunctionResult>>(fromId, t1));
+                balanceTasks.Add(t1);
+                Task<FunctionResult> t2 = toAccount.StartTransaction("GetBalance", new FunctionInput());
+                balanceTaskInfo.Add(new Tuple<Guid, Task<FunctionResult>>(toId, t2));
+                balanceTasks.Add(t2);
+            }
+            await Task.WhenAll(balanceTasks);
+            foreach (var aBalanceTaskInfo in balanceTaskInfo)
+            {
+                if (aBalanceTaskInfo.Item2.Result.hasException())
+                {
+                    Assert.Fail();
+                }
+                Assert.IsFalse(aBalanceTaskInfo.Item2.Result.hasException());
+                accountBalances[aBalanceTaskInfo.Item1] = (float)aBalanceTaskInfo.Item2.Result.resultObject;
+            }
 
             var taskInfo = new List<Tuple<Guid, Guid, float, Task<FunctionResult>>>();
             var tasks = new List<Task<FunctionResult>>();
@@ -138,37 +139,39 @@ namespace Test.GrainTests
             {
                 await Task.WhenAll(tasks);
             }
-            //foreach(var aTaskInfo in taskInfo)
-            //{
-            //    if(!aTaskInfo.Item4.Result.hasException())
-            //    {
-            //        accountBalances[aTaskInfo.Item1] -= aTaskInfo.Item3;
-            //        accountBalances[aTaskInfo.Item2] += aTaskInfo.Item3;                    
-            //    }
-            //}
 
-            //balanceTaskInfo = new List<Tuple<Guid, Task<FunctionResult>>>();
-            //balanceTasks = new List<Task<FunctionResult>>();
-            //foreach (var transferInfoTuple in transferInformation)
-            //{
-            //    var fromId = Helper.convertUInt32ToGuid(transferInfoTuple.Item1);
-            //    var toId = Helper.convertUInt32ToGuid(transferInfoTuple.Item2);
-            //    var fromAccount = client.GetGrain<IAccountGrain>(fromId);
-            //    var toAccount = client.GetGrain<IAccountGrain>(toId);
-            //    Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", new FunctionInput());
-            //    balanceTaskInfo.Add(new Tuple<Guid, Task<FunctionResult>>(fromId, t1));
-            //    balanceTasks.Add(t1);
-            //    Task<FunctionResult> t2 = toAccount.StartTransaction("GetBalance", new FunctionInput());
-            //    balanceTaskInfo.Add(new Tuple<Guid, Task<FunctionResult>>(toId, t2));
-            //    balanceTasks.Add(t2);
-            //}
-            //await Task.WhenAll(balanceTasks);
-            //foreach (var aBalanceTaskInfo in balanceTaskInfo)
-            //{
-            //    Assert.IsFalse(aBalanceTaskInfo.Item2.Result.hasException());
-            //    Assert.IsTrue((float)aBalanceTaskInfo.Item2.Result.resultObject == accountBalances[aBalanceTaskInfo.Item1]);
-            //    accountBalances[aBalanceTaskInfo.Item1] = (float)aBalanceTaskInfo.Item2.Result.resultObject;
-            //}
+            foreach (var aTaskInfo in taskInfo)
+            {
+                if (!aTaskInfo.Item4.Result.hasException())
+                {
+                    accountBalances[aTaskInfo.Item1] -= aTaskInfo.Item3;
+                    accountBalances[aTaskInfo.Item2] += aTaskInfo.Item3;
+                }
+            }
+
+            balanceTaskInfo = new List<Tuple<Guid, Task<FunctionResult>>>();
+            balanceTasks = new List<Task<FunctionResult>>();
+            foreach (var transferInfoTuple in transferInformation)
+            {
+                var fromId = Helper.convertUInt32ToGuid(transferInfoTuple.Item1);
+                var toId = Helper.convertUInt32ToGuid(transferInfoTuple.Item2);
+                var fromAccount = client.GetGrain<IAccountGrain>(fromId);
+                var toAccount = client.GetGrain<IAccountGrain>(toId);
+                Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", new FunctionInput());
+                balanceTaskInfo.Add(new Tuple<Guid, Task<FunctionResult>>(fromId, t1));
+                balanceTasks.Add(t1);
+                Task<FunctionResult> t2 = toAccount.StartTransaction("GetBalance", new FunctionInput());
+                balanceTaskInfo.Add(new Tuple<Guid, Task<FunctionResult>>(toId, t2));
+                balanceTasks.Add(t2);
+            }
+            await Task.WhenAll(balanceTasks);
+            foreach (var aBalanceTaskInfo in balanceTaskInfo)
+            {
+                Assert.IsFalse(aBalanceTaskInfo.Item2.Result.hasException());
+
+                Assert.IsTrue((float)aBalanceTaskInfo.Item2.Result.resultObject == accountBalances[aBalanceTaskInfo.Item1]);
+                accountBalances[aBalanceTaskInfo.Item1] = (float)aBalanceTaskInfo.Item2.Result.resultObject;
+            }
         }
         
         [TestMethod]

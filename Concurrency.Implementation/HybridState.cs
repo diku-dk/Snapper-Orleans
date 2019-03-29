@@ -22,19 +22,33 @@ namespace Concurrency.Implementation
             nonDetStateManager = new Nondeterministic.S2PLTransactionalState<TState>();
             //nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
         }
+
         Task ITransactionalState<TState>.Abort(int tid)
-        {            
-            nonDetStateManager.Abort(tid);
-            return Task.CompletedTask;                        
+        {
+            try
+            {
+                nonDetStateManager.Abort(tid);
+            }catch(Exception e)
+            {
+                Console.WriteLine($"\n Exception(Abort)::transaction {tid} exception {e.Message}");
+            }
+            return Task.CompletedTask;
         }
 
         Task ITransactionalState<TState>.Commit(int tid)
         {
-            var result = nonDetStateManager.Commit(tid);
-            if(result != null && result.isSet())
+            try
             {
-                //Update state from write transaction
-                myState = result.getValue();
+                var result = nonDetStateManager.Commit(tid);
+                if (result != null && result.isSet())
+                {
+                    //Update state from write transaction
+                    myState = result.getValue();
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"\n Exception(Commit)::transaction {tid} exception {e.Message}");
             }
             return Task.CompletedTask;
         }
