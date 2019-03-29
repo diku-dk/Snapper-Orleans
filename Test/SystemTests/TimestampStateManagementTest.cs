@@ -29,27 +29,9 @@ namespace Test.SystemTests
             if (state == null)
             {
                 var seedState = createInitState();
-                state = new HybridState<KeyValueState>(seedState);
+                state = new HybridState<KeyValueState>(seedState, ConcurrencyType.TIMESTAMP);
             }
-        }
-
-        [TestMethod]
-        public async Task StateTransitionSingleTransaction()
-        {
-            state = new HybridState<KeyValueState>(createInitState());
-            //Test different modes R->RW->R-RW->RW->R->...
-            TransactionContext ctx = new TransactionContext(1, 1, Helper.convertUInt32ToGuid(0));
-            ctx.isDeterministic = false;
-            var task = state.Read(ctx);
-            Assert.IsTrue(task.IsCompleted);
-            task = state.Read(ctx);
-            Assert.IsTrue(task.IsCompleted);
-            task = state.ReadWrite(ctx);
-            Assert.IsTrue(task.IsCompleted);
-            task = state.ReadWrite(ctx);
-            Assert.IsTrue(task.IsCompleted);
-            await state.Abort(ctx.transactionID);
-        }
+        }        
 
         [TestMethod]
         public async Task InterLeavedExecutionStateTransition()

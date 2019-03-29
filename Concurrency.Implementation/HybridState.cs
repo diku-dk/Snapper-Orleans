@@ -9,18 +9,26 @@ using Utilities;
 
 namespace Concurrency.Implementation
 {
+    public enum ConcurrencyType { S2PL, TIMESTAMP };
     public class HybridState<TState> : ITransactionalState<TState> where TState : ICloneable, new()
     {        
         private IDetTransactionalState<TState> detStateManager;
         private INonDetTransactionalState<TState> nonDetStateManager;
         private TState myState;
 
-        public HybridState(TState state)
+        public HybridState(TState state, ConcurrencyType type=ConcurrencyType.TIMESTAMP)
         {
-            this.myState = state;            
+            this.myState = state;
             detStateManager = new Deterministic.DeterministicTransactionalState<TState>();
-            //nonDetStateManager = new Nondeterministic.S2PLTransactionalState<TState>();
-            nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
+            switch (type)
+            {
+                case ConcurrencyType.S2PL:
+                    nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
+                    break;
+                case ConcurrencyType.TIMESTAMP:
+                    nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
+                    break;
+            }            
         }
 
         Task ITransactionalState<TState>.Abort(int tid)
