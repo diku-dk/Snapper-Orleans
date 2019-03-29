@@ -78,6 +78,7 @@ namespace Concurrency.Implementation
                 FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
                 Task<FunctionResult> t1 = this.Execute(c1);
                 await t1;
+
                 //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
                 Dictionary<Guid, String> grainIDsInTransaction = t1.Result.grainsInNestedFunctions;
                 result = new FunctionResult(t1.Result.resultObject);
@@ -94,7 +95,7 @@ namespace Concurrency.Implementation
 
                     List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
 
-                    Console.WriteLine($"Transaction {context.transactionID} send prepare messages to {grainIDsInTransaction.Count} grains. \n");
+                    //Console.WriteLine($"Transaction {context.transactionID} send prepare messages to {grainIDsInTransaction.Count} grains. \n");
                     foreach (var grain in grainIDsInTransaction)
                     {
                         prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(context.transactionID));
@@ -146,7 +147,7 @@ namespace Concurrency.Implementation
                 //myScheduler.ackComplete(context.transactionID);
             } catch (Exception e)
             {
-                Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: transaction {context.transactionID} exception {e.Message}");
+                Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: transaction {startFunction} {context.transactionID} exception {e.Message}");
                 
             }
             return result;

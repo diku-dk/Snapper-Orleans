@@ -29,6 +29,7 @@ namespace Concurrency.Implementation.Nondeterministic
 
             transactionList = new DLinkedList<TransactionStateInfo>();
             transactionMap = new Dictionary<int, Node<TransactionStateInfo>>();
+            readDependencyMap = new Dictionary<int, int>();
 
         }
         public Task<TState> ReadWrite(TransactionContext ctx, TState committedState)
@@ -87,7 +88,7 @@ namespace Concurrency.Implementation.Nondeterministic
                 {
                     throw new Exception($"Transaction {tid} is aborted as its read operion read version {prevReadTs}, which is smaller than write timestamp {wts}.");
                 }
-                readDependencyMap.Remove(ctx.transactionID);
+                //readDependencyMap.Remove(ctx.transactionID);
             }
 
             //Clone the state of the depending transaction
@@ -102,13 +103,37 @@ namespace Concurrency.Implementation.Nondeterministic
             return Task.FromResult<TState>(copy);
         }
 
+        public Task<TState> Read(TransactionContext ctx, TState committedState)
+        {
+
+            //If there is a readwrite() from thesame transaction before this read operation
+            if (transactionMap.ContainsKey(ctx.transactionID) == true)
+            {
+                return Task.FromResult<TState>(transactionMap[ctx.transactionID].data.state);
+            }
+
+            if (readDependencyMap.ContainsKey(ctx.transactionID) == false)
+            {
+                if (ctx.transactionID < this.commitTransactionId)
+                    throw new Exception($"Txn {ctx.transactionID} is aborted to since the tid of this Read operation is smaller than the committed tid {this.commitTransactionId}");
+                readDependencyMap.Add(ctx.transactionID, this.commitTransactionId);
+            }
+            else
+            {
+                if (readDependencyMap[ctx.transactionID] < this.commitTransactionId)
+                    throw new Exception($"Txn {ctx.transactionID} is aborted to avoid reading inconsistent committed states");
+            }
+            return Task.FromResult<TState>(committedState);
+        }
+
         public async Task<bool> Prepare(int tid)
         {
-            if (transactionMap[tid].data.status.Equals(Status.Aborted))
-                return false;
+            //Prepare read-only first
             if (readDependencyMap.ContainsKey(tid))
                 return true;
 
+            if (transactionMap[tid].data.status.Equals(Status.Aborted))
+                return false;
             //Vote "yes" if it depends commited state.
             int depTid = transactionMap[tid].data.depTid;
             if (depTid <= this.commitTransactionId)
@@ -146,6 +171,14 @@ namespace Concurrency.Implementation.Nondeterministic
 
         public Optional<TState> Commit(int tid)
         {
+            //Commit read-only transactions
+            if (readDependencyMap.ContainsKey(tid))
+            {
+                readDependencyMap.Remove(tid);
+                return null;
+            }
+
+            //Commit non-read-only transactions
             Node<TransactionStateInfo> node = transactionMap[tid];
             node.data.status = Status.Committed;
             //Set the promise of transaction tid, such that transactions depending on it can prepare.
@@ -158,50 +191,27 @@ namespace Concurrency.Implementation.Nondeterministic
             this.writeTs = node.data.wts;
 
             //Clean the transaction list
-            CleanUp(node);
-            //Clean ReadMap
-            if (readDependencyMap.ContainsKey(tid))
-            {
-                readDependencyMap.Remove(tid);
-                return null;
-            }
-
-            return new Optional<TState>(commitedState);
+            CleanUp(node);      
+            return new Optional<TState>(node.data.state);
         }
 
         public void Abort(int tid)
         {
-            Node<TransactionStateInfo> node = transactionMap[tid];
-            node.data.status = Status.Aborted;
-            //Clean ReadMap
-            if (readDependencyMap.ContainsKey(tid))
+            //Abort read-only transactions
+            if (readDependencyMap.ContainsKey(tid)) {
                 readDependencyMap.Remove(tid);
-            //Set the promise of transaction tid, such that transactions depending on it can prepare.
-            node.data.ExecutionPromise.SetResult(true);
+                return;
+            }
+
+            if (transactionMap.ContainsKey(tid))
+            {
+                Node<TransactionStateInfo> node = transactionMap[tid];
+                node.data.status = Status.Aborted;
+                //Set the promise of transaction tid, such that transactions depending on it can prepare.
+                node.data.ExecutionPromise.SetResult(true);
+            }
         }
 
-        public Task<TState> Read(TransactionContext ctx, TState committedState)
-        {
-
-            //If there is a readwrite() from thesame transaction before this read operation
-            if (transactionMap.ContainsKey(ctx.transactionID) == true)
-            {
-                return Task.FromResult<TState>(transactionMap[ctx.transactionID].data.state);
-            }
-
-            if (readDependencyMap.ContainsKey(ctx.transactionID) == false)
-            {
-                if(ctx.transactionID < this.commitTransactionId)
-                    throw new Exception($"Txn {ctx.transactionID} is aborted to since the tid of this Read operation is smaller than the committed tid {this.commitTransactionId}");
-                readDependencyMap.Add(ctx.transactionID, this.commitTransactionId);
-            }
-            else
-            {
-                if (readDependencyMap[ctx.transactionID] < this.commitTransactionId)
-                    throw new Exception($"Txn {ctx.transactionID} is aborted to avoid reading inconsistent committed states");
-            }
-            return Task.FromResult<TState>(committedState);
-        }
 
 
         public enum Status

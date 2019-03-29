@@ -7,11 +7,12 @@ namespace Utilities
     public class Optional<T>
     {
         T value;
-        bool set;
+        bool set = false;
 
         public Optional(T value)
         {
             this.value = value;
+            this.set = true;
         }
 
         public Optional()
