@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Utilities;
 
-namespace Concurrency.Interface.Nondeterministic
+namespace Concurrency.Interface
 {
     public interface ITransactionalState<TState>
     {
