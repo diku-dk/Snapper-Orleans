@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using Concurrency.Interface.Logging;
-using Concurrency.Interface.Nondeterministic;
+using Concurrency.Interface;
 using Utilities;
 
 namespace Concurrency.Implementation.Logging

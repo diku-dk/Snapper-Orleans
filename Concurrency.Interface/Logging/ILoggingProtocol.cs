@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Concurrency.Interface.Nondeterministic;
+using Concurrency.Interface;
 using Orleans.Concurrency;
 using System.Threading.Tasks;
 

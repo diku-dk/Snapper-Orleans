@@ -49,7 +49,7 @@ namespace Concurrency.Implementation.Nondeterministic
                     else
                     {
                         //abort the transaction                        
-                        throw new Exception($"Txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the lock");                        
+                        throw new DeadlockAvoidanceException($"Txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the lock");                        
                     }
                 }
             }
@@ -83,17 +83,17 @@ namespace Concurrency.Implementation.Nondeterministic
                         return committedState;
                     } else
                     {
-                        throw new Exception($"Reader txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
+                        throw new DeadlockAvoidanceException($"Reader txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
                     }                 
                 }
             } else
             {
-                readers.Add(tid);
-                if (readers.Count == 1)
+                if (readers.Count == 0)
                 {
                     //First reader downs the semaphore
                     await writeSemaphore.WaitAsync(); //This should not block but is used to block subsequent writers                    
                 }
+                readers.Add(tid);                
                 return committedState;
             }
         }
@@ -121,7 +121,7 @@ namespace Concurrency.Implementation.Nondeterministic
                     else
                     {
                         //abort the transaction                        
-                        throw new Exception($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
+                        throw new DeadlockAvoidanceException($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
                     }
                 }
             }
@@ -134,12 +134,12 @@ namespace Concurrency.Implementation.Nondeterministic
                     await readSemaphore.WaitAsync(); //This should never block but required to make subsequent readers block
                     writeLockTaken = true;
                     writeLockTakenByTid = tid;
-                    activeState = (TState)committedState.Clone();
                 } else if (readers.Count == 1 && readers.Contains(tid))
                 {
                     //Upgrade myself to a write lock
                     readers.Remove(tid);
-                    Debug.Assert(activeState != null);
+                    writeLockTaken = true;
+                    writeLockTakenByTid = tid;
                 } else
                 {
                     if(tid < readers.Max)
@@ -147,13 +147,13 @@ namespace Concurrency.Implementation.Nondeterministic
                         //Wait for readers to release the lock
                         await writeSemaphore.WaitAsync();
                         writeLockTaken = true;
-                        writeLockTakenByTid = tid;
-                        activeState = (TState)committedState.Clone();
+                        writeLockTakenByTid = tid;                        
                     } else
                     {
-                        throw new Exception($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {readers.Max} that holds the read lock");
+                        throw new DeadlockAvoidanceException($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {readers.Max} that holds the read lock");
                     }
                 }
+                activeState = (TState)committedState.Clone();
             }
             return activeState;
         }
