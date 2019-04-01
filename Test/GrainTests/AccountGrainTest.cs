@@ -103,7 +103,7 @@ namespace Test.GrainTests
                 Assert.IsFalse(aBalanceTaskInfo.Item2.Result.hasException());
                 accountBalances[aBalanceTaskInfo.Item1] = (float)aBalanceTaskInfo.Item2.Result.resultObject;
             }
-
+            
             var taskInfo = new List<Tuple<Guid, Guid, float, Task<FunctionResult>>>();
             var tasks = new List<Task<FunctionResult>>();
             foreach (var transferInfoTuple in transferInformation)

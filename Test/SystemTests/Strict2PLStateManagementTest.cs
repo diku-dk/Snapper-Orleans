@@ -33,8 +33,7 @@ namespace Test.SystemTests
         [TestMethod]
         public async Task InterLeavedExecutionStateTransition()
         {
-            //Test concurrent reads
-            state = new HybridState<KeyValueState>(createInitState());
+            //Test concurrent reads            
             TransactionContext ctx1 = new TransactionContext(1, 2, Helper.convertUInt32ToGuid(0));
             ctx1.isDeterministic = false;
             TransactionContext ctx2 = new TransactionContext(1, 3, Helper.convertUInt32ToGuid(0));

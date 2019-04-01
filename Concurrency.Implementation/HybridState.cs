@@ -23,7 +23,7 @@ namespace Concurrency.Implementation
             switch (type)
             {
                 case ConcurrencyType.S2PL:
-                    nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
+                    nonDetStateManager = new Nondeterministic.S2PLTransactionalState<TState>();
                     break;
                 case ConcurrencyType.TIMESTAMP:
                     nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();

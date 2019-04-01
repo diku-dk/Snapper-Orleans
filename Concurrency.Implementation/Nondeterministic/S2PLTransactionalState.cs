@@ -18,6 +18,7 @@ namespace Concurrency.Implementation.Nondeterministic
         private SemaphoreSlim writeSemaphore;
         private SemaphoreSlim readSemaphore;
         private SortedSet<int> readers;
+        private SortedSet<int> writers;
 
         public S2PLTransactionalState()
         {
@@ -26,6 +27,7 @@ namespace Concurrency.Implementation.Nondeterministic
             writeSemaphore = new SemaphoreSlim(1);
             readSemaphore = new SemaphoreSlim(1);
             readers = new SortedSet<int>();
+            writers = new SortedSet<int>();
         }
 
         private async Task<TState> AccessState(int tid, TState committedState)
@@ -88,12 +90,12 @@ namespace Concurrency.Implementation.Nondeterministic
                 }
             } else
             {
-                if (readers.Count == 0)
+                readers.Add(tid);
+                if (readers.Count == 1 && writers.Count == 0)
                 {
-                    //First reader downs the semaphore
+                    //First reader downs the semaphore if there are no writers waiting
                     await writeSemaphore.WaitAsync(); //This should not block but is used to block subsequent writers                    
-                }
-                readers.Add(tid);                
+                }                                
                 return committedState;
             }
         }
@@ -112,8 +114,9 @@ namespace Concurrency.Implementation.Nondeterministic
                 {   //Check the wait-die protocol
                     if (tid < writeLockTakenByTid)
                     {
+                        writers.Add(tid);
                         //Wait for other writer
-                        await writeSemaphore.WaitAsync();
+                        await writeSemaphore.WaitAsync();                        
                         writeLockTaken = true;
                         writeLockTakenByTid = tid;
                         activeState = (TState)committedState.Clone();
@@ -130,14 +133,16 @@ namespace Concurrency.Implementation.Nondeterministic
                 //Check for readers
                 if(readers.Count == 0)
                 {
+                    writers.Add(tid);
                     await writeSemaphore.WaitAsync(); // This should never block but required to make subsequent writers block
-                    await readSemaphore.WaitAsync(); //This should never block but required to make subsequent readers block
+                    await readSemaphore.WaitAsync(); //This should never block but required to make subsequent readers block                    
                     writeLockTaken = true;
                     writeLockTakenByTid = tid;
                 } else if (readers.Count == 1 && readers.Contains(tid))
                 {
                     //Upgrade myself to a write lock
                     readers.Remove(tid);
+                    writers.Add(tid);
                     writeLockTaken = true;
                     writeLockTakenByTid = tid;
                 } else
@@ -145,7 +150,8 @@ namespace Concurrency.Implementation.Nondeterministic
                     if(tid < readers.Max)
                     {
                         //Wait for readers to release the lock
-                        await writeSemaphore.WaitAsync();
+                        writers.Add(tid);
+                        await writeSemaphore.WaitAsync();                        
                         writeLockTaken = true;
                         writeLockTakenByTid = tid;                        
                     } else
@@ -160,7 +166,8 @@ namespace Concurrency.Implementation.Nondeterministic
                 
         public Task<bool> Prepare(int tid)
         {            
-            return Task.FromResult((writeLockTaken && writeLockTakenByTid == tid) || readers.Contains(tid));            
+            Debug.Assert((readers.Contains(tid) && !writers.Contains(tid))|| (!readers.Contains(tid) && writers.Contains(tid)));
+            return Task.FromResult((writeLockTaken && writeLockTakenByTid == tid && writers.Contains(tid)) || readers.Contains(tid));            
         }
 
         private void CleanUpAndSignal(int tid)
@@ -169,16 +176,20 @@ namespace Concurrency.Implementation.Nondeterministic
             {
                 writeLockTaken = false;
                 writeLockTakenByTid = -1;
+                writers.Remove(tid);
                 //Privilege readers over writers (XXX: Not fair queuing, can cause starvation)
                 if (readers.Count > 0)
                 {
                     //Release all readers
                     //Assumes one transaction can only have one outstanding call to Read/ReadWrite
                     readSemaphore.Release(readers.Count);
+                    //Console.WriteLine($"writer releases sem, readers count = {readers.Count}, read sem value = {result}");
                 }
                 else
                 {
+                    readSemaphore.Release();
                     writeSemaphore.Release();
+                    //Console.WriteLine($"writer releases sem, readers count = {readers.Count}, write sem value = {result}");
                 }
             }
             else if (readers.Contains(tid))
@@ -186,15 +197,15 @@ namespace Concurrency.Implementation.Nondeterministic
                 readers.Remove(tid);
                 if (readers.Count == 0)
                 {
-                    //Release one writer
+                    //Release one writer                    
                     writeSemaphore.Release();
+                    //Console.WriteLine($"reader releases sem, readers count = {readers.Count}, write sem value = {result}");
                 }
             }
         }
 
         public Optional<TState> Commit(int tid)
-        {
-            //XXX: This should not return anything actually
+        {            
             var reader = readers.Contains(tid);
             CleanUpAndSignal(tid);            
             var result = reader ? null : new Optional<TState>(activeState);

@@ -25,7 +25,7 @@ namespace Concurrency.Implementation
         private TransactionScheduler myScheduler;
 
         public TransactionExecutionGrain(TState state, String myUserClassName){
-            this.state = new HybridState<TState>(state);
+            this.state = new HybridState<TState>(state, ConcurrencyType.TIMESTAMP);
             this.myUserClassName = myUserClassName;
         }
 
@@ -82,7 +82,7 @@ namespace Concurrency.Implementation
                 await t1;
                 //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
                 result = new FunctionResult(t1.Result.resultObject);
-                if(!result.hasException())
+                if(!t1.Result.hasException())
                     canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
                 if (canCommit)
                 {
