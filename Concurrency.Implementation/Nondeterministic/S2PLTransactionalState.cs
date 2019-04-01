@@ -169,7 +169,7 @@ namespace Concurrency.Implementation.Nondeterministic
             {
                 writeLockTaken = false;
                 writeLockTakenByTid = -1;
-                //Privilege readers over writers
+                //Privilege readers over writers (XXX: Not fair queuing, can cause starvation)
                 if (readers.Count > 0)
                 {
                     //Release all readers

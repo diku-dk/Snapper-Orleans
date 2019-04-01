@@ -23,32 +23,11 @@ namespace Test.SystemTests
             return new KeyValueState();
         }
 
-        //[TestInitialize]
+        [TestInitialize]
         public void Init()
         {
-            if (state == null)
-            {
-                var seedState = createInitState();
-                state = new HybridState<KeyValueState>(seedState);
-            }
-        }
-
-        [TestMethod]
-        public async Task StateTransitionSingleTransaction()
-        {
-            state = new HybridState<KeyValueState>(createInitState());
-            //Test different modes R->RW->R-RW->RW->R->...
-            TransactionContext ctx = new TransactionContext(1, 1, Helper.convertUInt32ToGuid(0));
-            ctx.isDeterministic = false;
-            var task = state.Read(ctx);
-            Assert.IsTrue(task.IsCompleted);
-            task = state.Read(ctx);
-            Assert.IsTrue(task.IsCompleted);
-            task = state.ReadWrite(ctx);
-            Assert.IsTrue(task.IsCompleted);
-            task = state.ReadWrite(ctx);
-            Assert.IsTrue(task.IsCompleted);
-            await state.Abort(ctx.transactionID);
+            var seedState = createInitState();
+            state = new HybridState<KeyValueState>(seedState,ConcurrencyType.S2PL);
         }
 
         [TestMethod]
@@ -85,37 +64,9 @@ namespace Test.SystemTests
             Assert.IsTrue(task4.IsCompleted);
             state.Abort(ctx3.transactionID);
             state.Commit(ctx4.transactionID);
-
             //Test serializability of read write in presence of other read writes or reads
 
             //Test abort policy            
         }
-    }
-    public class KeyValueState : ICloneable
-    {
-        Dictionary<int, int[]> keyValues;
-
-        public KeyValueState()
-        {
-            keyValues = new Dictionary<int, int[]>();
-        }
-
-        public KeyValueState(Dictionary<int, int[]> keyValues)
-        {
-            this.keyValues = keyValues;
-        }
-
-        object ICloneable.Clone()
-        {
-            var copiedValues = new Dictionary<int, int[]>();
-            foreach (var entry in keyValues) {
-                var value = new int[entry.Value.Length];
-                entry.Value.CopyTo(value,0);
-                copiedValues.Add(entry.Key, value);
-            }
-            KeyValueState copy = new KeyValueState(copiedValues);
-            return copy;
-        }
-    }
-
+    } 
 }

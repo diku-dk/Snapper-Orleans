@@ -133,6 +133,7 @@ namespace Test.GrainTests
                 if (sequential)
                 {
                     await task;
+                    Assert.IsFalse(task.Result.hasException());
                 }
             }
             if(!sequential)
