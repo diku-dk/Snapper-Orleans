@@ -53,5 +53,8 @@ namespace Concurrency.Interface
         /// </summary>
         [AlwaysInterleave]
         Task AckBatchCompletion(int bid, Guid executor_id);
+
+        [AlwaysInterleave]
+        Task<HashSet<int>> GetCompleteAfterSet(int tid);
     }
 }

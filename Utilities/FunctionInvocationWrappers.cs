@@ -34,6 +34,9 @@ namespace Utilities
         public Boolean exception = false;
         public HashSet<int> beforeSet;
         public HashSet<int> afterSet;
+        public int maxBeforeBid;
+        public int minAfterBid;
+        public Boolean isBeforeAfterConsecutive = false;
 
         public FunctionResult(Object resultObject, FunctionResult r)
         {
@@ -42,6 +45,9 @@ namespace Utilities
             foreach (var entry in r.grainsInNestedFunctions)
                 this.grainsInNestedFunctions.Add(entry.Key, entry.Value);
             this.exception = r.exception;
+            this.isBeforeAfterConsecutive = r.isBeforeAfterConsecutive;
+            this.beforeSet = new HashSet<int>();
+            this.afterSet = new HashSet<int>();
         }
 
         public FunctionResult(Object resultObject=null)
@@ -50,6 +56,8 @@ namespace Utilities
             this.grainsInNestedFunctions = new Dictionary<Guid, String>();
             this.beforeSet = new HashSet<int>();
             this.afterSet = new HashSet<int>();
+            this.maxBeforeBid = int.MinValue;
+            this.minAfterBid = int.MaxValue;
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
@@ -59,6 +67,16 @@ namespace Utilities
                 this.grainsInNestedFunctions.Add(entry.Key,entry.Value);
             this.beforeSet.UnionWith(r.beforeSet);
             this.afterSet.UnionWith(r.afterSet);
+            maxBeforeBid = (this.maxBeforeBid < r.maxBeforeBid) ? r.maxBeforeBid : this.maxBeforeBid;
+            minAfterBid = (this.minAfterBid > r.minAfterBid) ? r.minAfterBid : this.minAfterBid;
+            isBeforeAfterConsecutive &= r.isBeforeAfterConsecutive;
+        }
+
+        public void setSchedulingStatistics(int before, int after, Boolean b)
+        {
+            this.maxBeforeBid = before;
+            this.minAfterBid = after;
+            this.isBeforeAfterConsecutive = b;
         }
 
         public void setResult(Object result)

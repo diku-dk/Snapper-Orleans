@@ -45,10 +45,10 @@ namespace OrleansClient
         
         public async Task ConcurrentDetTransaction()
         {
-            TestThroughput test = new TestThroughput(10000);
+            TestThroughput test = new TestThroughput(100);
             //for(int i=0; i<10; i++)
                 
-            await test.DoTest(client, 10000, false);
+            await test.DoTest(client, 1000, false);
             //await test.DoTest(client, 100, true);
 
         }
