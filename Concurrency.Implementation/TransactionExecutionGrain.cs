@@ -67,7 +67,7 @@ namespace Concurrency.Implementation
 
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
-            FunctionResult result = null;
+            FunctionResult ret = null;
             TransactionContext context = null;
             Task<FunctionResult> t1 = null;
             Boolean canCommit = false;
@@ -81,13 +81,11 @@ namespace Concurrency.Implementation
                 t1 = this.Execute(c1);
                 await t1;
                 //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
-                result = new FunctionResult(t1.Result.resultObject);
-
+                ret = new FunctionResult(t1.Result);
                 //Local serializability check
                 bool serializable = true;
                 //serializable &= CheckSerailizability(context.transactionID, t1.Result).Result;
-
-                if (!result.hasException() && serializable)
+                if (!t1.Result.hasException() && serializable)
                     canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
                 if (canCommit)
                 {
@@ -96,14 +94,14 @@ namespace Concurrency.Implementation
                 else
                 {
                     await Abort_2PC(context.transactionID, t1.Result);
-                    result.setException();
+                    ret.setException();
                 }
             }
             catch (Exception e)
             {
                 Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: transaction {startFunction} {context.transactionID} exception {e.Message}");
             }
-            return result;
+            return ret;
         }
 
         public async Task<Boolean> CheckSerailizability(int tid, FunctionResult result)
