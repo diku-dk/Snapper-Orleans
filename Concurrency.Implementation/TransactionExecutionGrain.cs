@@ -25,7 +25,7 @@ namespace Concurrency.Implementation
         private TransactionScheduler myScheduler;
 
         public TransactionExecutionGrain(TState state, String myUserClassName){
-            this.state = new HybridState<TState>(state);
+            this.state = new HybridState<TState>(state, ConcurrencyType.TIMESTAMP);
             this.myUserClassName = myUserClassName;
         }
 
@@ -67,7 +67,7 @@ namespace Concurrency.Implementation
 
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
-            FunctionResult ret = null;
+            FunctionResult result = null;
             TransactionContext context = null;
             Task<FunctionResult> t1 = null;
             Boolean canCommit = false;
@@ -81,11 +81,8 @@ namespace Concurrency.Implementation
                 t1 = this.Execute(c1);
                 await t1;
                 //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
-                ret = new FunctionResult(t1.Result);
-                //Local serializability check
-                bool serializable = true;
-                //serializable &= CheckSerailizability(context.transactionID, t1.Result).Result;
-                if (!t1.Result.hasException() && serializable)
+                result = new FunctionResult(t1.Result.resultObject);
+                if(!t1.Result.hasException())
                     canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
                 if (canCommit)
                 {
@@ -94,47 +91,14 @@ namespace Concurrency.Implementation
                 else
                 {
                     await Abort_2PC(context.transactionID, t1.Result);
-                    ret.setException();
+                    result.setException();
                 }
             }
             catch (Exception e)
             {
                 Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: transaction {startFunction} {context.transactionID} exception {e.Message}");
             }
-            return ret;
-        }
-
-        public async Task<Boolean> CheckSerailizability(int tid, FunctionResult result)
-        {
-            Boolean serializable = true;
-            if (result.beforeSet.Count == 0)
-            {
-                //If before set is empty, the schedule must be serializable
-                serializable = true;
-            }
-            else if (result.isBeforeAfterConsecutive)
-            {
-                //The after set is complete
-                if (result.maxBeforeBid < result.minAfterBid)
-                    serializable = true;
-                else
-                    serializable = false; //False Positive abort;
-            }
-            else
-            {
-                //The after set is not complete, there are holes between maxBeforeBid and minAfterBid
-                if (result.beforeSet.Overlaps(result.afterSet))
-                    serializable = false;
-                else if (result.maxBeforeBid > result.minAfterBid)
-                    serializable = false; //False Positive abort;
-                else
-                {
-                    //Go to GC for complete after set;
-                    HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(tid);
-                }
-            }
-            return serializable;
-
+            return result;
         }
 
         public async Task<Boolean> Prepare_2PC(int tid, Guid coordinatorKey, FunctionResult result)
@@ -229,7 +193,14 @@ namespace Concurrency.Implementation
                 {
                     Console.WriteLine($"\n Exception::InvokeFunction: {e.Message.ToString()}");
                 }
-                updateExecutionResult(call.funcInput.context.transactionID, invokeRet);
+                if(!invokeRet.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey))
+                    invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
+
+                //Update before set and after set
+                int tid = call.funcInput.context.transactionID;
+                invokeRet.beforeSet.UnionWith(myScheduler.getBeforeSet(tid));
+                invokeRet.afterSet.UnionWith(myScheduler.getAfterSet(tid));
+
                 return invokeRet;
             }
             else
@@ -252,24 +223,6 @@ namespace Concurrency.Implementation
                 //XXX: Check if this works -> return new FunctionResult(ret);
             }
         }
-
-        //Update the metadata of the execution results, including accessed grains, before/after set, etc.
-        public void updateExecutionResult(int tid, FunctionResult invokeRet)
-        {
-            int maxBeforeBid, minAfterBid;
-            bool isBeforeAfterConsecutive = false;
-
-            if (!invokeRet.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey))
-                invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
-            invokeRet.beforeSet.UnionWith(myScheduler.getBeforeSet(tid, out maxBeforeBid));
-            invokeRet.afterSet.UnionWith(myScheduler.getAfterSet(tid, out minAfterBid));
-            if (maxBeforeBid == int.MinValue || minAfterBid == int.MaxValue)
-                isBeforeAfterConsecutive = false;
-            else if (batchScheduleMap[minAfterBid].lastBatchID == maxBeforeBid)
-                isBeforeAfterConsecutive = true;
-            invokeRet.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive);
-        }
-
 
         public async Task<FunctionResult> InvokeFunction(FunctionCall call)
         {
