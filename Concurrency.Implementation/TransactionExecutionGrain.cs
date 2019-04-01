@@ -134,6 +134,39 @@ namespace Concurrency.Implementation
             return canCommit;
         }
 
+        public async Task<Boolean> CheckSerailizability(int tid, FunctionResult result)
+        {
+            Boolean serializable = true;
+            if (result.beforeSet.Count == 0)
+            {
+                //If before set is empty, the schedule must be serializable
+                serializable = true;
+            }
+            else if (result.isBeforeAfterConsecutive)
+            {
+                //The after set is complete
+                if (result.maxBeforeBid < result.minAfterBid)
+                    serializable = true;
+                else
+                    serializable = false; //False Positive abort;
+            }
+            else
+            {
+                //The after set is not complete, there are holes between maxBeforeBid and minAfterBid
+                if (result.beforeSet.Overlaps(result.afterSet))
+                    serializable = false;
+                else if (result.maxBeforeBid > result.minAfterBid)
+                    serializable = false; //False Positive abort;
+                else
+                {
+                    //Go to GC for complete after set;
+                    HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(tid);
+                }
+            }
+            return serializable;
+
+        }
+
         public async Task Commit_2PC(int tid, FunctionResult result)
         {
             Dictionary<Guid, String> grainIDsInTransaction = result.grainsInNestedFunctions;
@@ -198,9 +231,7 @@ namespace Concurrency.Implementation
 
                 //Update before set and after set
                 int tid = call.funcInput.context.transactionID;
-                invokeRet.beforeSet.UnionWith(myScheduler.getBeforeSet(tid));
-                invokeRet.afterSet.UnionWith(myScheduler.getAfterSet(tid));
-
+                updateExecutionResult(tid, invokeRet);
                 return invokeRet;
             }
             else
@@ -222,6 +253,23 @@ namespace Concurrency.Implementation
                 return ret;
                 //XXX: Check if this works -> return new FunctionResult(ret);
             }
+        }
+
+        //Update the metadata of the execution results, including accessed grains, before/after set, etc.
+        public void updateExecutionResult(int tid, FunctionResult invokeRet)
+        {
+            int maxBeforeBid, minAfterBid;
+            bool isBeforeAfterConsecutive = false;
+
+            if (!invokeRet.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey))
+                invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
+            invokeRet.beforeSet.UnionWith(myScheduler.getBeforeSet(tid, out maxBeforeBid));
+            invokeRet.afterSet.UnionWith(myScheduler.getAfterSet(tid, out minAfterBid));
+            if (maxBeforeBid == int.MinValue || minAfterBid == int.MaxValue)
+                isBeforeAfterConsecutive = false;
+            else if (batchScheduleMap[minAfterBid].lastBatchID == maxBeforeBid)
+                isBeforeAfterConsecutive = true;
+            invokeRet.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive);
         }
 
         public async Task<FunctionResult> InvokeFunction(FunctionCall call)
