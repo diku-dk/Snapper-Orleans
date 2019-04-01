@@ -6,6 +6,7 @@ using Concurrency.Interface;
 using Concurrency.Interface.Nondeterministic;
 using Concurrency.Interface.Logging;
 using Utilities;
+using System.Diagnostics;
 using Concurrency.Implementation.Logging;
 using Orleans;
 
@@ -82,8 +83,15 @@ namespace Concurrency.Implementation
                 await t1;
                 //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
                 result = new FunctionResult(t1.Result.resultObject);
-                if(!t1.Result.hasException())
+                canCommit = !t1.Result.hasException();
+                if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)
+                {
                     canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
+                } else
+                {
+                    Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
+                }
+                    
                 if (canCommit)
                 {
                     await Commit_2PC(context.transactionID, t1.Result);
@@ -140,13 +148,13 @@ namespace Concurrency.Implementation
             if (result.beforeSet.Count == 0)
             {
                 //If before set is empty, the schedule must be serializable
-                serializable = true;
+                return true;
             }
             else if (result.isBeforeAfterConsecutive)
             {
                 //The after set is complete
                 if (result.maxBeforeBid < result.minAfterBid)
-                    serializable = true;
+                    return true;
                 else
                     serializable = false; //False Positive abort;
             }
