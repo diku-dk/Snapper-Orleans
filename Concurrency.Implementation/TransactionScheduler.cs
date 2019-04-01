@@ -171,14 +171,14 @@ namespace Concurrency.Implementation
             }
         }
 
-        public HashSet<int> getBeforeSet(int tid)
+        public HashSet<int> getBeforeSet(int tid, out int maxBeforeBid)
         {
-            return scheduleInfo.getBeforeSet(tid);
+            return scheduleInfo.getBeforeSet(tid, out maxBeforeBid);
         }
 
-        public HashSet<int> getAfterSet(int tid)
+        public HashSet<int> getAfterSet(int tid, out int minAfterBid)
         {
-            return scheduleInfo.getAfterSet(tid);
+            return scheduleInfo.getAfterSet(tid, out minAfterBid);
         }
     }
 

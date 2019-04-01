@@ -131,10 +131,11 @@ namespace Concurrency.Implementation
             return nodes[id].prev.promise;
         }
 
-        public HashSet<int> getBeforeSet(int tid)
+        public HashSet<int> getBeforeSet(int tid, out int maxBeforeBid)
         {
             var result = new HashSet<int>();
             var node = nodes[nonDetTxnToScheduleMap[tid]].prev;
+            maxBeforeBid = node.id == -1 ? int.MinValue : node.id;
             while(node.id != -1)
             {                
                 if (node.isDet)
@@ -145,12 +146,13 @@ namespace Concurrency.Implementation
             return result;
         }
 
-        public HashSet<int> getAfterSet(int tid)
+        public HashSet<int> getAfterSet(int tid, out int minAfterBid)
         {
             var result = new HashSet<int>();
             var node = nodes[nonDetTxnToScheduleMap[tid]].next;
             bool foundAll = false;
-            while(node != null)
+            minAfterBid = node == null ? int.MaxValue : node.id;
+            while (node != null)
             {
                 if(node.isDet)
                 {
@@ -165,10 +167,12 @@ namespace Concurrency.Implementation
 
             if(!foundAll)
             {
-                foreach(var key in nodes.Keys) {
+                minAfterBid = int.MaxValue;
+                foreach (var key in nodes.Keys) {
                     if(key > tid && nodes[key].isDet)
                     {
                         result.Add(key);
+                        minAfterBid = minAfterBid > key ? key: minAfterBid;
                     }
                 }
             }

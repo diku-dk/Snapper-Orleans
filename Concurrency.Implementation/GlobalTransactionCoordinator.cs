@@ -384,6 +384,11 @@ namespace Concurrency.Implementation
             
         }
 
+        public Task<HashSet<int>> GetCompleteAfterSet(int tid)
+        {
+            return null;
+        }
+
         public async Task SpawnCoordinator(uint myId, uint numofCoordinators)
         {
             if (this.spawned)
