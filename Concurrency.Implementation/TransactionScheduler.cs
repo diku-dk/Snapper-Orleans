@@ -170,6 +170,16 @@ namespace Concurrency.Implementation
                 schedule = batchScheduleMap[bid];
             }
         }
+
+        public HashSet<int> getBeforeSet(int tid)
+        {
+            return scheduleInfo.getBeforeSet(tid);
+        }
+
+        public HashSet<int> getAfterSet(int tid)
+        {
+            return scheduleInfo.getAfterSet(tid);
+        }
     }
 
 

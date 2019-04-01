@@ -72,16 +72,19 @@ namespace Test.SystemTests
 
             try
             {
-                var task4 = state.ReadWrite(ctx3);
+                var task4 = state.Read(ctx2);
                 await task4;
                 Assert.Fail();
             }
-            catch (DeadlockAvoidanceException)
+            catch (Exception)
             {
                 ;
             }
 
-            
+            var task5 = state.Read(ctx3);
+            Assert.IsTrue(task5.IsCompleted);
+
+
             //Assert.IsFalse(task4.IsCompleted);
             //state.Commit(ctx1.transactionID);
             //Assert.IsFalse(task4.IsCompleted);

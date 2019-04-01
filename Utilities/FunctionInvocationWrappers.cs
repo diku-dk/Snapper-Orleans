@@ -32,6 +32,8 @@ namespace Utilities
         public Object resultObject;
         public Dictionary<Guid, String> grainsInNestedFunctions;
         public Boolean exception = false;
+        public HashSet<int> beforeSet;
+        public HashSet<int> afterSet;
 
         public FunctionResult(Object resultObject, FunctionResult r)
         {
@@ -46,6 +48,8 @@ namespace Utilities
         {
             this.resultObject = resultObject;
             this.grainsInNestedFunctions = new Dictionary<Guid, String>();
+            this.beforeSet = new HashSet<int>();
+            this.afterSet = new HashSet<int>();
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
@@ -53,6 +57,8 @@ namespace Utilities
             this.exception |= r.exception;
             foreach (var entry in r.grainsInNestedFunctions)
                 this.grainsInNestedFunctions.Add(entry.Key,entry.Value);
+            this.beforeSet.UnionWith(r.beforeSet);
+            this.afterSet.UnionWith(r.afterSet);
         }
 
         public void setResult(Object result)
@@ -69,6 +75,13 @@ namespace Utilities
         {
             return (exception == true);
         }
+
+        public void expandBeforeandAfterSet(HashSet<int> bSet, HashSet<int> aSet)
+        {
+            beforeSet.UnionWith(bSet);
+            afterSet.UnionWith(aSet);
+        }
+        
     }
 
     [Serializable]
