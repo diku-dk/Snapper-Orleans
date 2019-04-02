@@ -160,7 +160,7 @@ namespace Concurrency.Implementation
                 else
                 {
                     //Go to GC for complete after set;
-                    HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(tid);
+                    HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(tid, null);
                 }
             }
             return serializable;

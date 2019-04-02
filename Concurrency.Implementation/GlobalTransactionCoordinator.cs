@@ -384,9 +384,11 @@ namespace Concurrency.Implementation
             
         }
 
-        public Task<HashSet<int>> GetCompleteAfterSet(int tid)
+        public Task<HashSet<int>> GetCompleteAfterSet(int tid, Dictionary<int, String> grains)
         {
             return null;
+
+
         }
 
         public async Task SpawnCoordinator(uint myId, uint numofCoordinators)

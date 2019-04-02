@@ -1,6 +1,7 @@
 ﻿using Concurrency.Interface.Nondeterministic;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
 using Utilities;
@@ -118,8 +119,9 @@ namespace Concurrency.Implementation.Nondeterministic
 
             if (readDependencyMap.ContainsKey(tid))
                 return true;
-            if (transactionMap.ContainsKey(tid) == false)
-                return false;
+            Debug.Assert(transactionMap.ContainsKey(tid));
+            //if (transactionMap.ContainsKey(tid) == false)
+                //return false;
             //Vote "yes" if it depends commited state.
             int depTid = transactionMap[tid].data.depTid;
             if (depTid <= this.commitTransactionId)

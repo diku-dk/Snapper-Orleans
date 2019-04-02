@@ -55,6 +55,6 @@ namespace Concurrency.Interface
         Task AckBatchCompletion(int bid, Guid executor_id);
 
         [AlwaysInterleave]
-        Task<HashSet<int>> GetCompleteAfterSet(int tid);
+        Task<HashSet<int>> GetCompleteAfterSet(int tid, Dictionary<int, String> grains);
     }
 }
