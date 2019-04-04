@@ -8,8 +8,7 @@ using Concurrency.Interface.Nondeterministic;
 using Utilities;
 
 namespace Concurrency.Implementation
-{
-    public enum ConcurrencyType { S2PL, TIMESTAMP };
+{    
     public class HybridState<TState> : ITransactionalState<TState> where TState : ICloneable, new()
     {        
         private IDetTransactionalState<TState> detStateManager;
