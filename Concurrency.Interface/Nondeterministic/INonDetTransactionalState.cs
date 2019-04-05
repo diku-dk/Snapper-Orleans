@@ -7,6 +7,7 @@ using Utilities;
 
 namespace Concurrency.Interface.Nondeterministic
 {
+    public enum ConcurrencyType { S2PL, TIMESTAMP };
     public interface INonDetTransactionalState<TState>
     {
         Task<TState> Read(TransactionContext ctx, TState committedState);

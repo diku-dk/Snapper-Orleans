@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Utilities;
 
 namespace Concurrency.Interface
-{
+{    
     public interface ITransactionalState<TState>
     {
         Task<TState> Read(TransactionContext ctx);

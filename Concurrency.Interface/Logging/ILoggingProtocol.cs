@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace Concurrency.Interface.Logging
 {
+    public enum StorageWrapperType { FILESYSTEM, DYNAMODB };
     public interface ILoggingProtocol<TState>
     {
         Task HandleBeforePrepareIn2PC(int tid, Guid coordinatorKey, HashSet<Guid> grains);
