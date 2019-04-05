@@ -13,25 +13,19 @@ namespace Test.GrainTests
     [TestClass]
     public class AccountGrainTest
     {
-        ClientConfiguration config;
-        IClusterClient client;
+        static ClientConfiguration config;
+        static IClusterClient client;
         Random rand = new Random();
-        readonly uint numOfCoordinators = 10;
-        readonly int maxAccounts = 10;
+        static readonly uint numOfCoordinators = 5;
+        static readonly int maxAccounts = 10;
         readonly int maxTransferAmount = 10;
         readonly int numSequentialTransfers = 10;
-        readonly int numConcurrentTransfers = 100;
+        readonly int numConcurrentTransfers = 1000;
 
-        [TestMethod]
-        public void test()
+        [ClassInitialize]
+        public static async Task ClassInitialize(TestContext context)
         {
-            Assert.AreEqual(42,42);
-        }
-
-        [TestInitialize]
-        public async Task bootStrap()
-        {
-            if(config == null)
+            if (config == null)
             {
                 config = new ClientConfiguration();
                 client = await config.StartClientWithRetries();
@@ -43,7 +37,16 @@ namespace Test.GrainTests
                     tasks.Add(coordinator.SpawnCoordinator(i, numOfCoordinators));
                 }
                 await Task.WhenAll(tasks);
-            }            
+                IGlobalTransactionCoordinator coord_0 = client.GetGrain<IGlobalTransactionCoordinator>(Utilities.Helper.convertUInt32ToGuid(0));
+                BatchToken token = new BatchToken(-1, -1);
+                await coord_0.PassToken(token);
+            }
+        }
+
+        [TestInitialize]
+        public async Task bootStrap()
+        {
+           
         }
 
         private List<Tuple<uint, uint, float, bool>> GenerateTransferInformation(int numTuples, Tuple<int, int> fromAccountRange, Tuple<int, int> toAccountRange, Tuple<int, int> transferAmountRange, Tuple<bool, bool> hybridTypeRange)
@@ -169,7 +172,6 @@ namespace Test.GrainTests
             foreach (var aBalanceTaskInfo in balanceTaskInfo)
             {
                 Assert.IsFalse(aBalanceTaskInfo.Item2.Result.hasException());
-
                 Assert.IsTrue((float)aBalanceTaskInfo.Item2.Result.resultObject == accountBalances[aBalanceTaskInfo.Item1]);
                 accountBalances[aBalanceTaskInfo.Item1] = (float)aBalanceTaskInfo.Item2.Result.resultObject;
             }

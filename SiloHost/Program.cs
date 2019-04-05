@@ -47,8 +47,6 @@ namespace OrleansSiloHost
                 {
                     options.ClusterId = "dev";
                     options.ServiceId = "AccountTransferApp";
-
-
                 })
                 .Configure<GrainCollectionOptions>(options =>
                 {

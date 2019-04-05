@@ -22,34 +22,39 @@ namespace OrleansClient
         uint numOfCoordinator;
         IClusterClient client;
 
-        public GlobalCoordinatorTest(uint n, IClusterClient client)
+        public GlobalCoordinatorTest(IClusterClient client)
         {
-            this.numOfCoordinator = n;
             this.client = client;
-
-
         }
 
         public async Task SpawnCoordinator()
         {
-            List<Task> tasks = new List<Task>();
             //Spawn coordinators
             for (uint i = 0; i < this.numOfCoordinator; i++)
             {
                 IGlobalTransactionCoordinator coordinator = client.GetGrain<IGlobalTransactionCoordinator>(Utilities.Helper.convertUInt32ToGuid(i));
                 await coordinator.SpawnCoordinator(i, numOfCoordinator);                  
             }
+            IGlobalTransactionCoordinator coord_0 = client.GetGrain<IGlobalTransactionCoordinator>(Utilities.Helper.convertUInt32ToGuid(0));
+            BatchToken token = new BatchToken(-1, -1);
+            await coord_0.PassToken(token);
+
             //await Task.WhenAll(tasks);
         }
 
         
         public async Task ConcurrentDetTransaction()
         {
+            this.numOfCoordinator = 5;
+            await this.SpawnCoordinator();
             TestThroughput test = new TestThroughput(100);
             //for(int i=0; i<10; i++)
-                
-            await test.DoTest(client, 1000, false);
-            //await test.DoTest(client, 100, true);
+            List<Task> tasks = new List<Task>();
+            tasks.Add(test.DoTest(client, 1000, true));
+            //tasks.Add(test.DoTest(client, 100, true));
+            //tasks.Add(test.DoTest(client, 100, false));
+            //tasks.Add(test.DoTest(client, 100, true));
+            await Task.WhenAll(tasks);
 
         }
 

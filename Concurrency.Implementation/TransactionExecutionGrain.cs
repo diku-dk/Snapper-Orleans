@@ -20,7 +20,7 @@ namespace Concurrency.Implementation
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
         protected String myUserClassName;
-        protected int numCoordinators = 10;
+        protected int numCoordinators = 5;
         protected Random rnd;
         private IGlobalTransactionCoordinator myCoordinator;
         private TransactionScheduler myScheduler;
