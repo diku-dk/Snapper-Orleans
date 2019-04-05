@@ -21,8 +21,9 @@ namespace Concurrency.Implementation
 
         //Timer
         private IDisposable disposable;
+        private readonly int batchIntervalMSecs = 1000;
         private TimeSpan waitingTime = TimeSpan.FromSeconds(2);
-        private TimeSpan batchInterval = TimeSpan.FromMilliseconds(1000);
+        private TimeSpan batchInterval; 
 
         //Batch Schedule
         private Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>> batchSchedulePerGrain;
@@ -56,6 +57,7 @@ namespace Concurrency.Implementation
 
         public override Task OnActivateAsync()
         {
+            batchInterval = TimeSpan.FromMilliseconds(batchIntervalMSecs);
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             
@@ -151,6 +153,39 @@ namespace Concurrency.Implementation
             return context;
         }
 
+
+        public async Task CheckBackoff(BatchToken token)
+        {
+            if(deterministicTransactionRequests.Count == 0 && nonDeterministicEmitSize.Count == 0)
+            {
+                //The coordinator has some transaction request
+                if (token.backoff)
+                {
+                    //Block
+                    await Task.Delay(TimeSpan.FromMilliseconds(batchIntervalMSecs / coordinatorList.Count));
+                }
+                else if (!token.idleToken)
+                {
+                    token.idleToken = true;
+                    token.markedIdleByCoordinator = myPrimaryKey;
+                } else if(token.markedIdleByCoordinator == myPrimaryKey)
+                {
+                    //Token traverses full round being idle, enable backoff
+                    token.backoff = true;
+                    await Task.Delay(TimeSpan.FromMilliseconds(batchIntervalMSecs / coordinatorList.Count));
+                }
+            } else
+            {
+                //The coordinator has no transaction request
+                if(token.backoff)
+                {
+                    token.backoff = false;
+                } else if(token.idleToken)
+                {
+                    token.idleToken = false;
+                }
+            }
+        }
         /**
          *Coordinator calls this function to pass token
          */
@@ -158,6 +193,7 @@ namespace Concurrency.Implementation
         {
             //Console.WriteLine($"Coordinator {myId}: receives new token");
             await EmitTransaction(token);
+            await CheckBackoff(token);
             neighbour.PassToken(token);
             //Console.WriteLine($"Coordinator {myId} passed token to {this.neighbour.GetPrimaryKey()}.");
         }

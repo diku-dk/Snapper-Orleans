@@ -39,6 +39,5 @@ namespace Concurrency.Interface
         Task IncreaseCoordinators(int numCoordinators);
 
         Task DecreaseCoordinators(int numCoordinators);
-
     }
 }
