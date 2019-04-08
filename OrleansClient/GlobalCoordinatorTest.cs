@@ -11,6 +11,7 @@ using AccountTransfer.Grains;
 using System.Reflection;
 using Concurrency.Interface;
 using Utilities;
+using System.Threading;
 
 namespace OrleansClient
 {
@@ -50,11 +51,12 @@ namespace OrleansClient
             TestThroughput test = new TestThroughput(100);
             //for(int i=0; i<10; i++)
             List<Task> tasks = new List<Task>();
-            tasks.Add(test.DoTest(client, 1000, true));
-            //tasks.Add(test.DoTest(client, 100, true));
-            //tasks.Add(test.DoTest(client, 100, false));
-            //tasks.Add(test.DoTest(client, 100, true));
-            await Task.WhenAll(tasks);
+            Thread.Sleep(5000);
+            await test.DoTest(client, 10, true);
+            Thread.Sleep(5000);
+            await test.DoTest(client, 10, false);
+            Thread.Sleep(5000);
+            await test.DoTest(client, 10, true);
 
         }
 

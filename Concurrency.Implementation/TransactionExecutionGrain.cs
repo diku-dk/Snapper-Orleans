@@ -84,7 +84,8 @@ namespace Concurrency.Implementation
                 //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
                 result = new FunctionResult(t1.Result.resultObject);
                 canCommit = !t1.Result.hasException();
-                if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)
+                Boolean sertializable = this.CheckSerailizability(context.transactionID, t1.Result).Result;
+                if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit && sertializable)
                 {
                     canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
                 } else
@@ -132,6 +133,7 @@ namespace Concurrency.Implementation
                 await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
                 foreach (Task<Boolean> vote in prepareResult)
                 {
+
                     if (vote.Result == false)
                     {
                         canCommit = false;
@@ -168,7 +170,8 @@ namespace Concurrency.Implementation
                 else
                 {
                     //Go to GC for complete after set;
-                    HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(tid, null);
+                    //HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(tid, null);
+                    serializable = false;
                 }
             }
             return serializable;

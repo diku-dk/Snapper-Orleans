@@ -158,7 +158,7 @@ namespace Concurrency.Implementation
         {
             if(deterministicTransactionRequests.Count == 0 && nonDeterministicEmitSize.Count == 0)
             {
-                //The coordinator has some transaction request
+                //The coordinator has no transaction request
                 if (token.backoff)
                 {
                     //Block
@@ -191,7 +191,7 @@ namespace Concurrency.Implementation
          */
         public async Task PassToken(BatchToken token)
         {
-            //Console.WriteLine($"Coordinator {myId}: receives new token");
+            Console.WriteLine($"Coordinator {myId}: receives new token");
             await EmitTransaction(token);
             await CheckBackoff(token);
             neighbour.PassToken(token);
@@ -328,7 +328,8 @@ namespace Concurrency.Implementation
             }
             batchGrainClassName.Remove(curBatchID);
             this.detEmitPromiseMap[myEmitSequence].SetResult(true);
-            //this.detEmitPromiseMap.Remove(myEmitSequence);
+            this.deterministicTransactionRequests.Remove(myEmitSequence);
+            this.detEmitPromiseMap.Remove(myEmitSequence);
             //Console.WriteLine($"\n Coordinator {this.myId}: sent schedule for batch {curBatchID}, which contains {transactionList.Count} transactions.");
         }
 
