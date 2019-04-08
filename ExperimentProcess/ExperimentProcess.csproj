@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.Core" Version="3.3.17" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.3.4.17" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="2.1.2" />
+    <PackageReference Include="Microsoft.Orleans.Core" Version="2.1.2" />
+    <PackageReference Include="Microsoft.Orleans.OrleansAWSUtils" Version="2.1.2" />
+    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator" Version="2.1.2" />
+    <PackageReference Include="NetMQ" Version="4.0.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AccountTransfer.Grains\AccountTransfer.Grains.csproj" />
+    <ProjectReference Include="..\AccountTransfer.Interfaces\AccountTransfer.Interfaces.csproj" />
+    <ProjectReference Include="..\Concurrency.Implementation\Concurrency.Implementation.csproj" />
+    <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
+    <ProjectReference Include="..\TPCC.Grains\TPCC.Grains.csproj" />
+    <ProjectReference Include="..\TPCC.Interfaces\TPCC.Interfaces.csproj" />
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
+  </ItemGroup>
+
+</Project>

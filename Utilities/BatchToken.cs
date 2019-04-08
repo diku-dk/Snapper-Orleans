@@ -24,10 +24,5 @@ namespace Utilities
             backoff = true;
             lastBatchPerGrain = new Dictionary<Guid, int>();
         }
-
-
-
-
-
     }
 }
