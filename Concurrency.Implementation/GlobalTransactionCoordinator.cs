@@ -21,7 +21,7 @@ namespace Concurrency.Implementation
 
         //Timer
         private IDisposable disposable;
-        private readonly int batchIntervalMSecs = 1000;
+        private readonly int batchIntervalMSecs = 5000;
         private TimeSpan waitingTime = TimeSpan.FromSeconds(2);
         private TimeSpan batchInterval; 
 
@@ -141,7 +141,6 @@ namespace Concurrency.Implementation
                 if (nonDeterministicEmitSize[myEmitSeq] == 0)
                 {
                     nonDeterministicEmitSize.Remove(myEmitSeq);
-                    nonDetEmitPromiseMap.Remove(myEmitSeq);
                     nonDetEmitID.Remove(myEmitSeq);
                 }
                 //Console.WriteLine($"Coordinator {myId}: emitted non-det transaction {tid}");
@@ -156,8 +155,9 @@ namespace Concurrency.Implementation
 
         public async Task CheckBackoff(BatchToken token)
         {
-            if(deterministicTransactionRequests.Count == 0 && nonDeterministicEmitSize.Count == 0)
+            if(detEmitPromiseMap.Count == 0 && nonDetEmitPromiseMap.Count == 0)
             {
+                Console.WriteLine($"Coordinator {myId}: backs off,  NO request.");
                 //The coordinator has no transaction request
                 if (token.backoff)
                 {
@@ -176,8 +176,9 @@ namespace Concurrency.Implementation
                 }
             } else
             {
-                //The coordinator has no transaction request
-                if(token.backoff)
+                Console.WriteLine($"Coordinator {myId}: stops backing off.");
+                //The coordinator has  transaction requests
+                if (token.backoff)
                 {
                     token.backoff = false;
                 } else if(token.idleToken)
@@ -191,9 +192,9 @@ namespace Concurrency.Implementation
          */
         public async Task PassToken(BatchToken token)
         {
-            Console.WriteLine($"Coordinator {myId}: receives new token");
-            await EmitTransaction(token);
+            Console.WriteLine($"Coordinator {myId}: receives new token at {DateTime.Now.TimeOfDay.ToString()}");
             await CheckBackoff(token);
+            await EmitTransaction(token);
             neighbour.PassToken(token);
             //Console.WriteLine($"Coordinator {myId} passed token to {this.neighbour.GetPrimaryKey()}.");
         }
@@ -237,6 +238,7 @@ namespace Concurrency.Implementation
                 token.lastTransactionID += nonDeterministicEmitSize[myEmitSequence];
                 this.nonDetEmitSeq++;
                 nonDetEmitPromiseMap[myEmitSequence].SetResult(true);
+                nonDetEmitPromiseMap.Remove(myEmitSequence);
             }
         }
         /**

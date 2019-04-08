@@ -52,11 +52,11 @@ namespace OrleansClient
             //for(int i=0; i<10; i++)
             List<Task> tasks = new List<Task>();
             Thread.Sleep(5000);
-            await test.DoTest(client, 10, true);
-            Thread.Sleep(5000);
-            await test.DoTest(client, 10, false);
-            Thread.Sleep(5000);
-            await test.DoTest(client, 10, true);
+            await test.DoTest(client, 100, true);
+            await test.DoTest(client, 100, false);
+            await test.DoTest(client, 100, true);
+            await test.DoTest(client, 100, false);
+            await test.DoTest(client, 100, true);
 
         }
 
