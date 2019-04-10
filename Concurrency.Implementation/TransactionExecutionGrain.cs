@@ -20,31 +20,30 @@ namespace Concurrency.Implementation
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
         protected String myUserClassName;
-        protected int numCoordinators = 5;
-        protected Random rnd;
-        private IGlobalTransactionCoordinator myCoordinator;
+        //protected Random rnd;
+        private IGlobalTransactionCoordinatorGrain myCoordinator;
         private TransactionScheduler myScheduler;
 
-        public TransactionExecutionGrain(TState state, String myUserClassName){
-            this.state = new HybridState<TState>(state, ConcurrencyType.TIMESTAMP);
+        public TransactionExecutionGrain(String myUserClassName){
+            
             this.myUserClassName = myUserClassName;
         }
 
-        public TransactionExecutionGrain()
-        {
-
-        }
-        public override Task OnActivateAsync()
-        {
-            rnd = new Random();
-            myCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid((UInt32)rnd.Next(0, numCoordinators)));            
-            batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();            
+        public async override Task OnActivateAsync()
+        {            
             myPrimaryKey = this.GetPrimaryKey();
+            var configTuple = await this.GrainFactory.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0)).GetConfiguration(myUserClassName, myPrimaryKey);
+            Console.WriteLine($"Coordinator id = {configTuple.Item2}");
+            myCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(configTuple.Item2));
+            this.state = new HybridState<TState>(configTuple.Item1.nonDetCCConfiguration.nonDetConcurrencyManager);
+            if(configTuple.Item1.logConfiguration.isLoggingEnabled)
+            {
+                log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey, configTuple.Item1.logConfiguration.loggingStorageWrapper);
+            }
+            batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();
             myScheduler = new TransactionScheduler(batchScheduleMap);
-            //Enable the following line for logging
-            //log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey);
             coordinatorMap = new Dictionary<int, Guid>();
-            return base.OnActivateAsync();
+            //return base.OnActivateAsync();
         }
 
 
@@ -258,7 +257,7 @@ namespace Concurrency.Implementation
                     if (log != null && state != null)
                         await log.HandleOnCompleteInDeterministicProtocol(state, bid, batchScheduleMap[bid].globalCoordinator);
 
-                    var coordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(batchScheduleMap[bid].globalCoordinator);
+                    var coordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(batchScheduleMap[bid].globalCoordinator);
                     Task ack = coordinator.AckBatchCompletion(bid, myPrimaryKey);
                 }
                 return ret;

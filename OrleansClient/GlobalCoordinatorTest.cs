@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using AccountTransfer.Grains;
 using System.Reflection;
 using Concurrency.Interface;
+using Concurrency.Interface.Nondeterministic;
 using Utilities;
 using System.Threading;
 
@@ -31,15 +32,12 @@ namespace OrleansClient
         public async Task SpawnCoordinator()
         {
             //Spawn coordinators
-            for (uint i = 0; i < this.numOfCoordinator; i++)
-            {
-                IGlobalTransactionCoordinator coordinator = client.GetGrain<IGlobalTransactionCoordinator>(Utilities.Helper.convertUInt32ToGuid(i));
-                await coordinator.SpawnCoordinator(i, numOfCoordinator);                  
-            }
-            IGlobalTransactionCoordinator coord_0 = client.GetGrain<IGlobalTransactionCoordinator>(Utilities.Helper.convertUInt32ToGuid(0));
-            BatchToken token = new BatchToken(-1, -1);
-            await coord_0.PassToken(token);
 
+            var configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
+            var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(ConcurrencyType.TIMESTAMP));
+            var coordConfig = new CoordinatorGrainConfiguration(1000, 1000, 5);
+            await configGrain.UpdateNewConfiguration(exeConfig);
+            await configGrain.UpdateNewConfiguration(coordConfig);
             //await Task.WhenAll(tasks);
         }
 
