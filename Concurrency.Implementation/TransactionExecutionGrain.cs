@@ -73,6 +73,7 @@ namespace Concurrency.Implementation
             try
             {
                 context = await myCoordinator.NewTransaction();
+                myScheduler.ackBatchCommit(context.highestBatchIdCommitted);
                 functionCallInput.context = context;
                 context.coordinatorKey = this.myPrimaryKey;
                 //Console.WriteLine($"Transaction {context.transactionID}: is started.\n");
@@ -87,7 +88,7 @@ namespace Concurrency.Implementation
                 if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)
                 {
                     Boolean serializable = this.CheckSerializability(context.transactionID, t1.Result).Result;
-                    //canCommit = serializable;
+                    canCommit = serializable;
                     if(canCommit)
                         canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
                 } else
@@ -217,7 +218,8 @@ namespace Concurrency.Implementation
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
             //Console.WriteLine($"\n {this.myPrimaryKey}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}");        
-            batchScheduleMap.Add(schedule.batchID, schedule);            
+            batchScheduleMap.Add(schedule.batchID, schedule);
+            myScheduler.ackBatchCommit(schedule.highestCommittedBatchId);
             myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
             return Task.CompletedTask;
         }

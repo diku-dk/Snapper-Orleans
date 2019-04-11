@@ -231,7 +231,7 @@ namespace Test.GrainTests
         {
             var transferInfo_det = GenerateTransferInformation(numConcurrentTransfers, new Tuple<int, int>(0, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(true, true));
             await TestTransfers(false, transferInfo_det);
-
+            await Task.Delay(TimeSpan.FromSeconds(2));
             var transferInfo_nondet = GenerateTransferInformation(numConcurrentTransfers, new Tuple<int, int>(0, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(false, false));
             await TestTransfers(false, transferInfo_nondet);
         }

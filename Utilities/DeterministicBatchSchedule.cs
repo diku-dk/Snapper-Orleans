@@ -14,6 +14,7 @@ namespace Utilities
         public Guid globalCoordinator;
         public int batchID;
         public int lastBatchID;
+        public int highestCommittedBatchId;
 
         public TaskCompletionSource<Boolean> prevDetBatch;
         public TaskCompletionSource<Boolean> prevNonDetBatch;

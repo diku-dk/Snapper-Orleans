@@ -159,7 +159,35 @@ namespace Concurrency.Implementation
 
         public void ackBatchCommit(int bid)
         {
-            scheduleInfo.removePreviousNodes(bid);
+            bool found = scheduleInfo.nodes.ContainsKey(bid);
+            if(!scheduleInfo.nodes.ContainsKey(bid))
+            {
+                var node = scheduleInfo.tail;
+                while(node.id != -1)
+                {
+                    if(node.isDet == false || node.id > bid)
+                    {
+                        node = node.prev;                        
+                    } else
+                    {
+                        if(node.committed == false)
+                        {
+                            bid = node.id;
+                            found = true;
+                            break;
+                        } else
+                        {
+                            return;
+                        }
+                    }
+                } 
+            }
+            if(!found)
+            {
+                return;
+            }
+            scheduleInfo.nodes[bid].committed = true;
+            scheduleInfo.removePreviousNodes(bid);            
             var schedule = batchScheduleMap[batchScheduleMap[bid].lastBatchID];
             bid = schedule.batchID;
             while(bid != -1 && schedule != null)

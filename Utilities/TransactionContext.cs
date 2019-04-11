@@ -18,6 +18,8 @@ namespace Utilities
 
         public Dictionary<Guid, Tuple<string, int>> grainAccessInformation;
 
+        public int highestBatchIdCommitted;
+
         /*
          * Transaction coordinator sets the batchID and transactionID, which are not allowed to be changed.
          */
@@ -27,6 +29,7 @@ namespace Utilities
             transactionID = tid;
             status = Status.Submitted;
             isDeterministic = true;
+            highestBatchIdCommitted = -1;
         }
 
         public TransactionContext(int tid)
@@ -34,6 +37,7 @@ namespace Utilities
             transactionID = tid;
             status = Status.Submitted;
             isDeterministic = false;
+            highestBatchIdCommitted = -1;
         }
 
         public TransactionContext(Dictionary<Guid, Tuple<string, int>> grainAccessInformation)
@@ -41,6 +45,7 @@ namespace Utilities
             this.grainAccessInformation = grainAccessInformation;
             status = Status.Submitted;
             isDeterministic = true;
+            highestBatchIdCommitted = -1;
         }
 
 

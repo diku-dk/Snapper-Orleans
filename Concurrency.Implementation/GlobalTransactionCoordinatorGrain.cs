@@ -111,6 +111,7 @@ namespace Concurrency.Implementation
                 await emitting.Task;
             }
             Console.WriteLine($"Coordinator {myId}: emitted deterministic transaction {context.transactionID}");
+            context.highestBatchIdCommitted = this.highestCommittedBatchID;
             return context;
         }
 
@@ -125,7 +126,9 @@ namespace Concurrency.Implementation
             {
                 Debug.Assert(tidToAllocate != 0);
                 Console.WriteLine($"Coordinator {myId}: emitted non-det transaction with pre-allocated tid {tidToAllocate}");
-                return new TransactionContext(tidToAllocate++);
+                var ctx = new TransactionContext(tidToAllocate++);
+                ctx.highestBatchIdCommitted = this.highestCommittedBatchID;
+                return ctx;
             }
             TransactionContext context = null;
             try
@@ -161,6 +164,7 @@ namespace Concurrency.Implementation
             {
                 //Console.WriteLine($"Exception :: Coordinator {myId}: receives new non deterministic transaction {e.Message}");
             }
+            context.highestBatchIdCommitted = this.highestCommittedBatchID;
             return context;
         }
 
@@ -358,6 +362,7 @@ namespace Concurrency.Implementation
                 var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);
                 DeterministicBatchSchedule schedule = item.Value;
                 schedule.globalCoordinator = this.myPrimaryKey;
+                schedule.highestCommittedBatchId = this.highestCommittedBatchID;
                 Task emit = dest.ReceiveBatchSchedule(schedule);
             }
             batchGrainClassName.Remove(curBatchID);

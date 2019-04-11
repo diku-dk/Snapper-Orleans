@@ -12,7 +12,7 @@ namespace Concurrency.Implementation
         public Dictionary<int, ScheduleNode> nodes;
         public ScheduleNode tail; //Points to the last node in the doubly-linked list
         public Dictionary<int, NonDeterministicBatchSchedule> nonDetBatchScheduleMap;
-        public Dictionary<int, int> nonDetTxnToScheduleMap;
+        public Dictionary<int, int> nonDetTxnToScheduleMap;        
         
         public ScheduleInfo()
         {
@@ -136,8 +136,8 @@ namespace Concurrency.Implementation
             var result = new HashSet<int>();
             var node = nodes[nonDetTxnToScheduleMap[tid]].prev;
             maxBeforeBid = node.id == -1 ? int.MinValue : node.id;
-            while(node.id != -1)
-            {                
+            while(node.id != -1 && !node.committed)
+            {   
                 if (node.isDet)
                     result.Add(node.id);
 
@@ -245,6 +245,7 @@ namespace Concurrency.Implementation
     {
         public int id;
         public bool isDet = false;
+        public bool committed = false;
         public TaskCompletionSource<Boolean> promise = new TaskCompletionSource<bool>(false);
         //links
         public ScheduleNode prev;
