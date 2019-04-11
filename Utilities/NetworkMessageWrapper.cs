@@ -5,7 +5,9 @@ using System.Text;
 namespace Utilities
 {
     public enum MsgType { WORKLOAD_CONFIG, WORKLOAD_RESULTS };
-    public class NetworkMessageWrapper
+
+    [Serializable]
+    public class NetworkMessageWrapper 
     {
         public MsgType msgType;
         public byte[] contents;

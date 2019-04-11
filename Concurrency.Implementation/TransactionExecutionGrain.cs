@@ -54,7 +54,6 @@ namespace Concurrency.Implementation
          */
         public async Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation, String startFunction, FunctionInput inputs)
         {
-            
             TransactionContext context = await myCoordinator.NewTransaction(grainAccessInformation);
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
@@ -83,10 +82,14 @@ namespace Concurrency.Implementation
                 //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
                 result = new FunctionResult(t1.Result.resultObject);
                 canCommit = !t1.Result.hasException();
-                Boolean sertializable = true;//this.CheckSerailizability(context.transactionID, t1.Result).Result;
-                if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit && sertializable)
+                
+                //canCommit = canCommit & serializable;
+                if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)
                 {
-                    canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
+                    Boolean serializable = this.CheckSerailizability(context.transactionID, t1.Result).Result;
+                    //canCommit = serializable;
+                    if(canCommit)
+                        canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
                 } else
                 {
                     Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);

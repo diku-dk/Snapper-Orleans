@@ -21,6 +21,7 @@
     <ProjectReference Include="..\AccountTransfer.Interfaces\AccountTransfer.Interfaces.csproj" />
     <ProjectReference Include="..\Concurrency.Implementation\Concurrency.Implementation.csproj" />
     <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
+    <ProjectReference Include="..\OrleansClient\OrleansClient.csproj" />
     <ProjectReference Include="..\TPCC.Grains\TPCC.Grains.csproj" />
     <ProjectReference Include="..\TPCC.Interfaces\TPCC.Interfaces.csproj" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />

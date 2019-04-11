@@ -364,7 +364,7 @@ namespace Concurrency.Implementation
                     batchSchedulePerGrain.Remove(bid);
                     batchGrainClassName.Remove(bid);
                     batchStatusMap[bid].SetResult(true);
-                    Console.WriteLine($"\n Coordinator: batch {bid} has been committed.");
+                    //Console.WriteLine($"\n Coordinator: batch {bid} has been committed.");
                 }
             }
      

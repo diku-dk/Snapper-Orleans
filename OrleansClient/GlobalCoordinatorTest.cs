@@ -27,6 +27,7 @@ namespace OrleansClient
         public GlobalCoordinatorTest(IClusterClient client)
         {
             this.client = client;
+            this.numOfCoordinator = 5;
         }
 
         public async Task SpawnCoordinator()
@@ -44,18 +45,12 @@ namespace OrleansClient
         
         public async Task ConcurrentDetTransaction()
         {
-            this.numOfCoordinator = 5;
-            await this.SpawnCoordinator();
+
             TestThroughput test = new TestThroughput(100);
             //for(int i=0; i<10; i++)
             List<Task> tasks = new List<Task>();
-            Thread.Sleep(5000);
-            await test.DoTest(client, 100, true);
-            await test.DoTest(client, 100, false);
-            await test.DoTest(client, 100, true);
-            await test.DoTest(client, 100, false);
-            await test.DoTest(client, 100, true);
-
+            await test.DoTest(client, 1000, false);
+            await test.DoTest(client, 1000, true);
         }
 
     }
