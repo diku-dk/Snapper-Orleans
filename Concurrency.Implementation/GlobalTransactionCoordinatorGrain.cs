@@ -25,7 +25,8 @@ namespace Concurrency.Implementation
         private int backoffTimeIntervalMSecs;
         private int idleIntervalTillBackOffSecs;
         private TimeSpan waitingTime;
-        private TimeSpan batchInterval; 
+        private TimeSpan batchInterval;
+        private float smoothingPreAllocationFactor = 0.5f;
 
         //Batch Schedule
         private Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>> batchSchedulePerGrain;
@@ -47,6 +48,9 @@ namespace Concurrency.Implementation
         Dictionary<int, int> nonDeterministicEmitSize;
         //List buffering the incoming deterministic transaction requests
         Dictionary<int, List<TransactionContext>> deterministicTransactionRequests;
+        private int numTransactionIdsPreAllocated;
+        private int numTransactionIdsReserved;
+        private int tidToAllocate;
 
         //Emitting status
         private Boolean isEmitTimerOn = false;
@@ -72,6 +76,9 @@ namespace Concurrency.Implementation
             this.batchesWaitingForCommit = new SortedSet<int>();
             detEmitSeq = 0;
             nonDetEmitSeq = 0;
+            numTransactionIdsPreAllocated = 0;
+            numTransactionIdsReserved = 0;
+            tidToAllocate = -1;
             detEmitPromiseMap = new Dictionary<int, TaskCompletionSource<bool>>();
             nonDetEmitPromiseMap = new Dictionary<int, TaskCompletionSource<bool>>();
             nonDeterministicEmitSize = new Dictionary<int, int>();
@@ -114,6 +121,12 @@ namespace Concurrency.Implementation
         public async Task<TransactionContext> NewTransaction()
         {
             //Console.WriteLine($"Coordinator {myId}: received non-det transaction");
+            if (numTransactionIdsReserved-- > 0)
+            {
+                Debug.Assert(tidToAllocate != 0);
+                Console.WriteLine($"Coordinator {myId}: emitted non-det transaction with pre-allocated tid {tidToAllocate}");
+                return new TransactionContext(tidToAllocate++);
+            }
             TransactionContext context = null;
             try
             {
@@ -128,7 +141,7 @@ namespace Concurrency.Implementation
                 nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] + 1;
 
                 if (emitting.Task.IsCompleted != true)
-                {
+                {                    
                     await emitting.Task;
                 }
                 int tid = nonDetEmitID[myEmitSeq]++;
@@ -192,14 +205,19 @@ namespace Concurrency.Implementation
                 }
             }
         }
+
         /**
          *Coordinator calls this function to pass token
          */
         public async Task PassToken(BatchToken token)
         {
-            Console.WriteLine($"Coordinator {myId}: receives new token at {DateTime.Now.TimeOfDay.ToString()}");
+            //Console.WriteLine($"Coordinator {myId}: receives new token at {DateTime.Now.TimeOfDay.ToString()}");
+            numTransactionIdsReserved = 0; //Reset the range of pre-allocation
             await CheckBackoff(token);
             await EmitTransaction(token);
+            tidToAllocate = token.lastTransactionID + 1;
+            token.lastTransactionID += numTransactionIdsPreAllocated;
+            Console.WriteLine($"Coordinator {myId} before {tidToAllocate} after {token.lastTransactionID}");
             neighbour.PassToken(token);
             //Console.WriteLine($"Coordinator {myId} passed token to {this.neighbour.GetPrimaryKey()}.");
         }
@@ -238,12 +256,21 @@ namespace Concurrency.Implementation
             if (nonDeterministicEmitSize.ContainsKey(myEmitSequence))
             {
                 //curTransactionID = token.lastTransactionID + 1;
+                //Estimate a pre-allocation size based on moving average
+                var waitingTxns = nonDeterministicEmitSize[myEmitSequence];                
+                numTransactionIdsPreAllocated = (int)(smoothingPreAllocationFactor * (float)waitingTxns + (1 - smoothingPreAllocationFactor) * (float)numTransactionIdsPreAllocated);
+                numTransactionIdsReserved = numTransactionIdsPreAllocated;
+                Console.WriteLine($"Coordinator id {myId} waitingtxns {waitingTxns}, preallocatedTransactions {numTransactionIdsPreAllocated}");
                 Debug.Assert(nonDetEmitID.ContainsKey(myEmitSequence) == false);
                 nonDetEmitID.Add(myEmitSequence, token.lastTransactionID + 1);
                 token.lastTransactionID += nonDeterministicEmitSize[myEmitSequence];
                 this.nonDetEmitSeq++;
                 nonDetEmitPromiseMap[myEmitSequence].SetResult(true);
                 nonDetEmitPromiseMap.Remove(myEmitSequence);
+            } else
+            {
+                numTransactionIdsPreAllocated = 0;
+                numTransactionIdsReserved = 0;
             }
         }
         /**
