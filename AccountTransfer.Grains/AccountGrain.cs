@@ -34,7 +34,7 @@ namespace AccountTransfer.Grains
 
     public class AccountGrain : TransactionExecutionGrain<Balance>, IAccountGrain
     {
-        public AccountGrain() : base (new Balance(), "AccountTransfer.Grains.AccountGrain")
+        public AccountGrain() : base ("AccountTransfer.Grains.AccountGrain")
         {
             ;
         }

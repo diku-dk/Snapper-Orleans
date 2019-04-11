@@ -12,17 +12,18 @@ using System.Threading;
 
 namespace Concurrency.Implementation
 {
-    public class GlobalTransactionCoordinator : Grain, IGlobalTransactionCoordinator
+    public class GlobalTransactionCoordinatoGrain : Grain, IGlobalTransactionCoordinatorGrain
 
     {
         protected Guid myPrimaryKey;
-        private IGlobalTransactionCoordinator neighbour;
-        private List<IGlobalTransactionCoordinator> coordinatorList;
+        private IGlobalTransactionCoordinatorGrain neighbour;
+        private List<IGlobalTransactionCoordinatorGrain> coordinatorList;
 
         //Timer
         private IDisposable disposable;
-        private readonly int batchIntervalMSecs = 5000;
-        private TimeSpan waitingTime = TimeSpan.FromSeconds(2);
+        private int batchIntervalMSecs;
+        private int backoffTimeIntervalMSecs;
+        private TimeSpan waitingTime;
         private TimeSpan batchInterval; 
 
         //Batch Schedule
@@ -56,8 +57,7 @@ namespace Concurrency.Implementation
         private Boolean spawned = false;
 
         public override Task OnActivateAsync()
-        {
-            batchInterval = TimeSpan.FromMilliseconds(batchIntervalMSecs);
+        {            
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             
@@ -68,8 +68,6 @@ namespace Concurrency.Implementation
 
             //Enable the following line for log
             //log = new Simple2PCLoggingProtocol<String>(this.GetType().ToString(), myPrimaryKey);
-            disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
-
             this.batchesWaitingForCommit = new SortedSet<int>();
             detEmitSeq = 0;
             nonDetEmitSeq = 0;
@@ -133,7 +131,7 @@ namespace Concurrency.Implementation
                     await emitting.Task;
                 }
                 int tid = nonDetEmitID[myEmitSeq]++;
-                context = new TransactionContext(tid, myPrimaryKey);
+                context = new TransactionContext(tid);
 
                 //Check if the emitting of the current non-deterministic batch is completed, if so, 
                 //set the token promise and increment the curNondeterministicBatchID.
@@ -162,7 +160,7 @@ namespace Concurrency.Implementation
                 if (token.backoff)
                 {
                     //Block
-                    await Task.Delay(TimeSpan.FromMilliseconds(batchIntervalMSecs / coordinatorList.Count));
+                    await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / coordinatorList.Count));
                 }
                 else if (!token.idleToken)
                 {
@@ -172,7 +170,7 @@ namespace Concurrency.Implementation
                 {
                     //Token traverses full round being idle, enable backoff
                     token.backoff = true;
-                    await Task.Delay(TimeSpan.FromMilliseconds(batchIntervalMSecs / coordinatorList.Count));
+                    await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / coordinatorList.Count));
                 }
             } else
             {
@@ -420,26 +418,32 @@ namespace Concurrency.Implementation
         public Task<HashSet<int>> GetCompleteAfterSet(int tid, Dictionary<int, String> grains)
         {
             return null;
-
-
         }
 
-        public async Task SpawnCoordinator(uint myId, uint numofCoordinators)
+        public async Task SpawnCoordinator(uint myId, uint numofCoordinators, int batchIntervalMSecs, int backoffIntervalMSecs)
         {
             if (this.spawned)
+            {
+                //No updated configuration for now so just ignore repeated spawn calls
+                Console.WriteLine($"Coordinator {myId} receives spawn request but has already been spawned");
                 return;
-            else
+            } else
                 this.spawned = true;
+            
+            waitingTime = TimeSpan.FromMilliseconds(2000);            
+            this.batchIntervalMSecs = batchIntervalMSecs;
+            batchInterval = TimeSpan.FromMilliseconds(batchIntervalMSecs);            
+            this.backoffTimeIntervalMSecs = backoffIntervalMSecs;
+            disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
 
             uint neighbourId = (myId + 1) % numofCoordinators;
-            neighbour = this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid(neighbourId));
-            coordinatorList = new List<IGlobalTransactionCoordinator>();
+            neighbour = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(neighbourId));
+            coordinatorList = new List<IGlobalTransactionCoordinatorGrain>();
             for (uint i = 0; i < numofCoordinators; i++)
             {
                 if (i != myId)
-                    coordinatorList.Add(this.GrainFactory.GetGrain<IGlobalTransactionCoordinator>(Helper.convertUInt32ToGuid(i)));
-            }
-            //The "first" coordinator starts the token passing
+                    coordinatorList.Add(this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(i)));
+            }            
             this.myId = myId;
             this.neighbourId = neighbourId;
             Console.WriteLine($"\n Coordinator {myId}: is initialized, my next neighbour is coordinator {neighbourId}");

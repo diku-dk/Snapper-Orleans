@@ -10,7 +10,7 @@ namespace Concurrency.Interface
     struct Message<T>
     {
     }
-    public interface IGlobalTransactionCoordinator : IGrainWithGuidKey
+    public interface IGlobalTransactionCoordinatorGrain : IGrainWithGuidKey
     {
 
         /// <summary>
@@ -40,7 +40,7 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task PassToken(BatchToken token);
 
-        Task SpawnCoordinator(uint myId, uint numOfCoordinators);
+        Task SpawnCoordinator(uint myId, uint numOfCoordinators, int batchIntervalMSecs, int backOffIntervalMSecs);
 
         [AlwaysInterleave]
         Task NotifyCommit(int bid);

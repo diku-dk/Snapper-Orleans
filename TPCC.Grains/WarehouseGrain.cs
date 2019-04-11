@@ -12,7 +12,7 @@ namespace TPCC.Grains
 {
     public class WarehouseGrain : TransactionExecutionGrain<WarehouseData>, IWarehouseGrain
     {
-        public WarehouseGrain() : base(new WarehouseData(),"TPCC.Grains.WarehouseGrain")
+        public WarehouseGrain() : base("TPCC.Grains.WarehouseGrain")
         {
             ;
         }

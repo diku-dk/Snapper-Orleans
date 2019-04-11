@@ -7,7 +7,7 @@ using Concurrency.Interface;
 using Utilities;
 
 namespace Concurrency.Implementation.Logging
-{
+{    
     class Simple2PCLoggingProtocol<TState> : ILoggingProtocol<TState>
     {
         IKeyValueStorageWrapper logStorage;
@@ -15,13 +15,20 @@ namespace Concurrency.Implementation.Logging
         Guid grainPrimaryKey;
         int sequenceNumber;
 
-        public Simple2PCLoggingProtocol(String grainType, Guid grainPrimaryKey) {
+        public Simple2PCLoggingProtocol(String grainType, Guid grainPrimaryKey, StorageWrapperType storage) {
             this.grainType = grainType;
             this.grainPrimaryKey = grainPrimaryKey;
-            this.sequenceNumber = 0;
-            const string basePath = @"C:\Users\x\orleans-logs\";
-            logStorage = new FileKeyValueStorageWrapper(basePath, grainType, grainPrimaryKey);
-            //logStorage = new DynamoDBStorageWrapper(grainType, grainPrimaryKey);
+            this.sequenceNumber = 0;            
+            switch(storage)
+            {
+                case StorageWrapperType.FILESYSTEM:
+                    const string basePath = @"C:\Users\x\orleans-logs\";
+                    logStorage = new FileKeyValueStorageWrapper(basePath, grainType, grainPrimaryKey);
+                    break;
+                case StorageWrapperType.DYNAMODB:
+                    logStorage = new DynamoDBStorageWrapper(grainType, grainPrimaryKey);
+                    break;
+            }
         }
 
         private int getSequenceNumber()

@@ -5,6 +5,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Orleans;
 using Concurrency.Interface;
 using AccountTransfer.Interfaces;
+using Concurrency.Interface.Nondeterministic;
 using Utilities;
 using Orleans.Core;
 
@@ -15,11 +16,14 @@ namespace Test.GrainTests
     {
         static ClientConfiguration config;
         static IClusterClient client;
+        static IConfigurationManagerGrain configGrain;
         Random rand = new Random();
         static readonly uint numOfCoordinators = 5;
         static readonly int maxAccounts = 100;
+        static readonly int batchIntervalMsecs = 1000;
+        static readonly int backoffIntervalMsecs = 1000;
         readonly int maxTransferAmount = 10;
-        readonly int numSequentialTransfers = 10;
+        readonly int numSequentialTransfers = 100;
         readonly int numConcurrentTransfers = 1000;
 
         [ClassInitialize]
@@ -29,24 +33,13 @@ namespace Test.GrainTests
             {
                 config = new ClientConfiguration();
                 client = await config.StartClientWithRetries();
-                var tasks = new List<Task>();
-                //Spawn coordinators
-                for (uint i = 0; i < numOfCoordinators; i++)
-                {
-                    IGlobalTransactionCoordinator coordinator = client.GetGrain<IGlobalTransactionCoordinator>(Utilities.Helper.convertUInt32ToGuid(i));
-                    tasks.Add(coordinator.SpawnCoordinator(i, numOfCoordinators));
-                }
-                await Task.WhenAll(tasks);
-                IGlobalTransactionCoordinator coord_0 = client.GetGrain<IGlobalTransactionCoordinator>(Utilities.Helper.convertUInt32ToGuid(0));
-                BatchToken token = new BatchToken(-1, -1);
-                await coord_0.PassToken(token);
+                //Spawn Configuration grain
+                configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
+                var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(ConcurrencyType.TIMESTAMP));
+                var coordConfig = new CoordinatorGrainConfiguration(batchIntervalMsecs, backoffIntervalMsecs , numOfCoordinators);
+                await configGrain.UpdateNewConfiguration(exeConfig);
+                await configGrain.UpdateNewConfiguration(coordConfig);
             }
-        }
-
-        [TestInitialize]
-        public async Task bootStrap()
-        {
-           
         }
 
         private List<Tuple<uint, uint, float, bool>> GenerateTransferInformation(int numTuples, Tuple<int, int> fromAccountRange, Tuple<int, int> toAccountRange, Tuple<int, int> transferAmountRange, Tuple<bool, bool> hybridTypeRange)
@@ -172,8 +165,6 @@ namespace Test.GrainTests
             foreach (var aBalanceTaskInfo in balanceTaskInfo)
             {
                 Assert.IsFalse(aBalanceTaskInfo.Item2.Result.hasException());
-                if ((float)aBalanceTaskInfo.Item2.Result.resultObject != accountBalances[aBalanceTaskInfo.Item1])
-                    ;
                 Assert.IsTrue((float)aBalanceTaskInfo.Item2.Result.resultObject == accountBalances[aBalanceTaskInfo.Item1]);
             }
         }

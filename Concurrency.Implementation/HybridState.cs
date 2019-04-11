@@ -15,7 +15,12 @@ namespace Concurrency.Implementation
         private INonDetTransactionalState<TState> nonDetStateManager;
         private TState myState;
 
-        public HybridState(TState state, ConcurrencyType type=ConcurrencyType.TIMESTAMP)
+        public HybridState(ConcurrencyType type=ConcurrencyType.TIMESTAMP) : this(new TState(), type)
+        {
+            ;
+        }
+
+        public HybridState(TState state, ConcurrencyType type = ConcurrencyType.TIMESTAMP)
         {
             this.myState = state;
             detStateManager = new Deterministic.DeterministicTransactionalState<TState>();
@@ -27,7 +32,7 @@ namespace Concurrency.Implementation
                 case ConcurrencyType.TIMESTAMP:
                     nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
                     break;
-            }            
+            }
         }
 
         Task ITransactionalState<TState>.Abort(int tid)
