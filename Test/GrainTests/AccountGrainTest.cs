@@ -19,11 +19,11 @@ namespace Test.GrainTests
         static IConfigurationManagerGrain configGrain;
         Random rand = new Random();
         static readonly uint numOfCoordinators = 5;
-        static readonly int maxAccounts = 10;
+        static readonly int maxAccounts = 100;
         static readonly int batchIntervalMsecs = 1000;
         static readonly int backoffIntervalMsecs = 1000;
         readonly int maxTransferAmount = 10;
-        readonly int numSequentialTransfers = 10;
+        readonly int numSequentialTransfers = 100;
         readonly int numConcurrentTransfers = 1000;
 
         [ClassInitialize]
@@ -35,7 +35,7 @@ namespace Test.GrainTests
                 client = await config.StartClientWithRetries();
                 //Spawn Configuration grain
                 configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
-                var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(ConcurrencyType.S2PL));
+                var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(ConcurrencyType.TIMESTAMP));
                 var coordConfig = new CoordinatorGrainConfiguration(batchIntervalMsecs, backoffIntervalMsecs , numOfCoordinators);
                 await configGrain.UpdateNewConfiguration(exeConfig);
                 await configGrain.UpdateNewConfiguration(coordConfig);

@@ -131,7 +131,7 @@ namespace Concurrency.Implementation
                     await emitting.Task;
                 }
                 int tid = nonDetEmitID[myEmitSeq]++;
-                context = new TransactionContext(tid, myPrimaryKey);
+                context = new TransactionContext(tid);
 
                 //Check if the emitting of the current non-deterministic batch is completed, if so, 
                 //set the token promise and increment the curNondeterministicBatchID.

@@ -29,7 +29,7 @@ namespace Utilities
             isDeterministic = true;
         }
 
-        public TransactionContext(int tid, Guid coordinatorKey)
+        public TransactionContext(int tid)
         {
             transactionID = tid;
             status = Status.Submitted;

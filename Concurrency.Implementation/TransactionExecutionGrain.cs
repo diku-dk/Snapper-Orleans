@@ -83,7 +83,7 @@ namespace Concurrency.Implementation
                 //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
                 result = new FunctionResult(t1.Result.resultObject);
                 canCommit = !t1.Result.hasException();
-                Boolean sertializable = this.CheckSerailizability(context.transactionID, t1.Result).Result;
+                Boolean sertializable = true;//this.CheckSerailizability(context.transactionID, t1.Result).Result;
                 if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit && sertializable)
                 {
                     canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
@@ -235,9 +235,7 @@ namespace Concurrency.Implementation
                 catch(Exception e)
                 {
                     Console.WriteLine($"\n Exception::InvokeFunction: {e.Message.ToString()}");
-                }
-                if(!invokeRet.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey))
-                    invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
+                }                
 
                 //Update before set and after set
                 int tid = call.funcInput.context.transactionID;
