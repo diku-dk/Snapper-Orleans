@@ -157,7 +157,7 @@ namespace Concurrency.Implementation
         {
             if(detEmitPromiseMap.Count == 0 && nonDetEmitPromiseMap.Count == 0)
             {
-                Console.WriteLine($"Coordinator {myId}: backs off,  NO request.");
+                //Console.WriteLine($"Coordinator {myId}: backs off,  NO request.");
                 //The coordinator has no transaction request
                 if (token.backoff)
                 {
@@ -176,7 +176,7 @@ namespace Concurrency.Implementation
                 }
             } else
             {
-                Console.WriteLine($"Coordinator {myId}: stops backing off.");
+                //Console.WriteLine($"Coordinator {myId}: stops backing off.");
                 //The coordinator has  transaction requests
                 if (token.backoff)
                 {
@@ -192,7 +192,7 @@ namespace Concurrency.Implementation
          */
         public async Task PassToken(BatchToken token)
         {
-            Console.WriteLine($"Coordinator {myId}: receives new token at {DateTime.Now.TimeOfDay.ToString()}");
+            //Console.WriteLine($"Coordinator {myId}: receives new token at {DateTime.Now.TimeOfDay.ToString()}");
             await CheckBackoff(token);
             await EmitTransaction(token);
             neighbour.PassToken(token);
@@ -366,7 +366,7 @@ namespace Concurrency.Implementation
                     batchSchedulePerGrain.Remove(bid);
                     batchGrainClassName.Remove(bid);
                     batchStatusMap[bid].SetResult(true);
-                    Console.WriteLine($"\n Coordinator: batch {bid} has been committed.");
+                    //Console.WriteLine($"\n Coordinator: batch {bid} has been committed.");
                 }
             }
      

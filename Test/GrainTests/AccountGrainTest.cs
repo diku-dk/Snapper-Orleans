@@ -17,7 +17,7 @@ namespace Test.GrainTests
         static IClusterClient client;
         Random rand = new Random();
         static readonly uint numOfCoordinators = 5;
-        static readonly int maxAccounts = 10;
+        static readonly int maxAccounts = 100;
         readonly int maxTransferAmount = 10;
         readonly int numSequentialTransfers = 10;
         readonly int numConcurrentTransfers = 1000;
@@ -172,8 +172,9 @@ namespace Test.GrainTests
             foreach (var aBalanceTaskInfo in balanceTaskInfo)
             {
                 Assert.IsFalse(aBalanceTaskInfo.Item2.Result.hasException());
+                if ((float)aBalanceTaskInfo.Item2.Result.resultObject != accountBalances[aBalanceTaskInfo.Item1])
+                    ;
                 Assert.IsTrue((float)aBalanceTaskInfo.Item2.Result.resultObject == accountBalances[aBalanceTaskInfo.Item1]);
-                accountBalances[aBalanceTaskInfo.Item1] = (float)aBalanceTaskInfo.Item2.Result.resultObject;
             }
         }
         
@@ -235,20 +236,20 @@ namespace Test.GrainTests
         [TestMethod]
         public async Task TestDetThenNonDetConcurrentTransfer()
         {
-            var transferInfo_det = GenerateTransferInformation(numSequentialTransfers, new Tuple<int, int>(0, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(true, true));
+            var transferInfo_det = GenerateTransferInformation(numConcurrentTransfers, new Tuple<int, int>(0, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(true, true));
             await TestTransfers(false, transferInfo_det);
 
-            var transferInfo_nondet = GenerateTransferInformation(numSequentialTransfers, new Tuple<int, int>(0, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(false, false));
+            var transferInfo_nondet = GenerateTransferInformation(numConcurrentTransfers, new Tuple<int, int>(0, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(false, false));
             await TestTransfers(false, transferInfo_nondet);
         }
 
         [TestMethod]
         public async Task TestNonDetThenDetConcurrentTransfer()
         {
-            var transferInfo_nondet = GenerateTransferInformation(numSequentialTransfers, new Tuple<int, int>(0, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(false, false));
+            var transferInfo_nondet = GenerateTransferInformation(numConcurrentTransfers, new Tuple<int, int>(0, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(false, false));
             await TestTransfers(false, transferInfo_nondet);
 
-            var transferInfo_det = GenerateTransferInformation(numSequentialTransfers, new Tuple<int, int>(0, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(true, true));
+            var transferInfo_det = GenerateTransferInformation(numConcurrentTransfers, new Tuple<int, int>(0, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(true, true));
             await TestTransfers(false, transferInfo_det);
         }
     }

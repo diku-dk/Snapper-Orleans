@@ -151,6 +151,7 @@ namespace OrleansClient
         {
 
             var Test = new GlobalCoordinatorTest(client);
+            await Test.SpawnCoordinator();
             await Test.ConcurrentDetTransaction();
         }
 
