@@ -55,18 +55,27 @@ namespace Test.SystemTests
             }
             TransactionContext ctx4 = new TransactionContext(1);
             var task4 = state.ReadWrite(ctx4);
-            
             Assert.IsFalse(task4.IsCompleted);
             Assert.IsTrue(task1.Result.value == task2.Result.value && task1.Result.value == 100000);
-            state.Commit(ctx1.transactionID);
+            TransactionContext ctx5 = new TransactionContext(0);
+            var task5 = state.ReadWrite(ctx5);
+            await state.Commit(ctx1.transactionID);
             Assert.IsFalse(task4.IsCompleted);
-            state.Abort(ctx2.transactionID);
+            await state.Abort(ctx2.transactionID);
+            Assert.IsFalse(task5.IsCompleted);
+            await state.Abort(ctx3.transactionID);
             await task4;
-            Assert.IsTrue(task4.IsCompleted);
-            task4.Result.value += 100;            
-            state.Abort(ctx3.transactionID);
-            state.Commit(ctx4.transactionID);
-
+            Assert.IsTrue(task4.IsCompleted);            
+            var state1 = await task4;
+            state1.value += 100;            
+            await state.Commit(ctx4.transactionID);
+            var state2 = await task5;
+            Assert.IsTrue(task5.IsCompleted);
+            state2.value += 100;
+            await state.Commit(ctx5.transactionID);
+            var ctx7 = new TransactionContext(6);
+            var task7 = state.Read(ctx7);
+            Assert.IsTrue(task7.Result.value == 100200);
 
             //Test serializability of read write in presence of other read writes or reads
 

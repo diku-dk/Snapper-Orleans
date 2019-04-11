@@ -1,4 +1,5 @@
 ﻿using Concurrency.Interface.Nondeterministic;
+using Concurrency.Interface;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -34,7 +35,7 @@ namespace Concurrency.Implementation.Nondeterministic
             readDependencyMap = new Dictionary<int, int>();
 
         }
-        public Task<TState> ReadWrite(TransactionContext ctx, TState committedState)
+        public Task<TState> ReadWrite(TransactionContext ctx, CommittedState<TState> committedState)
         {
             
             int rts, wts, depTid;
@@ -56,7 +57,7 @@ namespace Concurrency.Implementation.Nondeterministic
             }
             else
             {
-                state = committedState;
+                state = committedState.GetState();
                 rts = readTs;
                 wts = writeTs;
                 depTid = commitTransactionId;
@@ -86,7 +87,7 @@ namespace Concurrency.Implementation.Nondeterministic
             return Task.FromResult<TState>(copy);
         }
 
-        public Task<TState> Read(TransactionContext ctx, TState committedState)
+        public Task<TState> Read(TransactionContext ctx, CommittedState<TState> committedState)
         {
             //If there is a readwrite() from the same transaction before this read operation
             if (transactionMap.ContainsKey(ctx.transactionID) == true)
@@ -111,7 +112,7 @@ namespace Concurrency.Implementation.Nondeterministic
                 if (readDependencyMap[ctx.transactionID] != this.commitTransactionId)
                     throw new DeadlockAvoidanceException($"Txn {ctx.transactionID} is aborted to avoid reading inconsistent committed states");
             }
-            return Task.FromResult<TState>(committedState);
+            return Task.FromResult<TState>(committedState.GetState());
         }
 
         public async Task<bool> Prepare(int tid)
@@ -172,13 +173,13 @@ namespace Concurrency.Implementation.Nondeterministic
             return this.transactionMap[tid].data.state;
         }
 
-        public Optional<TState> Commit(int tid)
+        public void Commit(int tid, CommittedState<TState> committedState)
         {
             //Commit read-only transactions
             if (readDependencyMap.ContainsKey(tid))
             {
                 readDependencyMap.Remove(tid);
-                return null;
+                return;
             }
 
             //Commit read-write transactions
@@ -188,14 +189,13 @@ namespace Concurrency.Implementation.Nondeterministic
             node.data.ExecutionPromise.SetResult(true);
             
             //Update commit information
-            this.commitTransactionId = tid;
-            var commitedState = node.data.state;
+            this.commitTransactionId = tid;            
             this.readTs = node.data.rts;
             this.writeTs = node.data.wts;
 
             //Clean the transaction list
-            CleanUp(node);      
-            return new Optional<TState>(node.data.state);
+            CleanUp(node);
+            committedState.SetState(node.data.state);
         }
 
         public void Abort(int tid)

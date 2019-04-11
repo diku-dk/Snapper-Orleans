@@ -1,4 +1,5 @@
 ﻿using Concurrency.Interface.Nondeterministic;
+using Concurrency.Interface;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -65,7 +66,7 @@ namespace Concurrency.Implementation.Nondeterministic
             return activeState;
         }
 
-        public async Task<TState> Read(TransactionContext ctx, TState committedState)
+        public async Task<TState> Read(TransactionContext ctx, CommittedState<TState> committedState)
         {
             var tid = ctx.transactionID;
             if(writeLockTaken)
@@ -82,7 +83,7 @@ namespace Concurrency.Implementation.Nondeterministic
                         readers.Add(tid);
                         //Wait for writer
                         await readSemaphore.WaitAsync();                        
-                        return committedState;
+                        return committedState.GetState();
                     } else
                     {
                         throw new DeadlockAvoidanceException($"Reader txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
@@ -96,13 +97,17 @@ namespace Concurrency.Implementation.Nondeterministic
                     //First reader downs the semaphore if there are no writers waiting
                     await writeSemaphore.WaitAsync(); //This should not block but is used to block subsequent writers                    
                 }                                
-                return committedState;
+                return committedState.GetState();
             }
         }
 
-        public async Task<TState> ReadWrite(TransactionContext ctx, TState committedState)
+        public async Task<TState> ReadWrite(TransactionContext ctx, CommittedState<TState> committedState)
         {
             var tid = ctx.transactionID;
+            if(tid == 1)
+            {
+                ;
+            }
             if (writeLockTaken)
             {
                 if (writeLockTakenByTid == tid)
@@ -119,7 +124,7 @@ namespace Concurrency.Implementation.Nondeterministic
                         await writeSemaphore.WaitAsync();                        
                         writeLockTaken = true;
                         writeLockTakenByTid = tid;
-                        activeState = (TState)committedState.Clone();
+                        activeState = (TState)committedState.GetState().Clone();
                     }
                     else
                     {
@@ -159,7 +164,7 @@ namespace Concurrency.Implementation.Nondeterministic
                         throw new DeadlockAvoidanceException($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {readers.Max} that holds the read lock");
                     }
                 }
-                activeState = (TState)committedState.Clone();
+                activeState = (TState)committedState.GetState().Clone();
             }
             return activeState;
         }
@@ -204,12 +209,12 @@ namespace Concurrency.Implementation.Nondeterministic
             }
         }
 
-        public Optional<TState> Commit(int tid)
+        public void Commit(int tid, CommittedState<TState> committedState)
         {            
             var reader = readers.Contains(tid);
-            CleanUpAndSignal(tid);            
-            var result = reader ? null : new Optional<TState>(activeState);
-            return result;
+            if(!reader)
+                committedState.SetState(activeState);
+            CleanUpAndSignal(tid);      
         }
 
         public void Abort(int tid)

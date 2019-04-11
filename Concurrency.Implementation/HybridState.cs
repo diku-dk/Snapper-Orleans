@@ -13,7 +13,7 @@ namespace Concurrency.Implementation
     {        
         private IDetTransactionalState<TState> detStateManager;
         private INonDetTransactionalState<TState> nonDetStateManager;
-        private TState myState;
+        private CommittedState<TState> myState;
 
         public HybridState(ConcurrencyType type=ConcurrencyType.TIMESTAMP) : this(new TState(), type)
         {
@@ -22,7 +22,7 @@ namespace Concurrency.Implementation
 
         public HybridState(TState state, ConcurrencyType type = ConcurrencyType.TIMESTAMP)
         {
-            this.myState = state;
+            this.myState = new CommittedState<TState>(state);
             detStateManager = new Deterministic.DeterministicTransactionalState<TState>();
             switch (type)
             {
@@ -51,12 +51,7 @@ namespace Concurrency.Implementation
         {
             try
             {
-                var result = nonDetStateManager.Commit(tid);
-                if (result != null && result.isSet())
-                {
-                    //Update state from write transaction
-                    myState = result.getValue();
-                }
+                nonDetStateManager.Commit(tid, myState);                
             }
             catch (Exception e)
             {
@@ -67,7 +62,7 @@ namespace Concurrency.Implementation
 
         TState ITransactionalState<TState>.GetCommittedState(int bid)
         {
-            return myState;
+            return myState.GetState();
         }
 
         TState ITransactionalState<TState>.GetPreparedState(int tid)
@@ -84,7 +79,7 @@ namespace Concurrency.Implementation
         {
             if (ctx.isDeterministic)
             {
-                return detStateManager.Read(ctx, myState);
+                return detStateManager.Read(ctx, myState.GetState());
             }
             else
             {
@@ -97,7 +92,7 @@ namespace Concurrency.Implementation
         {
             if (ctx.isDeterministic)
             {
-                return detStateManager.ReadWrite(ctx, myState);
+                return detStateManager.ReadWrite(ctx, myState.GetState());
             }
             else
             {
