@@ -36,7 +36,7 @@ namespace OrleansClient
 
             var configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
             var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(ConcurrencyType.TIMESTAMP));
-            var coordConfig = new CoordinatorGrainConfiguration(1000, 1000, 5);
+            var coordConfig = new CoordinatorGrainConfiguration(1000, 1000, 10, 5);
             await configGrain.UpdateNewConfiguration(exeConfig);
             await configGrain.UpdateNewConfiguration(coordConfig);
             //await Task.WhenAll(tasks);

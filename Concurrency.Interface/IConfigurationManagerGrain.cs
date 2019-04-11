@@ -51,12 +51,14 @@ namespace Concurrency.Interface
     {
         public int batchIntervalMSecs;
         public int backoffIntervalMSecs;
+        public int idleIntervalTillBackOffSecs;
         public uint numCoordinators;
 
-        public CoordinatorGrainConfiguration(int batchIntervalMSecs, int backoffIntervalMSecs, uint numCoordinators)
+        public CoordinatorGrainConfiguration(int batchIntervalMSecs, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs, uint numCoordinators)
         {
             this.batchIntervalMSecs = batchIntervalMSecs;
             this.backoffIntervalMSecs = backoffIntervalMSecs;
+            this.idleIntervalTillBackOffSecs = idleIntervalTillBackOffSecs;
             this.numCoordinators = numCoordinators;
         }
     }

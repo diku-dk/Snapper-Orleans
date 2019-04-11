@@ -43,7 +43,7 @@ namespace Concurrency.Implementation
 
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(CoordinatorGrainConfiguration config)
         {
-            if (config == null)
+            if (config == null || coordinatorGrainGlobalConfig != null)
                 return;
 
             if (coordinatorGrainGlobalConfig == null)
@@ -54,7 +54,7 @@ namespace Concurrency.Implementation
                 for(uint i=0;i<config.numCoordinators;i++)
                 {
                     var grain = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(i));
-                    tasks.Add(grain.SpawnCoordinator(i, config.numCoordinators, config.batchIntervalMSecs, config.backoffIntervalMSecs));
+                    tasks.Add(grain.SpawnCoordinator(i, config.numCoordinators, config.batchIntervalMSecs, config.backoffIntervalMSecs, config.idleIntervalTillBackOffSecs));
                 }
                 await Task.WhenAll(tasks);
                 //Inject token to coordinator 0
@@ -70,7 +70,7 @@ namespace Concurrency.Implementation
 
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(ExecutionGrainConfiguration config)
         {
-            if(config == null)
+            if(config == null || executionGrainGlobalConfig != null)
             {
                 return;
             }
@@ -78,10 +78,6 @@ namespace Concurrency.Implementation
             if (this.executionGrainGlobalConfig == null)
             {
                 this.executionGrainGlobalConfig = config;
-            }
-            else
-            {
-                throw new NotImplementedException("Cannot support multiple execution grain configuration for now");
             }
         }
 

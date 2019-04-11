@@ -23,6 +23,7 @@ namespace Concurrency.Implementation
         private IDisposable disposable;
         private int batchIntervalMSecs;
         private int backoffTimeIntervalMSecs;
+        private int idleIntervalTillBackOffSecs;
         private TimeSpan waitingTime;
         private TimeSpan batchInterval; 
 
@@ -102,7 +103,7 @@ namespace Concurrency.Implementation
             {
                 await emitting.Task;
             }
-            //Console.WriteLine($"Coordinator {myId}: emitted deterministic transaction {context.transactionID}");
+            Console.WriteLine($"Coordinator {myId}: emitted deterministic transaction {context.transactionID}");
             return context;
         }
 
@@ -145,7 +146,7 @@ namespace Concurrency.Implementation
                 
             } catch (Exception e)
             {
-                Console.WriteLine($"Exception :: Coordinator {myId}: receives new non deterministic transaction {e.Message}");
+                //Console.WriteLine($"Exception :: Coordinator {myId}: receives new non deterministic transaction {e.Message}");
             }
             return context;
         }
@@ -166,11 +167,17 @@ namespace Concurrency.Implementation
                 {
                     token.idleToken = true;
                     token.markedIdleByCoordinator = myPrimaryKey;
-                } else if(token.markedIdleByCoordinator == myPrimaryKey)
-                {
-                    //Token traverses full round being idle, enable backoff
-                    token.backoff = true;
-                    await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / coordinatorList.Count));
+                    var curTime = DateTime.Now;
+                    token.backOffProbeStartTime = curTime.Hour * 3600 + curTime.Minute * 60 + curTime.Second;
+                } else if(token.markedIdleByCoordinator == myPrimaryKey)                {
+                    var curTime = DateTime.Now;
+                    var curTimeInSecs = curTime.Hour * 3600 + curTime.Minute * 60 + curTime.Second;                    
+                    if(curTimeInSecs - token.backOffProbeStartTime > this.idleIntervalTillBackOffSecs)
+                    {
+                        //Token traverses full round being idle, enable backoff
+                        token.backoff = true;
+                        await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / coordinatorList.Count));
+                    }                        
                 }
             } else
             {
@@ -190,7 +197,7 @@ namespace Concurrency.Implementation
          */
         public async Task PassToken(BatchToken token)
         {
-            //Console.WriteLine($"Coordinator {myId}: receives new token at {DateTime.Now.TimeOfDay.ToString()}");
+            Console.WriteLine($"Coordinator {myId}: receives new token at {DateTime.Now.TimeOfDay.ToString()}");
             await CheckBackoff(token);
             await EmitTransaction(token);
             neighbour.PassToken(token);
@@ -420,7 +427,7 @@ namespace Concurrency.Implementation
             return null;
         }
 
-        public async Task SpawnCoordinator(uint myId, uint numofCoordinators, int batchIntervalMSecs, int backoffIntervalMSecs)
+        public async Task SpawnCoordinator(uint myId, uint numofCoordinators, int batchIntervalMSecs, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs)
         {
             if (this.spawned)
             {
@@ -432,6 +439,11 @@ namespace Concurrency.Implementation
             
             waitingTime = TimeSpan.FromMilliseconds(2000);            
             this.batchIntervalMSecs = batchIntervalMSecs;
+            if(idleIntervalTillBackOffSecs > 3600 )
+            {
+                throw new Exception("Too high value for back off probing -> cannot exceed an 1 hour");
+            }
+            this.idleIntervalTillBackOffSecs = idleIntervalTillBackOffSecs;
             batchInterval = TimeSpan.FromMilliseconds(batchIntervalMSecs);            
             this.backoffTimeIntervalMSecs = backoffIntervalMSecs;
             disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);

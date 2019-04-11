@@ -40,7 +40,7 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task PassToken(BatchToken token);
 
-        Task SpawnCoordinator(uint myId, uint numOfCoordinators, int batchIntervalMSecs, int backOffIntervalMSecs);
+        Task SpawnCoordinator(uint myId, uint numOfCoordinators, int batchIntervalMSecs, int backOffIntervalMSecs, int idleIntervalTillBackOffSecs);
 
         [AlwaysInterleave]
         Task NotifyCommit(int bid);

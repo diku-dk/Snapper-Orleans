@@ -14,6 +14,7 @@ namespace Utilities
         public bool idleToken;
         public bool backoff;
         public Guid markedIdleByCoordinator;
+        public int backOffProbeStartTime;
 
 
         public BatchToken(int bid, int tid)

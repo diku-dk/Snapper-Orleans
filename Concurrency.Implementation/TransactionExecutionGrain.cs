@@ -86,7 +86,7 @@ namespace Concurrency.Implementation
                 //canCommit = canCommit & serializable;
                 if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)
                 {
-                    Boolean serializable = this.CheckSerailizability(context.transactionID, t1.Result).Result;
+                    Boolean serializable = this.CheckSerializability(context.transactionID, t1.Result).Result;
                     //canCommit = serializable;
                     if(canCommit)
                         canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
@@ -146,7 +146,7 @@ namespace Concurrency.Implementation
             return canCommit;
         }
 
-        public async Task<Boolean> CheckSerailizability(int tid, FunctionResult result)
+        public async Task<Boolean> CheckSerializability(int tid, FunctionResult result)
         {
             Boolean serializable = true;
             if (result.beforeSet.Count == 0)
