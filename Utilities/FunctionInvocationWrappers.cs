@@ -37,6 +37,8 @@ namespace Utilities
         public int maxBeforeBid;
         public int minAfterBid;
         public Boolean isBeforeAfterConsecutive = false;
+        public Boolean readOnly = false;
+        public Tuple<Guid, String> grainWithHighestBeforeBid; 
 
         public FunctionResult(Object resultObject, FunctionResult r)
         {

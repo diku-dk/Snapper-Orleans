@@ -109,7 +109,7 @@ namespace AccountTransfer.Grains
             FunctionCall c = new FunctionCall(typeof(AccountGrain), "Deposit", input_1);
 
             FunctionResult result = new FunctionResult();
-            FunctionResult ret = await Withdraw(input_1);                        
+            FunctionResult ret = await Withdraw(input_1);
             result.mergeWithFunctionResult(ret);                        
             //Console.WriteLine($"\n\n ATm transfer from : {input.sourceAccount} to {input.destinationAccount}. \n\n");
             ret = await toAccount.Execute(c);

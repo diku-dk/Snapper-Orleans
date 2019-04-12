@@ -24,6 +24,14 @@ namespace Concurrency.Implementation
             scheduleInfo = new ScheduleInfo();
         }
 
+        public async Task waitForBatchCommit(int batchId)
+        {
+            if(scheduleInfo.nodes.ContainsKey(batchId))
+            {
+                await scheduleInfo.nodes[batchId].commitmentPromise.Task;
+            }
+        }
+
         public async void RegisterDeterministicBatchSchedule(int batchID) 
         {
             var schedule = batchScheduleMap[batchID];
@@ -108,7 +116,7 @@ namespace Concurrency.Implementation
         //For nonDeterninistic Transactions
         public async Task waitForTurn(int tid)
         {
-            await scheduleInfo.InsertNonDetTransaction(tid).promise.Task;
+            await scheduleInfo.InsertNonDetTransaction(tid).executionPromise.Task;
         }
 
         //For deterministic transaction
@@ -170,7 +178,7 @@ namespace Concurrency.Implementation
                         node = node.prev;                        
                     } else
                     {
-                        if(node.committed == false)
+                        if(node.commitmentPromise.Task.IsCompleted == false)
                         {
                             bid = node.id;
                             found = true;
@@ -186,7 +194,7 @@ namespace Concurrency.Implementation
             {
                 return;
             }
-            scheduleInfo.nodes[bid].committed = true;
+            scheduleInfo.nodes[bid].commitmentPromise.SetResult(true);
             scheduleInfo.removePreviousNodes(bid);            
             var schedule = batchScheduleMap[batchScheduleMap[bid].lastBatchID];
             bid = schedule.batchID;

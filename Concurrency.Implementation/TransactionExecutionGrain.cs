@@ -60,6 +60,7 @@ namespace Concurrency.Implementation
             Task<FunctionResult> t1 = this.Execute(c1);
             Task t2 = myCoordinator.checkBatchCompletion(context);
             await Task.WhenAll(t1, t2);
+            myScheduler.ackBatchCommit(context.batchID);
             //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
             return t1.Result;
         }
@@ -110,6 +111,10 @@ namespace Concurrency.Implementation
             {
                 Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: transaction {startFunction} {context.transactionID} exception {e.Message}");
             }
+            if(t1.Result.beforeSet.Count != 0)
+            {
+                await myScheduler.waitForBatchCommit(t1.Result.maxBeforeBid);
+            }            
             return result;
         }
 

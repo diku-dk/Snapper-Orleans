@@ -20,7 +20,7 @@ namespace Concurrency.Implementation
             ScheduleNode node = new ScheduleNode(-1, true);
             nonDetBatchScheduleMap = new Dictionary<int, NonDeterministicBatchSchedule>();
             nonDetTxnToScheduleMap = new Dictionary<int, int>();
-            node.promise.SetResult(true);
+            node.executionPromise.SetResult(true);
             tail = node;
             nodes.Add(-1, node);
         }
@@ -44,9 +44,9 @@ namespace Concurrency.Implementation
             } else
             {
                 //Join the non-det tail, replace the promise
-                if(tail.promise.Task.IsCompleted)
+                if(tail.executionPromise.Task.IsCompleted)
                 {
-                    tail.promise = new TaskCompletionSource<bool>();
+                    tail.executionPromise = new TaskCompletionSource<bool>();
                 }
             }
             nonDetBatchScheduleMap[tail.id].AddTransaction(tid);
@@ -79,7 +79,7 @@ namespace Concurrency.Implementation
                 {
                     //There could only be one non-det node between prevNode and the inserted Node
                     Debug.Assert(prevNode.next.isDet == false);
-                    if (prevNode.next.promise.Task.IsCompleted){
+                    if (prevNode.next.executionPromise.Task.IsCompleted){
                         nodes.Remove(prevNode.next.id);
                         prevNode.next = node;
                         node.prev = prevNode;
@@ -95,9 +95,9 @@ namespace Concurrency.Implementation
                     ScheduleNode toConnect = prevNode.next;
                     while(toConnect != null)
                     {
-                        if (toConnect.isDet || toConnect.promise.Task.IsCompleted)
+                        if (toConnect.isDet || toConnect.executionPromise.Task.IsCompleted)
                         {
-                            Debug.Assert(!(toConnect.isDet == false && toConnect.promise.Task.IsCompleted == false && toConnect.next != null));
+                            Debug.Assert(!(toConnect.isDet == false && toConnect.executionPromise.Task.IsCompleted == false && toConnect.next != null));
                             nodes.Remove(toConnect.id);
                         }
                         else
@@ -128,7 +128,7 @@ namespace Concurrency.Implementation
         public TaskCompletionSource<Boolean> getDependingPromise(int id)
         {
             Debug.Assert(nodes[id].prev != null);
-            return nodes[id].prev.promise;
+            return nodes[id].prev.executionPromise;
         }
 
         public HashSet<int> getBeforeSet(int tid, out int maxBeforeBid)
@@ -136,7 +136,7 @@ namespace Concurrency.Implementation
             var result = new HashSet<int>();
             var node = nodes[nonDetTxnToScheduleMap[tid]].prev;
             maxBeforeBid = node.id == -1 ? int.MinValue : node.id;
-            while(node.id != -1 && !node.committed)
+            while(node.id != -1 && !node.commitmentPromise.Task.IsCompleted)
             {   
                 if (node.isDet)
                     result.Add(node.id);
@@ -181,7 +181,7 @@ namespace Concurrency.Implementation
 
         public void completeDeterministicBatch(int id)
         {
-            nodes[id].promise.SetResult(true);            
+            nodes[id].executionPromise.SetResult(true);            
         }
 
         public void removePreviousNodes(int scheduleId)
@@ -233,7 +233,7 @@ namespace Concurrency.Implementation
             if(schedule.RemoveTransaction(tid))
             {
                 //Schedule node is completed
-                nodes[scheduleId].promise.SetResult(true);
+                nodes[scheduleId].executionPromise.SetResult(true);
                 //Only deterministic batches trigger garbage collection
                 //removePreviousScheduleNode(scheduleId);
                 //nonDetBatchScheduleMap.Remove(scheduleId);                
@@ -245,8 +245,8 @@ namespace Concurrency.Implementation
     {
         public int id;
         public bool isDet = false;
-        public bool committed = false;
-        public TaskCompletionSource<Boolean> promise = new TaskCompletionSource<bool>(false);
+        public TaskCompletionSource<Boolean> commitmentPromise = new TaskCompletionSource<bool>(false);
+        public TaskCompletionSource<Boolean> executionPromise = new TaskCompletionSource<bool>(false);
         //links
         public ScheduleNode prev;
         public ScheduleNode next;
