@@ -182,7 +182,7 @@ namespace Concurrency.Implementation
                     }
                 } 
             }
-            if(!found)
+            if(!found || bid == -1)
             {
                 return;
             }

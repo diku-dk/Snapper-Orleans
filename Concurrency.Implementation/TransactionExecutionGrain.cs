@@ -33,7 +33,7 @@ namespace Concurrency.Implementation
         {            
             myPrimaryKey = this.GetPrimaryKey();
             var configTuple = await this.GrainFactory.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0)).GetConfiguration(myUserClassName, myPrimaryKey);
-            Console.WriteLine($"Coordinator id = {configTuple.Item2}");
+            //Console.WriteLine($"Coordinator id = {configTuple.Item2}");
             myCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(configTuple.Item2));
             this.state = new HybridState<TState>(configTuple.Item1.nonDetCCConfiguration.nonDetConcurrencyManager);
             if(configTuple.Item1.logConfiguration.isLoggingEnabled)
