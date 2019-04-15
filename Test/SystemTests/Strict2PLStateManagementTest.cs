@@ -102,7 +102,7 @@ namespace Test.SystemTests
 
 
         [TestMethod]
-        public async Task InterleavedWrites()
+        public async Task InterleavedWriters()
         {
             int numConcurrentWrites = 10000;
             int numAborts = 1000;            

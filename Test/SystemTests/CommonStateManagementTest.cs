@@ -67,10 +67,10 @@ namespace Test.SystemTests
             foreach(var aType in concurrencyControlMethodsToTest)
             {
                 var state = createState(aType);
-                //Test different modes R->RW->R-RW->RW->R->...
+                //Test different modes RW->R-RW->RW->R->...
                 TransactionContext ctx = new TransactionContext(1, 1, Helper.convertUInt32ToGuid(0));
                 ctx.isDeterministic = false;
-                var task = state.Read(ctx);
+                var task = state.ReadWrite(ctx);
                 Assert.IsTrue(task.IsCompleted);
                 task = state.Read(ctx);
                 Assert.IsTrue(task.IsCompleted);
