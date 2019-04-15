@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -67,18 +68,25 @@ namespace Utilities
             this.exception |= r.exception;
             foreach (var entry in r.grainsInNestedFunctions)
                 this.grainsInNestedFunctions.Add(entry.Key,entry.Value);
-            this.beforeSet.UnionWith(r.beforeSet);
-            this.afterSet.UnionWith(r.afterSet);
-            maxBeforeBid = (this.maxBeforeBid < r.maxBeforeBid) ? r.maxBeforeBid : this.maxBeforeBid;
-            minAfterBid = (this.minAfterBid > r.minAfterBid) ? r.minAfterBid : this.minAfterBid;
-            isBeforeAfterConsecutive &= r.isBeforeAfterConsecutive;
+            Debug.Assert(this.beforeSet.Count == 0 && this.afterSet.Count == 0);
+            this.beforeSet = r.beforeSet;
+            this.afterSet = r.afterSet;
+            this.maxBeforeBid = r.maxBeforeBid;
+            this.minAfterBid = r.minAfterBid;
+            this.grainWithHighestBeforeBid = this.grainWithHighestBeforeBid;
+            isBeforeAfterConsecutive = r.isBeforeAfterConsecutive;
         }
 
-        public void setSchedulingStatistics(int before, int after, Boolean b)
+        public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, Boolean consecutive, Tuple<Guid, string>  tuple)
         {
-            this.maxBeforeBid = before;
-            this.minAfterBid = after;
-            this.isBeforeAfterConsecutive = b;
+
+            if(this.maxBeforeBid < maxBeforeBid)
+            {
+                this.maxBeforeBid = maxBeforeBid;
+                grainWithHighestBeforeBid = tuple;
+            }
+            minAfterBid = (this.minAfterBid > minAfterBid) ? minAfterBid : this.minAfterBid;
+            isBeforeAfterConsecutive &= consecutive;
         }
 
         public void setResult(Object result)

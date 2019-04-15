@@ -60,7 +60,8 @@ namespace Concurrency.Implementation
             Task<FunctionResult> t1 = this.Execute(c1);
             Task t2 = myCoordinator.checkBatchCompletion(context);
             await Task.WhenAll(t1, t2);
-            myScheduler.ackBatchCommit(context.batchID);
+            if(context.transactionID == batchScheduleMap[context.batchID].getLastTransaction())
+                myScheduler.ackBatchCommit(context.batchID);
             //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
             return t1.Result;
         }
@@ -113,7 +114,10 @@ namespace Concurrency.Implementation
             }
             if(t1.Result.beforeSet.Count != 0)
             {
-                await myScheduler.waitForBatchCommit(t1.Result.maxBeforeBid);
+                if (t1.Result.grainWithHighestBeforeBid.Item1 == myPrimaryKey && t1.Result.grainWithHighestBeforeBid.Item2.Equals(this.myUserClassName))
+                    await this.WaitForBatchCommit(t1.Result.maxBeforeBid);
+                else
+                    await this.GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);
             }            
             return result;
         }
@@ -224,7 +228,6 @@ namespace Concurrency.Implementation
         {
             //Console.WriteLine($"\n {this.myPrimaryKey}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}");        
             batchScheduleMap.Add(schedule.batchID, schedule);
-            myScheduler.ackBatchCommit(schedule.highestCommittedBatchId);
             myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
             return Task.CompletedTask;
         }
@@ -276,18 +279,24 @@ namespace Concurrency.Implementation
         //Update the metadata of the execution results, including accessed grains, before/after set, etc.
         public void updateExecutionResult(int tid, FunctionResult invokeRet)
         {
+            if (invokeRet.grainWithHighestBeforeBid == null)
+                invokeRet.grainWithHighestBeforeBid = new Tuple<Guid, string>(this.myPrimaryKey, this.myUserClassName);
+
             int maxBeforeBid, minAfterBid;
             bool isBeforeAfterConsecutive = false;
 
             if (!invokeRet.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey))
                 invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
-            invokeRet.beforeSet.UnionWith(myScheduler.getBeforeSet(tid, out maxBeforeBid));
-            invokeRet.afterSet.UnionWith(myScheduler.getAfterSet(tid, out minAfterBid));
+
+            var beforeSet = myScheduler.getBeforeSet(tid, out maxBeforeBid);
+            var afterSet = myScheduler.getAfterSet(tid, out minAfterBid);
+            invokeRet.beforeSet.UnionWith(beforeSet);
+            invokeRet.afterSet.UnionWith(afterSet);
             if (maxBeforeBid == int.MinValue || minAfterBid == int.MaxValue)
                 isBeforeAfterConsecutive = false;
             else if (batchScheduleMap[minAfterBid].lastBatchID == maxBeforeBid)
                 isBeforeAfterConsecutive = true;
-            invokeRet.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive);
+            invokeRet.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive, new Tuple<Guid, string>(this.myPrimaryKey, this.myUserClassName));
         }
 
         public async Task<FunctionResult> InvokeFunction(FunctionCall call)
@@ -358,6 +367,11 @@ namespace Concurrency.Implementation
             if (log != null)            
                 await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
             return prepareResult;
+        }
+
+        public async Task WaitForBatchCommit(int bid)
+        {
+            await myScheduler.waitForBatchCommit(bid);
         }
     }
 }

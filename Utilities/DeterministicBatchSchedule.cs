@@ -57,6 +57,16 @@ namespace Utilities
 
         }
 
+        public int getLastTransaction()
+        {
+            if (transactionList == null)
+                throw new ArgumentException("TRansactionLIst in Deterministic batch schedule must not be null.");
+            else if (transactionList.Count == 0)
+                throw new ArgumentException("TRansactionLIst in Deterministic batch schedule must not be empty.");
+            else
+                return transactionList[transactionList.Count - 1];
+        }
+
         /**
          * Apply the transaction execution
          */

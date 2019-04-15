@@ -43,5 +43,8 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task Abort(int tid);
 
+        [AlwaysInterleave]
+        Task WaitForBatchCommit(int bid);
+
     }
 }

@@ -26,7 +26,8 @@ namespace Concurrency.Implementation
 
         public async Task waitForBatchCommit(int batchId)
         {
-            if(scheduleInfo.nodes.ContainsKey(batchId))
+            
+            if (scheduleInfo.nodes.ContainsKey(batchId))
             {
                 await scheduleInfo.nodes[batchId].commitmentPromise.Task;
             }
@@ -165,8 +166,11 @@ namespace Concurrency.Implementation
             scheduleInfo.completeTransaction(tid);
         }
 
+
         public void ackBatchCommit(int bid)
         {
+            //When called by the coordinator of a non-det transaction, batch $bid may not access this grain.
+
             bool found = scheduleInfo.nodes.ContainsKey(bid);
             if(!scheduleInfo.nodes.ContainsKey(bid))
             {
@@ -198,7 +202,7 @@ namespace Concurrency.Implementation
             scheduleInfo.removePreviousNodes(bid);            
             var schedule = batchScheduleMap[batchScheduleMap[bid].lastBatchID];
             bid = schedule.batchID;
-            while(bid != -1 && schedule != null)
+            while(bid != -1 && schedule != null && batchScheduleMap.ContainsKey(bid))
             {                
                 inBatchTransactionCompletionMap.Remove(bid);
                 batchScheduleMap.Remove(bid);
