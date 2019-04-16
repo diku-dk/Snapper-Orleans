@@ -13,7 +13,7 @@ using System.Net;
 
 namespace ExperimentProcess
 {
-    class ClientConfiguration
+    public class ClientConfiguration
     {
         private IClusterClient client;
         private static readonly int maxAttempts = 10;
