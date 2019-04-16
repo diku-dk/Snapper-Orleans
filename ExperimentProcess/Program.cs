@@ -7,6 +7,8 @@ using Utilities;
 using Orleans;
 using OrleansClient;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using Concurrency.Interface;
 
 namespace ExperimentProcess
 {
@@ -15,10 +17,13 @@ namespace ExperimentProcess
         static WorkloadResults res;
         static Boolean LocalCluster = true;
         static IClusterClient[] clients;
+        static String sinkAddress = ">tcp://localhost:5558";
+        static String conductorAddress = ">tcp://localhost:5575";
 
-        private static async void ThreadWorkAsync(object obj)
+
+        private static async void ThreadWorkAsync(Object obj)
         {
-            int threadIdx = (int) obj;
+            ThreadWorkload workload = (ThreadWorkload) obj;
             ClientConfiguration config = new ClientConfiguration();
             IClusterClient client = null;
             if (LocalCluster)
@@ -26,64 +31,137 @@ namespace ExperimentProcess
             else
                 client = await config.StartClientWithRetriesToCluster();
 
-            await DoClientWork(client);
+            Stopwatch localWatch = new Stopwatch();
+            localWatch.Start();
+            Stopwatch globalWatch = new Stopwatch();
+            int numCommit = 0;
+
+            ITransactionExecutionGrain[] startGrains = new ITransactionExecutionGrain[workload.transactions.Count];
+            long[] latencies = new long[workload.transactions.Count];
+            int index = 0;
+            foreach (var transaction in workload.transactions)
+            {
+                String grainName = transaction.Item1;
+                var startGrainId = transaction.Item2;
+                startGrains[index++] = client.GetGrain<ITransactionExecutionGrain>(startGrainId, grainName);
+            }
+
+            index = 0;
+            globalWatch.Start();
+            foreach (var transaction in workload.transactions)
+            {
+                String grainName = transaction.Item1;
+                var startGrainId = transaction.Item2;
+                var functionName = transaction.Item3;
+                var functionInputs = transaction.Item4;
+                var isDeterministic = transaction.Item5;
+                var accessInformation = transaction.Item6;
+
+                Task<FunctionResult> task;
+                localWatch.Restart();
+                if (isDeterministic)
+                {
+                    task = startGrains[index].StartTransaction(accessInformation, functionName, functionInputs);
+                }
+                else
+                {
+                    task = startGrains[index].StartTransaction(functionName, functionInputs);
+                }
+                await task;
+                localWatch.Stop();
+                if (task.Result.hasException() == true)
+                {
+                    numCommit++;
+                    var latency = localWatch.ElapsedMilliseconds;
+                    latencies[index] = latency;
+                }
+                else
+                    latencies[index] = -1;
+                index++;
+            }
+            globalWatch.Stop();
+            var totalLatency = globalWatch.ElapsedMilliseconds;
+
+            long min = long.MaxValue;
+            long max = long.MinValue;
+            long average = 0;
+            foreach( var latency in latencies){
+                if(latency != -1)
+                {
+                    min = min > latency ? latency : min;
+                    max = max < latency ? latency : max;
+                    average += latency;
+                }
+            }
+            average /= numCommit;
+            float throughput = (float)numCommit / ((float)totalLatency / (float)1000);
+
+            WorkloadResults res = new WorkloadResults(workload.transactions.Count, numCommit, min, max, average, throughput);
+            var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_RESULTS);
+            msg.contents = Helper.serializeToByteArray<WorkloadResults>(res);
+            using (var sink = new PushSocket(sinkAddress))
+            {
+                sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
+            }
         }
 
-        static async Task DoClientWork(IClusterClient client)
-        {
-            var Test = new GlobalCoordinatorTest(client);
-            await Test.ConcurrentDetTransaction();
-        }
+
 
         static void ProcessWork()
         {
-            // Task Worker
-            // Connects PULL socket to tcp://localhost:5557
-            // collects workload for socket from Ventilator via that socket
-            // Connects PUSH socket to tcp://localhost:5558
-            // Sends results to Sink via that socket
             Console.WriteLine("====== WORKER ======");
-
-            using (var receiver = new PullSocket(">tcp://localhost:5575"))
-            using (var sink = new PushSocket(">tcp://localhost:5558"))
+            using (var conductor = new PullSocket(conductorAddress))
             {
-                //process tasks forever
                 while (true)
                 {
-                    //workload from the vetilator is a simple delay
-                    //to simulate some work being done, see
-                    //Ventilator.csproj Proram.cs for the workload sent
-                    //In real life some more meaningful work would be done
-                    var workloadMsg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(receiver.ReceiveFrameBytes());
+                    var workloadMsg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(conductor.ReceiveFrameBytes());
                     //Parse the workloadMsg
                     Debug.Assert(workloadMsg.msgType == Utilities.MsgType.WORKLOAD_CONFIG);
                     var workload = Helper.deserializeFromByteArray<WorkloadConfiguration>(workloadMsg.contents);
-                    clients = new IClusterClient[workload.numThreadsPerWorkerNodes];
+                    var numOfThreads = workload.numThreadsPerWorkerNodes;
+                    clients = new IClusterClient[numOfThreads];
                     //Spawn Threads
-                    Thread[] threads = new Thread[workload.numThreadsPerWorkerNodes];
+                    Thread[] threads = new Thread[numOfThreads];
                     for(int i=0; i<workload.numThreadsPerWorkerNodes;i++)
                     {
-                        //var thread = new Thread(() => ThreadWorkAsync(i));
                         Thread thread = new Thread(ThreadWorkAsync);
                         threads[i] = thread;
-                        thread.Start(i);                        
+                        thread.Start(new ThreadWorkload());                        
                     }
-
                     foreach (var thread in threads)
                     {
                         thread.Join();
                     }
-
-                    var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_RESULTS);
-                    msg.contents = Helper.serializeToByteArray<WorkloadResults>(res);
-                    //sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
                 }
             }
         }
 
+        public class ThreadWorkload
+        {
+            //Tuple<GrainName, Grain ID, Function Name, Function Inputs, isDeterministic, Access Information>
+            public List<Tuple<String, Guid, String, FunctionInput, Boolean, Dictionary<Guid, Tuple<String, int>>>> transactions;
+          
+            public ThreadWorkload(WorkloadConfiguration config)
+            {
+                transactions = new List<Tuple<string, Guid, string, FunctionInput, bool, Dictionary<Guid, Tuple<string, int>>>>();
+                int numOfTransactions = config.totalTransactions / (config.numWorkerNodes * config.numThreadsPerWorkerNodes);
+
+                for(int i=0; i< numOfTransactions; i++)
+                {
+                    ;
+                }
+
+            }
+            public ThreadWorkload()
+            {
+                transactions = new List<Tuple<string, Guid, string, FunctionInput, bool, Dictionary<Guid, Tuple<string, int>>>>();
+            }
+        }
+        
+
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            Console.WriteLine("Worker is Started...");
             ProcessWork();
         }
     }

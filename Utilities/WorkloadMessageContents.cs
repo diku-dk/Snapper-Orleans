@@ -23,13 +23,9 @@ namespace Utilities
         public long minLatency;
         public long maxLatency;
         public long averageLatency;
-        public int throughput;
+        public float throughput;
 
-        public WorkloadResults()
-        {
-        }
-
-        public WorkloadResults(int numTxns, int numSuccessFulTxns, long minLatency, long maxLatency, long averageLatency, int throughput)
+        public WorkloadResults(int numTxns, int numSuccessFulTxns, long minLatency, long maxLatency, long averageLatency, float throughput)
         {
             this.numTxns = numTxns;
             this.numSuccessFulTxns = numSuccessFulTxns;

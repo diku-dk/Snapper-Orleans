@@ -4,6 +4,10 @@ using NetMQ;
 using System.Diagnostics;
 using Utilities;
 using System.Threading;
+using Orleans;
+using ExperimentProcess;
+using Concurrency.Interface;
+using Concurrency.Interface.Nondeterministic;
 
 namespace ExperimentConductor
 {
@@ -13,6 +17,21 @@ namespace ExperimentConductor
         static String sinkAddress = ">tcp://localhost:5558";
         static int numOfWorkers = 1; 
         static int numOfThreadsPerWorker = 2;
+        Random rand = new Random();
+        static readonly uint numOfCoordinators = 5;
+        static readonly int maxAccounts = 100;
+        static readonly int batchIntervalMsecs = 1000;
+        static readonly int backoffIntervalMsecs = 1000;
+        static readonly int idleIntervalTillBackOffSecs = 10;
+        readonly int maxTransferAmount = 10;
+        readonly int numSequentialTransfers = 10;
+        readonly int numConcurrentTransfers = 1000;
+        static readonly int maxNonDetWaitingLatencyInMs = 1000;
+        static readonly ConcurrencyType nonDetCCType = ConcurrencyType.S2PL;
+
+        static IClusterClient client;
+        static Boolean LocalCluster = true;
+        static IConfigurationManagerGrain configGrain;
 
         static void PushToWorkers(Object obj) {
             // Task Ventilator
@@ -54,10 +73,31 @@ namespace ExperimentConductor
                         //Parse the workloadResult
                         Debug.Assert(resultMsg.msgType == Utilities.MsgType.WORKLOAD_RESULTS);
                         results[taskNumber] = Helper.deserializeFromByteArray<WorkloadResults>(resultMsg.contents);
+                        var res = results[taskNumber];
+                        Console.WriteLine($"{res.numSuccessFulTxns} of {res.numTxns} transactions are committed. Latency: {res.averageLatency}. Throughput: {res.throughput}.\n");
                     }
                     //Calculate and report the results
                 }
                 Console.WriteLine("====== SINK ======");
+            }
+        }
+
+        private static async void SpawnConfigurationCoordinator()
+        {
+            //Spawn the configuration grain
+            if(configGrain == null)
+            {
+                ClientConfiguration config = new ClientConfiguration();
+                IClusterClient client = null;
+                if (LocalCluster)
+                    client = await config.StartClientWithRetries();
+                else
+                    client = await config.StartClientWithRetriesToCluster();
+                configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
+                var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMs);
+                var coordConfig = new CoordinatorGrainConfiguration(batchIntervalMsecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numOfCoordinators);
+                await configGrain.UpdateNewConfiguration(exeConfig);
+                await configGrain.UpdateNewConfiguration(coordConfig);
             }
         }
 
@@ -73,13 +113,19 @@ namespace ExperimentConductor
             var workLoad = new WorkloadConfiguration();
             workLoad.numWorkerNodes = numOfWorkers;
             workLoad.numThreadsPerWorkerNodes = numOfThreadsPerWorker;
-            workLoad.totalTransactions = numOfWorkers * numOfThreadsPerWorker;
+            workLoad.totalTransactions = numOfWorkers * numOfThreadsPerWorker * 10;
 
+            //Spawn the configuration coordinator
+            Thread spawnThread = new Thread(SpawnConfigurationCoordinator);
+            spawnThread.Start();
+            spawnThread.Join();
+
+            
             Thread conducterThread = new Thread(PushToWorkers);
             conducterThread.Start(workLoad);
 
             Thread sinkThread = new Thread(PullFromWorkers);
-            conducterThread.Start();
+            sinkThread.Start();
 
             conducterThread.Join();
             sinkThread.Join();
