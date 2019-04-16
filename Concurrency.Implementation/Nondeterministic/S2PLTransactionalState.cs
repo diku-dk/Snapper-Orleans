@@ -20,6 +20,7 @@ namespace Concurrency.Implementation.Nondeterministic
         private SemaphoreSlim readSemaphore;
         private SortedSet<int> readers;
         private SortedSet<int> writers;
+        private SortedSet<int> aborters;
 
         public S2PLTransactionalState()
         {
@@ -29,6 +30,7 @@ namespace Concurrency.Implementation.Nondeterministic
             readSemaphore = new SemaphoreSlim(1);
             readers = new SortedSet<int>();
             writers = new SortedSet<int>();
+            aborters = new SortedSet<int>();
         }
 
         private async Task<TState> AccessState(int tid, TState committedState)
@@ -51,7 +53,8 @@ namespace Concurrency.Implementation.Nondeterministic
                     }
                     else
                     {
-                        //abort the transaction                        
+                        //abort the transaction
+                        aborters.Add(tid);
                         throw new DeadlockAvoidanceException($"Txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the lock");                        
                     }
                 }
@@ -69,8 +72,12 @@ namespace Concurrency.Implementation.Nondeterministic
         public async Task<TState> Read(TransactionContext ctx, CommittedState<TState> committedState)
         {
             var tid = ctx.transactionID;
-            if(writeLockTaken)
+            if(aborters.Contains(tid))
             {
+                throw new Exception($"{tid} has aborted, should go to abort phase");
+            }
+            if(writeLockTaken)
+            {                
                 if(writeLockTakenByTid == tid)
                 {
                     //No lock downgrade, just return the active copy
@@ -86,13 +93,15 @@ namespace Concurrency.Implementation.Nondeterministic
                         return committedState.GetState();
                     } else
                     {
+                        aborters.Add(tid);
                         throw new DeadlockAvoidanceException($"Reader txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
                     }                 
                 }
             } else
             {
                 readers.Add(tid);
-                if (readers.Count == 1 && writers.Count == 0)
+                Debug.Assert(writers.Count == 0);
+                if (readers.Count == 1)
                 {
                     //First reader downs the semaphore if there are no writers waiting
                     await writeSemaphore.WaitAsync(); //This should not block but is used to block subsequent writers                    
@@ -104,9 +113,14 @@ namespace Concurrency.Implementation.Nondeterministic
         public async Task<TState> ReadWrite(TransactionContext ctx, CommittedState<TState> committedState)
         {
             var tid = ctx.transactionID;
-            if(tid == 1)
+            if (aborters.Contains(tid))
             {
-                ;
+                throw new Exception($"{tid} has aborted, should go to abort phase");
+            }
+            else if (readers.Contains(tid))
+            {
+                aborters.Add(tid);
+                throw new NotImplementedException($"{tid} requests lock upgrade. Not supported in S2PL protocol.");
             }
             if (writeLockTaken)
             {
@@ -129,25 +143,19 @@ namespace Concurrency.Implementation.Nondeterministic
                     else
                     {
                         //abort the transaction                        
+                        aborters.Add(tid);
                         throw new DeadlockAvoidanceException($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
                     }
                 }
             }
             else
-            {
+            {                
                 //Check for readers
                 if(readers.Count == 0)
                 {
                     writers.Add(tid);
                     await writeSemaphore.WaitAsync(); // This should never block but required to make subsequent writers block
                     await readSemaphore.WaitAsync(); //This should never block but required to make subsequent readers block                    
-                    writeLockTaken = true;
-                    writeLockTakenByTid = tid;
-                } else if (readers.Count == 1 && readers.Contains(tid))
-                {
-                    //Upgrade myself to a write lock
-                    readers.Remove(tid);
-                    writers.Add(tid);
                     writeLockTaken = true;
                     writeLockTakenByTid = tid;
                 } else
@@ -161,6 +169,7 @@ namespace Concurrency.Implementation.Nondeterministic
                         writeLockTakenByTid = tid;                        
                     } else
                     {
+                        aborters.Add(tid);
                         throw new DeadlockAvoidanceException($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {readers.Max} that holds the read lock");
                     }
                 }
@@ -171,13 +180,33 @@ namespace Concurrency.Implementation.Nondeterministic
                 
         public Task<bool> Prepare(int tid)
         {            
-            Debug.Assert((readers.Contains(tid) && !writers.Contains(tid))|| (!readers.Contains(tid) && writers.Contains(tid)));
-            return Task.FromResult((writeLockTaken && writeLockTakenByTid == tid && writers.Contains(tid)) || readers.Contains(tid));            
+            if(aborters.Contains(tid))
+            {
+                Debug.Assert(!writers.Contains(tid) && !readers.Contains(tid));
+                return Task.FromResult(false);
+            } else if(writeLockTaken && writeLockTakenByTid == tid && writers.Contains(tid))
+            {
+                Debug.Assert(!readers.Contains(tid));
+                return Task.FromResult(true);
+            } else if(readers.Contains(tid))
+            {
+                Debug.Assert(!writers.Contains(tid));
+                return Task.FromResult(true);
+            } else
+            {
+                //This code path must not be triggered
+                Debug.Assert(false);
+                return Task.FromResult(false);
+            }
         }
 
         private void CleanUpAndSignal(int tid)
         {
-            if (writeLockTaken && writeLockTakenByTid == tid)
+            if(aborters.Contains(tid))
+            {
+                aborters.Remove(tid);
+            }
+            else if (writeLockTaken && writeLockTakenByTid == tid && writers.Contains(tid))
             {
                 writeLockTaken = false;
                 writeLockTakenByTid = -1;
@@ -206,6 +235,9 @@ namespace Concurrency.Implementation.Nondeterministic
                     writeSemaphore.Release();
                     //Console.WriteLine($"reader releases sem, readers count = {readers.Count}, write sem value = {result}");
                 }
+            } else
+            {
+                Debug.Assert(false);
             }
         }
 
