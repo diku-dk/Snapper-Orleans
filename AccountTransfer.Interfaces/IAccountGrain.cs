@@ -41,7 +41,6 @@ namespace AccountTransfer.Interfaces
         Task<FunctionResult> Deposit(FunctionInput fin);
         Task<FunctionResult> Transfer(FunctionInput fin);
         Task<FunctionResult> TransferOneToMulti(FunctionInput fin);
-
         Task<int> ActivateGrain();
     }
 }
