@@ -24,9 +24,10 @@ namespace Test.GrainTests
         static readonly int backoffIntervalMsecs = 1000;
         static readonly int idleIntervalTillBackOffSecs = 10;
         readonly int maxTransferAmount = 10;
-        readonly int numSequentialTransfers = 100;
+        readonly int numSequentialTransfers = 10;
         readonly int numConcurrentTransfers = 1000;
-        static readonly ConcurrencyType nonDetCCType = ConcurrencyType.TIMESTAMP;
+        static readonly int maxNonDetWaitingLatencyInMs = 1000;
+        static readonly ConcurrencyType nonDetCCType = ConcurrencyType.S2PL;
 
         [ClassInitialize]
         public static async Task ClassInitialize(TestContext context)
@@ -37,7 +38,7 @@ namespace Test.GrainTests
                 client = await config.StartClientWithRetries();
                 //Spawn Configuration grain
                 configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
-                var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType));
+                var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMs);
                 var coordConfig = new CoordinatorGrainConfiguration(batchIntervalMsecs, backoffIntervalMsecs , idleIntervalTillBackOffSecs, numOfCoordinators);
                 await configGrain.UpdateNewConfiguration(exeConfig);
                 await configGrain.UpdateNewConfiguration(coordConfig);

@@ -32,9 +32,10 @@ namespace Concurrency.Implementation
         private Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>> batchSchedulePerGrain;
         private Dictionary<int, Dictionary<Guid, String>> batchGrainClassName;
         private SortedSet<int> batchesWaitingForCommit;
-       
+
 
         //Maintains the status of batch processing
+        private Dictionary<int, int> lastBatchIDMap;
         private Dictionary<int, TaskCompletionSource<Boolean>> batchStatusMap;
         private int highestCommittedBatchID = -1;
 
@@ -65,7 +66,7 @@ namespace Concurrency.Implementation
         {            
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
-            
+            lastBatchIDMap = new Dictionary<int, int>();
             //actorLastBatch = new Dictionary<IDTransactionGrain, int>();
             expectedAcksPerBatch = new Dictionary<int, int>();
             batchStatusMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
@@ -289,7 +290,6 @@ namespace Concurrency.Implementation
             //Return if there is no deterministic transactions waiting for emit
             if (shouldEmit == false)
                 return;
-
             this.detEmitSeq++;
             int curBatchID = token.lastTransactionID + 1;
 
@@ -297,14 +297,12 @@ namespace Concurrency.Implementation
             {
                 context.batchID = curBatchID;
                 context.transactionID = ++token.lastTransactionID;
-
                 //update batch schedule
                 if (batchSchedulePerGrain.ContainsKey(context.batchID) == false)
                 {
                     batchSchedulePerGrain.Add(context.batchID, new Dictionary<Guid, DeterministicBatchSchedule>());
                     batchGrainClassName.Add(context.batchID, new Dictionary<Guid, String>());
                 }
-
                 //update the schedule for each grain accessed by this transaction
                 Dictionary<Guid, DeterministicBatchSchedule> grainSchedule = batchSchedulePerGrain[context.batchID];
                 foreach (var item in context.grainAccessInformation)
@@ -313,7 +311,6 @@ namespace Concurrency.Implementation
                     if (grainSchedule.ContainsKey(item.Key) == false)
                         grainSchedule.Add(item.Key, new DeterministicBatchSchedule(context.batchID));
                     grainSchedule[item.Key].AddNewTransaction(context.transactionID, item.Value.Item2);
-
                 }
                 context.grainAccessInformation.Clear();
             }
@@ -329,9 +326,11 @@ namespace Concurrency.Implementation
                     schedule.lastBatchID = token.lastBatchPerGrain[grain];
                 else
                     schedule.lastBatchID = -1;
+                schedule.globalCoordinator = this.myPrimaryKey;
                 Debug.Assert(schedule.batchID > schedule.lastBatchID);
                 token.lastBatchPerGrain[grain] = schedule.batchID;
             }
+            this.lastBatchIDMap.Add(curBatchID, token.lastBatchID);
             token.lastBatchID = curBatchID;
             //garbage collection
             if(this.highestCommittedBatchID > token.highestCommittedBatchID)
@@ -384,10 +383,12 @@ namespace Concurrency.Implementation
                 expectedAcksPerBatch[bid]--;
                 if (expectedAcksPerBatch[bid] == 0)
                 {
-                    if(this.highestCommittedBatchID == bid - 1)
+                    Debug.Assert(lastBatchIDMap.ContainsKey(bid));
+                    if(lastBatchIDMap[bid] == highestCommittedBatchID)
                     {
                         //commit
                         this.highestCommittedBatchID = bid;
+                        CleanUp(bid);
                         if (log != null)
                             await log.HandleOnCommitInDeterministicProtocol(bid);
                         await BroadcastCommit();
@@ -397,28 +398,35 @@ namespace Concurrency.Implementation
                         //Put this batch into a list waiting for commit
                         this.batchesWaitingForCommit.Add(bid);
                     }
-                    if (bid == 0 && expectedAcksPerBatch[bid] == 0)
-                        ;
-                    expectedAcksPerBatch.Remove(bid);
-                    batchSchedulePerGrain.Remove(bid);
-                    batchGrainClassName.Remove(bid);
-                    batchStatusMap[bid].SetResult(true);
-                    //Console.WriteLine($"\n Coordinator: batch {bid} has been committed.");
+                    
                 }
             }
      
         }
 
-        public async Task<bool> checkBatchCompletion(TransactionContext context)
+        public void CleanUp(int bid)
         {
-            if (batchStatusMap.ContainsKey(context.batchID) == false)
+            expectedAcksPerBatch.Remove(bid);
+            batchSchedulePerGrain.Remove(bid);
+            batchGrainClassName.Remove(bid);
+            lastBatchIDMap.Remove(bid);
+            batchStatusMap[bid].SetResult(true);
+            //Console.WriteLine($"\n Coordinator {this.myId}: batch {bid} has been committed, my highest committed batch id is {this.highestCommittedBatchID}");
+        }
+
+        public async Task<bool> checkBatchCompletion(int bid)
+        {
+            if (bid <= this.highestCommittedBatchID)
+                return true;
+
+            if (batchStatusMap.ContainsKey(bid) == false)
             {
-                batchStatusMap.Add(context.batchID, new TaskCompletionSource<bool>());
+                batchStatusMap.Add(bid, new TaskCompletionSource<bool>());
             }
 
-            if (batchStatusMap[context.batchID].Task.IsCompleted == false)
-                await batchStatusMap[context.batchID].Task;
-            batchStatusMap.Remove(context.batchID);
+            if (batchStatusMap[bid].Task.IsCompleted == false)
+                await batchStatusMap[bid].Task;
+            batchStatusMap.Remove(bid);
             return true;
         }
 
@@ -437,11 +445,14 @@ namespace Concurrency.Implementation
             if (bid > this.highestCommittedBatchID)
                 this.highestCommittedBatchID = bid;
             Boolean commitOccur = false;
-            while (this.batchesWaitingForCommit.Count != 0 && batchesWaitingForCommit.Min == highestCommittedBatchID + 1)
+            
+            while (this.batchesWaitingForCommit.Count != 0 && lastBatchIDMap[batchesWaitingForCommit.Min] == highestCommittedBatchID)
             {
                 //commit
-                this.highestCommittedBatchID++;
-                batchesWaitingForCommit.Remove(batchesWaitingForCommit.Min);
+                var commitBid = batchesWaitingForCommit.Min;
+                this.highestCommittedBatchID = commitBid;
+                CleanUp(commitBid);
+                batchesWaitingForCommit.Remove(commitBid);
                 commitOccur = true;
             }
             

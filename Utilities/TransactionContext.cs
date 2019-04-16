@@ -30,6 +30,7 @@ namespace Utilities
             status = Status.Submitted;
             isDeterministic = true;
             highestBatchIdCommitted = -1;
+            this.coordinatorKey = coordinatorKey;
         }
 
         public TransactionContext(int tid)

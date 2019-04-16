@@ -15,7 +15,8 @@ namespace Concurrency.Implementation
     public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain where TState : ICloneable, new()
     {   
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;        
-        private Dictionary<int, Guid> coordinatorMap;                
+        private Dictionary<int, Guid> coordinatorMap;
+        
         protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
@@ -41,8 +42,9 @@ namespace Concurrency.Implementation
                 log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey, configTuple.Item1.logConfiguration.loggingStorageWrapper);
             }
             batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();
-            myScheduler = new TransactionScheduler(batchScheduleMap);
+            myScheduler = new TransactionScheduler(batchScheduleMap, configTuple.Item1.maxNonDetWaitingLatencyInMs, this.GrainFactory);
             coordinatorMap = new Dictionary<int, Guid>();
+            
             //return base.OnActivateAsync();
         }
 
@@ -58,10 +60,8 @@ namespace Concurrency.Implementation
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
             Task<FunctionResult> t1 = this.Execute(c1);
-            Task t2 = myCoordinator.checkBatchCompletion(context);
+            Task t2 = myCoordinator.checkBatchCompletion(context.batchID);
             await Task.WhenAll(t1, t2);
-            if(context.transactionID == batchScheduleMap[context.batchID].getLastTransaction())
-                myScheduler.ackBatchCommit(context.batchID);
             //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
             return t1.Result;
         }
@@ -112,13 +112,15 @@ namespace Concurrency.Implementation
             {
                 Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: transaction {startFunction} {context.transactionID} exception {e.Message}");
             }
+
             if(t1.Result.beforeSet.Count != 0)
             {
                 if (t1.Result.grainWithHighestBeforeBid.Item1 == myPrimaryKey && t1.Result.grainWithHighestBeforeBid.Item2.Equals(this.myUserClassName))
                     await this.WaitForBatchCommit(t1.Result.maxBeforeBid);
                 else
                     await this.GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);
-            }            
+            }
+            //Console.WriteLine($"Transaction {context.transactionID}: Returned result to client.\n");
             return result;
         }
 
@@ -183,12 +185,18 @@ namespace Concurrency.Implementation
                 {
                     //Go to GC for complete after set;
                     //HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(tid, null);
-                    serializable = false;
+                    serializable = true;
                 }
             }
             return serializable;
 
         }
+
+        public async Task WaitForBatchCommit(int bid)
+        {
+            await myScheduler.waitForBatchCommit(bid);
+        }
+
 
         public async Task Commit_2PC(int tid, FunctionResult result)
         {
@@ -202,7 +210,7 @@ namespace Concurrency.Implementation
                 commitTasks.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(tid));
             }
             await Task.WhenAll(commitTasks);
-            //Console.WriteLine($"Transaction {context.transactionID}: committed. \n");
+            //Console.WriteLine($"Transaction {tid}: committed. \n");
         }
 
         public async Task Abort_2PC(int tid, FunctionResult result)
@@ -216,7 +224,7 @@ namespace Concurrency.Implementation
                 abortTasks.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(tid));
             }
             await Task.WhenAll(abortTasks);
-            //Console.WriteLine($"Transaction {context.transactionID}: aborted. \n");
+            //Console.WriteLine($"Transaction {tid}: aborted. \n");
         }
 
         /**
@@ -229,6 +237,7 @@ namespace Concurrency.Implementation
             //Console.WriteLine($"\n {this.myPrimaryKey}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}");        
             batchScheduleMap.Add(schedule.batchID, schedule);
             myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
+            myScheduler.ackBatchCommit(schedule.highestCommittedBatchId);
             return Task.CompletedTask;
         }
 
@@ -367,11 +376,6 @@ namespace Concurrency.Implementation
             if (log != null)            
                 await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
             return prepareResult;
-        }
-
-        public async Task WaitForBatchCommit(int bid)
-        {
-            await myScheduler.waitForBatchCommit(bid);
         }
     }
 }

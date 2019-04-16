@@ -39,11 +39,13 @@ namespace Concurrency.Interface
     {
         public LoggingConfiguration logConfiguration;
         public ConcurrencyConfiguration nonDetCCConfiguration;
+        public int maxNonDetWaitingLatencyInMs;
 
-        public ExecutionGrainConfiguration(LoggingConfiguration logConfiguration, ConcurrencyConfiguration nonDetCCConfiguration)
+        public ExecutionGrainConfiguration(LoggingConfiguration logConfiguration, ConcurrencyConfiguration nonDetCCConfiguration, int latency)
         {
             this.logConfiguration = logConfiguration;
             this.nonDetCCConfiguration = nonDetCCConfiguration;
+            maxNonDetWaitingLatencyInMs = latency;
         }
     }
 

@@ -3,6 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using Concurrency.Interface;
+using Orleans;
+using System.Diagnostics;
 
 namespace Concurrency.Implementation
 {
@@ -15,13 +18,16 @@ namespace Concurrency.Implementation
         //private int lastScheduledBatchId; //Includes deterministic and not-deterministic batches
         //private TaskCompletionSource<Boolean> nonDetCompletion;
         private Dictionary<int, Dictionary<int, List<TaskCompletionSource<Boolean>>>> inBatchTransactionCompletionMap;
+        private int maxNonDetWaitingLatencyInMs;
+        IGrainFactory grainFactory;
 
-
-        public TransactionScheduler(Dictionary<int, DeterministicBatchSchedule> batchScheduleMap)
+        public TransactionScheduler(Dictionary<int, DeterministicBatchSchedule> batchScheduleMap, int latency, IGrainFactory grainFactory)
         {
             this.batchScheduleMap = batchScheduleMap;            
             inBatchTransactionCompletionMap = new Dictionary<int, Dictionary<int, List<TaskCompletionSource<bool>>>>();
             scheduleInfo = new ScheduleInfo();
+            maxNonDetWaitingLatencyInMs = latency;
+            this.grainFactory = grainFactory;
         }
 
         public async Task waitForBatchCommit(int batchId)
@@ -29,7 +35,25 @@ namespace Concurrency.Implementation
             
             if (scheduleInfo.nodes.ContainsKey(batchId))
             {
-                await scheduleInfo.nodes[batchId].commitmentPromise.Task;
+                var task = scheduleInfo.nodes[batchId].commitmentPromise.Task;
+                if (task.IsCompleted)
+                    return;
+                else
+                {
+                    await Task.WhenAny(Task.Delay(maxNonDetWaitingLatencyInMs), task);
+                }
+                if (task.IsCompleted)
+                    return;
+                else
+                {
+                    Debug.Assert(batchScheduleMap.ContainsKey(batchId));
+                    var coordinatorID = batchScheduleMap[batchId].globalCoordinator;
+                    IGlobalTransactionCoordinatorGrain coordinator = grainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(coordinatorID);
+                    await coordinator.checkBatchCompletion(batchId);
+                }
+                    
+                return;
+
             }
         }
 
@@ -169,46 +193,54 @@ namespace Concurrency.Implementation
 
         public void ackBatchCommit(int bid)
         {
-            //When called by the coordinator of a non-det transaction, batch $bid may not access this grain.
-
-            bool found = scheduleInfo.nodes.ContainsKey(bid);
-            if(!scheduleInfo.nodes.ContainsKey(bid))
+            try
             {
-                var node = scheduleInfo.tail;
-                while(node.id != -1)
+                //When called by the coordinator of a non-det transaction, batch $bid may not access this grain.
+                bool found = scheduleInfo.nodes.ContainsKey(bid);
+                if (!scheduleInfo.nodes.ContainsKey(bid))
                 {
-                    if(node.isDet == false || node.id > bid)
+                    var node = scheduleInfo.tail;
+                    while (node.id != -1)
                     {
-                        node = node.prev;                        
-                    } else
-                    {
-                        if(node.commitmentPromise.Task.IsCompleted == false)
+                        if (node.isDet == false || node.id > bid)
                         {
-                            bid = node.id;
-                            found = true;
-                            break;
-                        } else
+                            node = node.prev;
+                        }
+                        else
                         {
-                            return;
+                            if (node.commitmentPromise.Task.IsCompleted == false)
+                            {
+                                bid = node.id;
+                                found = true;
+                                break;
+                            }
+                            else
+                            {
+                                return;
+                            }
                         }
                     }
-                } 
+                }
+                if (!found || bid == -1 || scheduleInfo.nodes[bid].commitmentPromise.Task.IsCompleted)
+                {
+                    return;
+                }
+                scheduleInfo.nodes[bid].commitmentPromise.SetResult(true);
+                scheduleInfo.removePreviousNodes(bid);
+                var lastBid = batchScheduleMap[bid].lastBatchID;
+                while (lastBid != -1 && batchScheduleMap.ContainsKey(lastBid))
+                {
+                    DeterministicBatchSchedule schedule = batchScheduleMap[lastBid];
+                    inBatchTransactionCompletionMap.Remove(lastBid);
+                    batchScheduleMap.Remove(lastBid);
+                    lastBid = schedule.lastBatchID;
+                }
             }
-            if(!found || bid == -1)
+            catch(Exception e)
             {
-                return;
+                Console.WriteLine($"\n Exception(ackBatchCommit):: exception {e.Message}");
             }
-            scheduleInfo.nodes[bid].commitmentPromise.SetResult(true);
-            scheduleInfo.removePreviousNodes(bid);            
-            var schedule = batchScheduleMap[batchScheduleMap[bid].lastBatchID];
-            bid = schedule.batchID;
-            while(bid != -1 && schedule != null && batchScheduleMap.ContainsKey(bid))
-            {                
-                inBatchTransactionCompletionMap.Remove(bid);
-                batchScheduleMap.Remove(bid);
-                bid = schedule.lastBatchID;                             
-                schedule = batchScheduleMap[bid];
-            }
+
         }
 
         public HashSet<int> getBeforeSet(int tid, out int maxBeforeBid)
