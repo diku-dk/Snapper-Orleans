@@ -129,7 +129,8 @@ namespace AccountTransfer.Grains
                 resultTasks.Add(this.GrainFactory.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(destinationAccount)).Execute(new FunctionCall(typeof(AccountGrain), "Deposit", new FunctionInput(functionInput, input.transferAmount))));
             }
 
-            FunctionResult ret = await Withdraw(functionInput);            
+            var withDrawInput = new FunctionInput(functionInput, input.transferAmount);            
+            FunctionResult ret = await Withdraw(withDrawInput);            
             FunctionResult myResult = new FunctionResult();
             myResult.mergeWithFunctionResult(ret);            
             var results = await Task.WhenAll(resultTasks);            
