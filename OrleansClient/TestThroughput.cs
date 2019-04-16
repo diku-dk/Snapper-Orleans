@@ -50,27 +50,46 @@ namespace OrleansClient
             }
 
             Console.WriteLine($"\n\n Start running Transactions ....\n\n");
-
+            var checkBalance = true;
             try
             {
                 List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
                 DateTime ts1 = DateTime.Now;
+
                 for (int i = 0; i < N; i++)
                 {
                     var grains = grainsPerTx[i];
-                    
+                    var balanceTasks = new List<Task>();
+                    if (checkBalance)
+                    {
+
+                        var fromId = Helper.convertUInt32ToGuid(grains.Item1);
+                        var toId = Helper.convertUInt32ToGuid(grains.Item2);
+                        var fromAccount = client.GetGrain<IAccountGrain>(fromId);
+                        var toAccount = client.GetGrain<IAccountGrain>(toId);
+                        Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", new FunctionInput());
+                        balanceTasks.Add(t1);
+                        Task<FunctionResult> t2 = toAccount.StartTransaction("GetBalance", new FunctionInput());
+                        balanceTasks.Add(t2);
+                        await Task.WhenAll(balanceTasks);
+                    }
+                }
+
+                for (int i = 0; i < N; i++)
+                {
+                    var grains = grainsPerTx[i];
 
                     if (isDeterministic)
                     {
                         var grainAccessInformation = new Dictionary<Guid, Tuple<String, int>>();                        
-                        Guid fromId = Helper.convertUInt32ToGuid(grains.Item1);
-                        Guid toId = Helper.convertUInt32ToGuid(grains.Item2);
+                        Guid from = Helper.convertUInt32ToGuid(grains.Item1);
+                        Guid to = Helper.convertUInt32ToGuid(grains.Item2);
 
            
-                        grainAccessInformation.Add(fromId, new Tuple<String, int>("AccountTransfer.Grains.AccountGrain", 1));
-                        grainAccessInformation.Add(toId, new Tuple<String, int>("AccountTransfer.Grains.AccountGrain", 1));
+                        grainAccessInformation.Add(from, new Tuple<String, int>("AccountTransfer.Grains.AccountGrain", 1));
+                        grainAccessInformation.Add(to, new Tuple<String, int>("AccountTransfer.Grains.AccountGrain", 1));
 
-                        IAccountGrain sourceGrain = client.GetGrain<IAccountGrain>(fromId);
+                        IAccountGrain sourceGrain = client.GetGrain<IAccountGrain>(from);
                         var args = new TransferInput(grains.Item1, grains.Item2, 10);
                         FunctionInput input = new FunctionInput(args);
                         //System.Threading.Thread.Sleep(10);
@@ -89,6 +108,26 @@ namespace OrleansClient
                 }
                 await Task.WhenAll(tasks);
                 DateTime ts2 = DateTime.Now;
+
+                for (int i = 0; i < N; i++)
+                {
+                    var grains = grainsPerTx[i];
+                    var balanceTasks = new List<Task>();
+                    if (checkBalance)
+                    {
+
+                        var fromId = Helper.convertUInt32ToGuid(grains.Item1);
+                        var toId = Helper.convertUInt32ToGuid(grains.Item2);
+                        var fromAccount = client.GetGrain<IAccountGrain>(fromId);
+                        var toAccount = client.GetGrain<IAccountGrain>(toId);
+                        Task<FunctionResult> t1 = fromAccount.StartTransaction("GetBalance", new FunctionInput());
+                        balanceTasks.Add(t1);
+                        Task<FunctionResult> t2 = toAccount.StartTransaction("GetBalance", new FunctionInput());
+                        balanceTasks.Add(t2);
+                        await Task.WhenAll(balanceTasks);
+                    }
+                }
+
                 int count = 0;
                 foreach (var aResultTask in tasks)
                 {
@@ -98,14 +137,11 @@ namespace OrleansClient
                     }
                 }
                 Console.WriteLine($"\n\n {count} transactions committed, Execution Time: {ts2 - ts1}.\n\n");
-
             }
             catch(Exception e)
             {
                 Console.WriteLine($"\n\n {e.ToString()}\n\n");
             }
-
-
         }      
 
 

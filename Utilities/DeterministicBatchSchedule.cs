@@ -38,17 +38,7 @@ namespace Utilities
             completed = false;
             transactionList = new List<int>();
             transactionAccessMap = new Dictionary<int, int>();
-        }
-
-        public DeterministicBatchSchedule(DeterministicBatchSchedule schedule)
-        {
-            batchID = schedule.batchID;
-            lastBatchID = schedule.lastBatchID;
-            curPos = schedule.curPos;
-            completed = schedule.completed;
-            transactionList = new List<int>(schedule.transactionList);
-            transactionAccessMap = new Dictionary<int, int>(schedule.transactionAccessMap);
-        }        
+        }       
 
         public void AddNewTransaction(int tid, int num)
         {

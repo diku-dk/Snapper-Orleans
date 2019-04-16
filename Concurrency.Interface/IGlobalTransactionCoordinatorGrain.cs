@@ -46,7 +46,7 @@ namespace Concurrency.Interface
         Task NotifyCommit(int bid);
 
         [AlwaysInterleave]
-        Task<bool> checkBatchCompletion(TransactionContext context);
+        Task<bool> checkBatchCompletion(int bid);
 
         /// <summary>
         /// Actors call this function to notify coordinator that a transaction has been completed locally. 
@@ -56,5 +56,7 @@ namespace Concurrency.Interface
 
         [AlwaysInterleave]
         Task<HashSet<int>> GetCompleteAfterSet(int tid, Dictionary<int, String> grains);
+       
+
     }
 }
