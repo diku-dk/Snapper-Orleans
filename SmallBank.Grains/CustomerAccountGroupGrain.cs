@@ -8,11 +8,10 @@ using Utilities;
 
 namespace SmallBank.Grains
 {
-    using DepositSavingInput = Tuple<UInt32, float>;
     using AmalgamateInput = Tuple<UInt32, UInt32>;
     using WriteCheckInput = Tuple<String, float>;
     using TransactSavingInput = Tuple<String, float>;
-    using DepositCheckingInput = Tuple<String, float>;
+    using DepositCheckingInput = Tuple<Tuple<String, UInt32>, float>;
     using BalanceInput = String;
     //Source AccountID, Destination AccountID, Destination Grain ID, Amount
     using TransferInput = Tuple<UInt32, UInt32, UInt32, float>;
@@ -35,7 +34,7 @@ namespace SmallBank.Grains
         }
     }
 
-    
+
     class CustomerAccountGroupGrain : TransactionExecutionGrain<CustomerAccountGroup>, ICustomerAccountGroupGrain
     {
         private UInt32 MapCustomerIdToGroup(UInt32 id)
@@ -54,9 +53,28 @@ namespace SmallBank.Grains
             {
                 var myState = await state.Read(context);
                 var tuple = (AmalgamateInput)fin.inputObject;
-                var balance = myState.savingAccount[tuple.Item1] + myState.checkingAccount[tuple.Item1];
-                var grain = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(MapCustomerIdToGroup(tuple.Item2));
-                await grain.Execute(new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositSaving", new FunctionInput(fin, new Tuple<UInt32, float>(tuple.Item1, tuple.Item2))));
+                var id = tuple.Item1;
+                float balance = 0;
+                
+                if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
+                {
+                    ret.setException();
+                }
+                else
+                {                    
+                    balance = myState.savingAccount[id] + myState.checkingAccount[id];                    
+                }
+
+                //By invoking with 0 amount and no state mutation, we make the execution deterministic
+                var destGrain = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(MapCustomerIdToGroup(tuple.Item2));
+                var result = await destGrain.Execute(new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", new FunctionInput(fin, new Tuple<Tuple<String, UInt32>, float>(new Tuple<String, UInt32>(String.Empty, id), balance))));
+                ret.mergeWithFunctionResult(result);
+                if(!ret.hasException())
+                {
+                    //By ensuring state mutation on no exception, we make it deterministic
+                    myState.savingAccount[id] = 0;
+                    myState.checkingAccount[id] = 0;
+                }
             }
             catch (Exception)
             {
@@ -73,11 +91,17 @@ namespace SmallBank.Grains
             {
                 var myState = await state.Read(context);
                 var custName = (BalanceInput)fin.inputObject;
-                if(myState.account.ContainsKey(custName))
+                if (myState.account.ContainsKey(custName))
                 {
                     var id = myState.account[custName];
+                    if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
+                    {
+                        ret.setException();
+                        return ret;
+                    }
                     ret.setResult(myState.savingAccount[id] + myState.checkingAccount[id]);
-                } else
+                }
+                else
                 {
                     ret.setException();
                     return ret;
@@ -86,7 +110,7 @@ namespace SmallBank.Grains
             catch (Exception)
             {
                 ret.setException();
-            }            
+            }
             return ret;
         }
 
@@ -98,16 +122,25 @@ namespace SmallBank.Grains
             {
                 var myState = await state.ReadWrite(context);
                 var inputTuple = (DepositCheckingInput)fin.inputObject;
-                if (myState.account.ContainsKey(inputTuple.Item1))
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+                if (!String.IsNullOrEmpty(custName))
                 {
-                    var id = myState.account[inputTuple.Item1];
-                    myState.checkingAccount[id] += inputTuple.Item2; //Can also be negative for checking account
-                } else
+                    id = myState.account[custName];
+                }
+                else
                 {
                     ret.setException();
                     return ret;
                 }
-            } catch (Exception)
+                if (!myState.checkingAccount.ContainsKey(id))
+                {
+                    ret.setException();
+                    return ret;
+                }
+                myState.checkingAccount[id] += inputTuple.Item2; //Can also be negative for checking account                
+            }
+            catch (Exception)
             {
                 ret.setException();
             }
@@ -159,13 +192,19 @@ namespace SmallBank.Grains
                 if (myState.account.ContainsKey(inputTuple.Item1))
                 {
                     var id = myState.account[inputTuple.Item1];
-                    if(myState.savingAccount[id] < inputTuple.Item2)
+                    if (!myState.savingAccount.ContainsKey(id))
+                    {
+                        ret.setException();
+                        return ret;
+                    }
+                    if (myState.savingAccount[id] < inputTuple.Item2)
                     {
                         ret.setException();
                         return ret;
                     }
                     myState.savingAccount[id] -= inputTuple.Item2;
-                } else
+                }
+                else
                 {
                     ret.setException();
                     return ret;
@@ -224,36 +263,25 @@ namespace SmallBank.Grains
                 if (myState.account.ContainsKey(inputTuple.Item1))
                 {
                     var id = myState.account[inputTuple.Item1];
+                    if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
+                    {
+                        ret.setException();
+                        return ret;
+                    }
                     if (myState.savingAccount[id] + myState.checkingAccount[id] < inputTuple.Item2)
                     {
                         myState.checkingAccount[id] -= (inputTuple.Item2 + 1); //Pay a penalty                        
-                    } else
+                    }
+                    else
                     {
                         myState.checkingAccount[id] -= inputTuple.Item2;
-                    }                    
+                    }
                 }
                 else
                 {
                     ret.setException();
                     return ret;
                 }
-            }
-            catch (Exception)
-            {
-                ret.setException();
-            }
-            return ret;
-        }
-
-        async Task<FunctionResult> ICustomerAccountGroupGrain.DepositSaving(FunctionInput fin)
-        {
-            TransactionContext context = fin.context;
-            FunctionResult ret = new FunctionResult();
-            try
-            {
-                var myState = await state.ReadWrite(context);
-                var inputTuple = (DepositSavingInput)fin.inputObject;
-                myState.savingAccount[inputTuple.Item1] += inputTuple.Item2;                
             }
             catch (Exception)
             {
