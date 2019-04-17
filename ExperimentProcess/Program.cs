@@ -9,21 +9,26 @@ using OrleansClient;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Interface;
+using AccountTransfer.Interfaces;
+using AccountTransfer.Grains;
 
 namespace ExperimentProcess
 {
     class Program
     {
-        static WorkloadResults res;
         static Boolean LocalCluster = true;
         static IClusterClient[] clients;
-        static String sinkAddress = ">tcp://localhost:5558";
+        static String sinkAddress = "@tcp://localhost:5558";
         static String conductorAddress = ">tcp://localhost:5575";
-
+        static PushSocket sink = new PushSocket(sinkAddress);
+        static WorkloadResults[] results;
+        static volatile int finished = 0;
+    
 
         private static async void ThreadWorkAsync(Object obj)
         {
-            ThreadWorkload workload = (ThreadWorkload) obj;
+            ThreadWorkload workload = ((Tuple<ThreadWorkload, int>) obj).Item1;
+            int threadIndex = ((Tuple<ThreadWorkload, int>)obj).Item2;
             ClientConfiguration config = new ClientConfiguration();
             IClusterClient client = null;
             if (LocalCluster)
@@ -35,7 +40,7 @@ namespace ExperimentProcess
             localWatch.Start();
             Stopwatch globalWatch = new Stopwatch();
             int numCommit = 0;
-
+            
             ITransactionExecutionGrain[] startGrains = new ITransactionExecutionGrain[workload.transactions.Count];
             long[] latencies = new long[workload.transactions.Count];
             int index = 0;
@@ -69,7 +74,7 @@ namespace ExperimentProcess
                 }
                 await task;
                 localWatch.Stop();
-                if (task.Result.hasException() == true)
+                if (task.Result.hasException() != true)
                 {
                     numCommit++;
                     var latency = localWatch.ElapsedMilliseconds;
@@ -80,6 +85,7 @@ namespace ExperimentProcess
                 index++;
             }
             globalWatch.Stop();
+            
             var totalLatency = globalWatch.ElapsedMilliseconds;
 
             long min = long.MaxValue;
@@ -97,12 +103,9 @@ namespace ExperimentProcess
             float throughput = (float)numCommit / ((float)totalLatency / (float)1000);
 
             WorkloadResults res = new WorkloadResults(workload.transactions.Count, numCommit, min, max, average, throughput);
-            var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_RESULTS);
-            msg.contents = Helper.serializeToByteArray<WorkloadResults>(res);
-            using (var sink = new PushSocket(sinkAddress))
-            {
-                sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
-            }
+            results[threadIndex]= res;
+            Interlocked.Increment(ref finished);
+            Console.WriteLine($"{res.numSuccessFulTxns} of {res.numTxns} transactions are committed. Latency: {res.averageLatency}. Throughput: {res.throughput}.\n");
         }
 
 
@@ -122,19 +125,58 @@ namespace ExperimentProcess
                     clients = new IClusterClient[numOfThreads];
                     //Spawn Threads
                     Thread[] threads = new Thread[numOfThreads];
-                    for(int i=0; i<workload.numThreadsPerWorkerNodes;i++)
+                    results = new WorkloadResults[numOfThreads];
+                    for(int i=0; i< numOfThreads; i++)
                     {
+                        int threadIndex = i;
                         Thread thread = new Thread(ThreadWorkAsync);
-                        threads[i] = thread;
-                        thread.Start(new ThreadWorkload());                        
+                        threads[threadIndex] = thread;
+                        thread.Start(new Tuple<ThreadWorkload, int>(new ThreadWorkload(workload), threadIndex));                        
                     }
                     foreach (var thread in threads)
                     {
                         thread.Join();
                     }
+
+                    Thread aggregate = new Thread(AggregateAndSendToSink);
+                    aggregate.Start(numOfThreads);
+                    aggregate.Join();
                 }
             }
         }
+
+
+        public static void AggregateAndSendToSink(Object obj)
+        {
+            int expectedResults = (int)obj;
+            while(finished < expectedResults)
+            {
+                Thread.Sleep(10000);
+            }
+            long min = long.MaxValue;
+            long max = long.MinValue;
+            long average = 0;
+            int committed = 0;
+            int totalTxns = 0;
+            float throughput = 0;
+            foreach (var res in results)
+            {
+                min = min < res.minLatency ? min : res.minLatency;
+                max = max > res.maxLatency ? max : res.maxLatency;
+                committed += res.numSuccessFulTxns;
+                totalTxns += res.numTxns;
+                average += res.averageLatency;
+                throughput += res.throughput;
+            }
+            average /= results.Length;
+            throughput /= results.Length;
+
+            var result = new WorkloadResults(totalTxns, committed, min, max, average, throughput);
+            var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_RESULTS);
+            msg.contents = Helper.serializeToByteArray<WorkloadResults>(result);
+            sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
+        }
+
 
         public class ThreadWorkload
         {
@@ -148,7 +190,15 @@ namespace ExperimentProcess
 
                 for(int i=0; i< numOfTransactions; i++)
                 {
-                    ;
+                    var args = new TransferInput(1, 2, 10);
+                    var grainName = "AccountTransfer.Grains.AccountGrain";
+                    var startGrainId = Helper.convertUInt32ToGuid(1);
+                    var functionName = "Transfer";
+                    var functionInputs = new FunctionInput(args);
+                    var isDeterministic = false;
+                    var accessInformation = new Dictionary<Guid, Tuple<string, int>>();
+                    transactions.Add(new Tuple<string, Guid, string, FunctionInput, bool, Dictionary<Guid, Tuple<string, int>>>
+                        (grainName, startGrainId, functionName, functionInputs, isDeterministic, accessInformation));
                 }
 
             }

@@ -14,6 +14,10 @@ namespace SmallBank.Grains
     using TransactSavingInput = Tuple<String, float>;
     using DepositCheckingInput = Tuple<String, float>;
     using BalanceInput = String;
+    //Source AccountID, Destination AccountID, Destination Grain ID, Amount
+    using TransferInput = Tuple<UInt32, UInt32, UInt32, float>;
+    //Source AccountID, Amount, List<Tuple<Destination Account ID, Destination Account Grain ID, Amount>>
+    using MultiTransferInput = Tuple<UInt32, float, List<Tuple<UInt32, UInt32, float>>>; 
 
     [Serializable]
     public class CustomerAccountGroup : ICloneable
@@ -110,9 +114,38 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        Task<FunctionResult> ICustomerAccountGroupGrain.MultiTransfer(FunctionInput fin)
+        async Task<FunctionResult> ICustomerAccountGroupGrain.MultiTransfer(FunctionInput fin)
         {
-            throw new NotImplementedException();
+            TransactionContext context = fin.context;
+            FunctionResult ret = new FunctionResult();
+            try
+            {
+                var myState = await state.ReadWrite(context);
+                var inputTuple = (MultiTransferInput)fin.inputObject;
+                if (myState.savingAccount[inputTuple.Item1] < inputTuple.Item2)
+                {
+                    ret.setException();
+                    return ret;
+                }
+                else
+                {
+                    List<Tuple<UInt32, UInt32, float>> destinations = inputTuple.Item3;
+                    List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
+                    foreach (var tuple in destinations){
+                        var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(tuple.Item2));
+                        FunctionInput funcInput = new FunctionInput(fin, new DepositSavingInput(tuple.Item1, tuple.Item3));
+                        FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositSaving", funcInput);
+                        tasks.Add(destination.Execute(funcCall));
+                    }
+                    await Task.WhenAll(tasks);
+                    myState.savingAccount[inputTuple.Item1] -= inputTuple.Item2;
+                }
+            }
+            catch (Exception)
+            {
+                ret.setException();
+            }
+            return ret;
         }
 
         async Task<FunctionResult> ICustomerAccountGroupGrain.TransactSaving(FunctionInput fin)
@@ -145,9 +178,39 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        Task<FunctionResult> ICustomerAccountGroupGrain.Transfer(FunctionInput fin)
+        async Task<FunctionResult> ICustomerAccountGroupGrain.Transfer(FunctionInput fin)
         {
-            throw new NotImplementedException();
+            TransactionContext context = fin.context;
+            FunctionResult ret = new FunctionResult();
+            try
+            {
+                var myState = await state.ReadWrite(context);
+                var inputTuple = (TransferInput)fin.inputObject;
+                if (myState.savingAccount[inputTuple.Item1] < inputTuple.Item4)
+                {
+                    ret.setException();
+                    return ret;
+                }
+                else
+                {
+                    var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(inputTuple.Item3));
+                    FunctionInput funcInput = new FunctionInput(fin, new DepositSavingInput(inputTuple.Item2, inputTuple.Item4));
+                    FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositSaving", funcInput);
+                    Task<FunctionResult> task = destination.Execute(funcCall);
+                    await task;
+                    if (task.Result.hasException() == true)
+                    {
+                        ret.setException();
+                        return ret;
+                    }
+                    myState.savingAccount[inputTuple.Item1] -= inputTuple.Item4;
+                }
+            }
+            catch (Exception)
+            {
+                ret.setException();
+            }
+            return ret;
         }
 
         async Task<FunctionResult> ICustomerAccountGroupGrain.WriteCheck(FunctionInput fin)

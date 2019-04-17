@@ -67,7 +67,7 @@ namespace ExperimentConductor
                 //socket to receive results on
                 using (var sink = new PullSocket(sinkAddress))
                 {
-                    for (int taskNumber = 0; taskNumber < numOfWorkers * numOfThreadsPerWorker; taskNumber++)
+                    for (int taskNumber = 0; taskNumber < numOfWorkers; taskNumber++)
                     {
                         var resultMsg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
                         //Parse the workloadResult
@@ -76,9 +76,10 @@ namespace ExperimentConductor
                         var res = results[taskNumber];
                         Console.WriteLine($"{res.numSuccessFulTxns} of {res.numTxns} transactions are committed. Latency: {res.averageLatency}. Throughput: {res.throughput}.\n");
                     }
+                    Console.ReadLine();
                     //Calculate and report the results
                 }
-                Console.WriteLine("====== SINK ======");
+                
             }
         }
 
@@ -98,6 +99,7 @@ namespace ExperimentConductor
                 var coordConfig = new CoordinatorGrainConfiguration(batchIntervalMsecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numOfCoordinators);
                 await configGrain.UpdateNewConfiguration(exeConfig);
                 await configGrain.UpdateNewConfiguration(coordConfig);
+                Console.WriteLine("Spawned the configuration grain.");
             }
         }
 
@@ -118,12 +120,13 @@ namespace ExperimentConductor
             //Spawn the configuration coordinator
             Thread spawnThread = new Thread(SpawnConfigurationCoordinator);
             spawnThread.Start();
-            spawnThread.Join();
+            //spawnThread.Join();
 
-            
+            Console.WriteLine("Started the conductor thread.");
             Thread conducterThread = new Thread(PushToWorkers);
             conducterThread.Start(workLoad);
 
+            Console.WriteLine("Started the sink thread.");
             Thread sinkThread = new Thread(PullFromWorkers);
             sinkThread.Start();
 
