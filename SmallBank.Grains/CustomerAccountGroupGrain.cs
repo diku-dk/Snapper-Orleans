@@ -14,9 +14,9 @@ namespace SmallBank.Grains
     using DepositCheckingInput = Tuple<Tuple<String, UInt32>, float>;
     using BalanceInput = String;
     //Source AccountID, Destination AccountID, Destination Grain ID, Amount
-    using TransferInput = Tuple<UInt32, UInt32, UInt32, float>;
-    //Source AccountID, Amount, List<Tuple<Destination Account ID, Destination Account Grain ID, Amount>>
-    using MultiTransferInput = Tuple<UInt32, float, List<Tuple<UInt32, UInt32, float>>>; 
+    using TransferInput = Tuple<Tuple<String, UInt32>, Tuple<String, UInt32>, UInt32, float>;
+    //Source AccountID, Amount, List<Tuple<Account Name, Account ID, Grain ID>>
+    using MultiTransferInput = Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32, UInt32>>>; 
 
     [Serializable]
     public class CustomerAccountGroup : ICloneable
@@ -128,11 +128,6 @@ namespace SmallBank.Grains
                 {
                     id = myState.account[custName];
                 }
-                else
-                {
-                    ret.setException();
-                    return ret;
-                }
                 if (!myState.checkingAccount.ContainsKey(id))
                 {
                     ret.setException();
@@ -155,23 +150,31 @@ namespace SmallBank.Grains
             {
                 var myState = await state.ReadWrite(context);
                 var inputTuple = (MultiTransferInput)fin.inputObject;
-                if (myState.savingAccount[inputTuple.Item1] < inputTuple.Item2)
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+
+                if (!String.IsNullOrEmpty(custName))
+                {
+                    id = myState.account[custName];
+                }
+
+                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item2 * inputTuple.Item3.Count)
                 {
                     ret.setException();
                     return ret;
                 }
                 else
                 {
-                    List<Tuple<UInt32, UInt32, float>> destinations = inputTuple.Item3;
+                    List<Tuple<String, UInt32, UInt32>> destinations = inputTuple.Item3;
                     List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
                     foreach (var tuple in destinations){
                         var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(tuple.Item2));
-                        FunctionInput funcInput = new FunctionInput(fin, new DepositSavingInput(tuple.Item1, tuple.Item3));
+                        FunctionInput funcInput = new FunctionInput(fin, new DepositCheckingInput(new Tuple<String, UInt32>(tuple.Item1, tuple.Item2), inputTuple.Item2));
                         FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositSaving", funcInput);
                         tasks.Add(destination.Execute(funcCall));
                     }
                     await Task.WhenAll(tasks);
-                    myState.savingAccount[inputTuple.Item1] -= inputTuple.Item2;
+                    myState.checkingAccount[id] -= inputTuple.Item2;
                 }
             }
             catch (Exception)
@@ -225,25 +228,31 @@ namespace SmallBank.Grains
             {
                 var myState = await state.ReadWrite(context);
                 var inputTuple = (TransferInput)fin.inputObject;
-                if (myState.savingAccount[inputTuple.Item1] < inputTuple.Item4)
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+
+                if (!String.IsNullOrEmpty(custName))
+                {
+                    id = myState.account[custName];
+                }
+
+                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item4)
                 {
                     ret.setException();
                     return ret;
                 }
-                else
+
+                var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(inputTuple.Item3));
+                FunctionInput funcInput = new FunctionInput(fin, new DepositCheckingInput(inputTuple.Item2, inputTuple.Item4));
+                FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
+                Task<FunctionResult> task = destination.Execute(funcCall);
+                await task;
+                if (task.Result.hasException() == true)
                 {
-                    var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(inputTuple.Item3));
-                    FunctionInput funcInput = new FunctionInput(fin, new DepositSavingInput(inputTuple.Item2, inputTuple.Item4));
-                    FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositSaving", funcInput);
-                    Task<FunctionResult> task = destination.Execute(funcCall);
-                    await task;
-                    if (task.Result.hasException() == true)
-                    {
-                        ret.setException();
-                        return ret;
-                    }
-                    myState.savingAccount[inputTuple.Item1] -= inputTuple.Item4;
+                    ret.setException();
+                    return ret;
                 }
+                myState.checkingAccount[id] -= inputTuple.Item4;              
             }
             catch (Exception)
             {

@@ -49,9 +49,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExperimentProcess", "Experi
 		{CDF720FD-C893-4799-A03D-A4EE2CFB81A4} = {CDF720FD-C893-4799-A03D-A4EE2CFB81A4}
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmallBank.Interfaces", "SmallBank.Interfaces\SmallBank.Interfaces.csproj", "{2B92FF54-0FD5-405F-BA9B-127D6242FF3A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmallBank.Interfaces", "SmallBank.Interfaces\SmallBank.Interfaces.csproj", "{2B92FF54-0FD5-405F-BA9B-127D6242FF3A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmallBank.Grains", "SmallBank.Grains\SmallBank.Grains.csproj", "{A5B30F91-BFF5-4191-9030-EB44AA85F540}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmallBank.Grains", "SmallBank.Grains\SmallBank.Grains.csproj", "{A5B30F91-BFF5-4191-9030-EB44AA85F540}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
