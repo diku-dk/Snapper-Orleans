@@ -13,6 +13,8 @@ using AccountTransfer.Interfaces;
 using AccountTransfer.Grains;
 using Concurrency.Implementation;
 using System.Net;
+using SmallBank.Interfaces;
+using SmallBank.Grains;
 
 namespace Test
 {
@@ -21,26 +23,6 @@ namespace Test
         private IClusterClient client;
         private static readonly int maxAttempts = 10;
         private ISiloHost host;
-
-        private async Task StartSilo()
-        {
-            var builder = new SiloHostBuilder()
-                .UseLocalhostClustering()
-                .Configure<ClusterOptions>(options =>
-                {
-                    options.ClusterId = "dev";
-                    options.ServiceId = "AccountTransferApp";
-
-
-                })
-                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(GlobalTransactionCoordinatoGrain).Assembly).WithReferences())                
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
-
-            host = builder.Build();
-            await host.StartAsync();            
-        }
 
         public async Task<IClusterClient> StartClientWithRetries()
         {
@@ -60,7 +42,6 @@ namespace Test
                                         options.ClusterId = "dev";
                                         options.ServiceId = "AccountTransferApp";
                                     })
-                                    .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(IAccountGrain).Assembly).WithReferences())
                                     .ConfigureLogging(logging => logging.AddConsole())
                                     .Build();
 

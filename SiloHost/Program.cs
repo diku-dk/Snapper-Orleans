@@ -6,9 +6,10 @@ using Orleans.Hosting;
 using Orleans.Configuration;
 using System.Net;
 using AccountTransfer.Grains;
-using Concurrency.Implementation.Deterministic;
-using Concurrency.Implementation.Nondeterministic;
 using Utilities;
+using SmallBank.Grains;
+using SmallBank.Interfaces;
+using AccountTransfer.Interfaces;
 
 namespace OrleansSiloHost
 {
@@ -56,8 +57,9 @@ namespace OrleansSiloHost
                     //options.ClassSpecificCollectionAge[typeof(MyGrainImplementation).FullName] = TimeSpan.FromMinutes(5);
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
+                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(CustomerAccountGroupGrain).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Warning));
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
             
             var host = builder.Build();
             await host.StartAsync();
@@ -86,6 +88,7 @@ namespace OrleansSiloHost
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .UseDynamoDBClustering(dynamoDBOptions)
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
+                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(CustomerAccountGroupGrain).Assembly).WithReferences())
                 .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
             var host = builder.Build();

@@ -67,7 +67,8 @@ namespace Utilities
         {
             this.exception |= r.exception;
             foreach (var entry in r.grainsInNestedFunctions)
-                this.grainsInNestedFunctions.Add(entry.Key,entry.Value);
+                if(this.grainsInNestedFunctions.ContainsKey(entry.Key) == false)
+                    this.grainsInNestedFunctions.Add(entry.Key,entry.Value);
             Debug.Assert(this.beforeSet.Count == 0 && this.afterSet.Count == 0);
             this.beforeSet = r.beforeSet;
             this.afterSet = r.afterSet;

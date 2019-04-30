@@ -1,5 +1,7 @@
 ﻿using AccountTransfer.Interfaces;
+using MathNet.Numerics.Distributions;
 using Orleans;
+using SmallBank.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,85 +11,148 @@ using Utilities;
 
 namespace ExperimentProcess
 {
+    enum TxnType {Balance, DepositChecking, Transfer, TransactSaving, WriteCheck, MultiTransfer}
     class SmallBankBenchmark : IBenchmark
     {
-        Random rand = new Random();
-        int maxAccounts = 10;
-        int maxTransferAmount = 10;
-        int numSequentialTransfers = 10;
-        int numConcurrentTransfers = 1000;
-        List<Tuple<uint, uint, float, bool>> transactions;
+        IDiscreteDistribution transactionTypeDistribution;
+        WorkloadConfiguration config;
+        IDiscreteDistribution distribution;
+        IDiscreteDistribution grainDistribution;
+        IClusterClient client;
+        float amount = 1;
 
-        public void GenerateBenchmark(WorkloadConfiguration config)
+        public void generateBenchmark(WorkloadConfiguration workloadConfig, IClusterClient client)
         {
-            //number of transaction
-            int N = config.totalTransactions / (config.numThreadsPerWorkerNodes * config.numWorkerNodes);
-            transactions = GenerateTransferInformation(N, new Tuple<int, int>(1, maxAccounts / 2), new Tuple<int, int>((maxAccounts / 2) + 1, maxAccounts), new Tuple<int, int>(1, maxTransferAmount), new Tuple<bool, bool>(false, true));
-        }
-
-        public async Task<WorkloadResults> RunBenchmark(IClusterClient client)
-        {
-
-            List<Tuple<Boolean, double>> results = new List<Tuple<bool, double>>();
-            Stopwatch globalStopwatch = new Stopwatch();
-            globalStopwatch.Start();
-            foreach (var transferInfoTuple in transactions)
+            config = workloadConfig;
+            if (config.distribution == Utilities.Distribution.ZIPFIAN)
             {
-                var fromId = Helper.convertUInt32ToGuid(transferInfoTuple.Item1);
-                var toId = Helper.convertUInt32ToGuid(transferInfoTuple.Item2);
-                var fromAccount = client.GetGrain<IAccountGrain>(fromId);
-                var toAccount = client.GetGrain<IAccountGrain>(toId);
-
-                var args = new TransferInput(transferInfoTuple.Item1, transferInfoTuple.Item2, transferInfoTuple.Item3);
-                var input = new FunctionInput(args);
-                Task<FunctionResult> task;
-                if (transferInfoTuple.Item4)
-                {
-                    //Deterministic transaction
-                    var grainAccessInformation = new Dictionary<Guid, Tuple<String, int>>();
-                    grainAccessInformation.Add(fromId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
-                    grainAccessInformation.Add(toId, new Tuple<string, int>("AccountTransfer.Grains.AccountGrain", 1));
-                    task = fromAccount.StartTransaction(grainAccessInformation, "Transfer", input);
-                }
-                else
-                {
-                    //Non-deterministic transaction
-                    task = fromAccount.StartTransaction("Transfer", input);
-                }
-                await task;
+                distribution = new Zipf(config.zipf, (int)config.numAccounts - 1, new Random());
+                grainDistribution = new Zipf(config.zipf, (int)config.numAccounts / (int)config.numAccountsPerGroup - 1, new Random());
             }
-            globalStopwatch.Stop();
-            long totaltime = globalStopwatch.ElapsedMilliseconds;
 
-
-            return null;
+            else if (config.distribution == Utilities.Distribution.UNIFORM)
+            {
+                distribution = new DiscreteUniform(0, (int)config.numAccounts - 1, new Random());
+                grainDistribution = new DiscreteUniform(0, (int)config.numAccounts / (int)config.numAccountsPerGroup - 1, new Random());
+            }
+            transactionTypeDistribution = new DiscreteUniform(0, 99, new Random());
+            this.client = client;
         }
 
-        private List<Tuple<uint, uint, float, bool>> GenerateTransferInformation(int numTuples, Tuple<int, int> fromAccountRange, Tuple<int, int> toAccountRange, Tuple<int, int> transferAmountRange, Tuple<bool, bool> hybridTypeRange)
+        //getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer
+        public TxnType nextTransactionType()
         {
-            var transferInformation = new List<Tuple<uint, uint, float, bool>>();
-            while (numTuples-- > 0)
+            int type = transactionTypeDistribution.Sample();
+            if (type < config.mixture[0])
+                return TxnType.Balance;
+            else if (type < config.mixture[1])
+                return TxnType.DepositChecking;
+            else if (type < config.mixture[2])
+                return TxnType.Transfer;
+            else if (type < config.mixture[3])
+                return TxnType.TransactSaving;
+            else if (type < config.mixture[4])
+                return TxnType.WriteCheck;
+            else
+                return TxnType.MultiTransfer;
+        }
+
+        public Task<FunctionResult> newTransaction()
+        {
+            TxnType type = nextTransactionType();
+            Task<FunctionResult> task = null;
+            FunctionInput input;
+            if (type != TxnType.Transfer && type!= TxnType.MultiTransfer)
             {
-                var fromAccount = (uint)rand.Next(fromAccountRange.Item1, fromAccountRange.Item2);
-                var toAccount = (uint)rand.Next(toAccountRange.Item1, toAccountRange.Item2);
-                while (fromAccount == toAccount)
+                uint accountId = Convert.ToUInt32(distribution.Sample());
+                uint groupId = accountId / config.numAccountsPerGroup;
+                var destination = client.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(groupId));
+                
+                switch (type)
                 {
-                    if ((fromAccountRange.Item2 - fromAccountRange.Item1) > (toAccountRange.Item2 - toAccountRange.Item1))
+                    case TxnType.Balance:
+                        input = new FunctionInput(accountId.ToString());
+                        task = destination.StartTransaction("Balance", input);
+                        break;
+                    case TxnType.DepositChecking:
+                        Tuple<Tuple<String, UInt32>, float> args1 = new Tuple<Tuple<string, uint>, float>(new Tuple<string, uint>(accountId.ToString(), accountId), amount);
+                        input = new FunctionInput(args1);
+                        task = destination.StartTransaction("DepositChecking", input);
+                        break;
+                    case TxnType.TransactSaving:
+                        Tuple<String, float> args2 = new Tuple<string, float>(accountId.ToString(), amount);
+                        input = new FunctionInput(args2);
+                        task = destination.StartTransaction("TransactSaving", input);
+                        break;
+                    case TxnType.WriteCheck:
+                        Tuple<String, float> args3 = new Tuple<string, float>(accountId.ToString(), amount);
+                        input = new FunctionInput(args3);
+                        task = destination.StartTransaction("WriteCheck", input);
+                        break;
+                    default:
+                        break;
+                }
+                
+            }
+            else if(type == TxnType.Transfer)
+            {
+                uint sourceID = Convert.ToUInt32(distribution.Sample());
+                Tuple<String, UInt32> item1 = new Tuple<string, uint>(sourceID.ToString(), sourceID);
+                uint destID = Convert.ToUInt32(distribution.Sample());
+                while(destID == sourceID)
+                    destID = Convert.ToUInt32(distribution.Sample());
+                Tuple<String, UInt32> item2 = new Tuple<string, uint>(destID.ToString(), destID);
+                float item3 = 10;
+                Tuple<Tuple<String, UInt32>, Tuple<String, UInt32>, float> args = new Tuple<Tuple<string, uint>, Tuple<string, uint>, float>(item1, item2, item3);
+                input = new FunctionInput(args);
+                var groupId = Helper.convertUInt32ToGuid(sourceID / config.numAccountsPerGroup);
+                var destination = client.GetGrain<ICustomerAccountGroupGrain>(groupId);
+                task = destination.StartTransaction("Transfer", input);
+            }
+            else
+            {
+
+                int[] grainIDs = new int[config.numGrainsMultiTransfer];
+                distribution.Samples(grainIDs);
+                int index = 0;
+                List<UInt32> accounts = new List<uint>();
+                int num = config.numAccountsMultiTransfer / grainIDs.Length;
+                int bound = config.numAccountsMultiTransfer % grainIDs.Length;
+                for (uint i=0; i<grainIDs.Length; i++)
+                {
+                    int numAccounts;
+                    uint baseAccountID = Convert.ToUInt32(grainIDs[i]) * config.numAccountsPerGroup;
+                    if(i < bound)
                     {
-                        fromAccount = (uint)rand.Next(fromAccountRange.Item1, fromAccountRange.Item2);
+                        numAccounts = num+1;
                     }
                     else
                     {
-                        toAccount = (uint)rand.Next(toAccountRange.Item1, toAccountRange.Item2);
+                        numAccounts = num;
+                    }
+                    for(uint j = 0; j < numAccounts; j++)
+                    {
+                        accounts.Add(baseAccountID + j);
                     }
                 }
-
-                var transferAmount = (float)rand.Next(transferAmountRange.Item1, transferAmountRange.Item2);
-                bool transactionType = (hybridTypeRange.Item1 == hybridTypeRange.Item2) ? hybridTypeRange.Item1 : Convert.ToBoolean(rand.Next(0, 1));
-                transferInformation.Add(new Tuple<uint, uint, float, bool>(fromAccount, toAccount, transferAmount, transactionType));
+                uint sourceID = accounts[0];
+                Tuple<String, UInt32> item1 = new Tuple<string, uint>(sourceID.ToString(), sourceID);
+                float item2 = this.amount;
+                List<Tuple<string, uint>> item3 = new List<Tuple<string, uint>>();
+                for (int i = 1; i < accounts.Count; i++)
+                {
+                    uint destAccountID = accounts[i];
+                    item3.Add(new Tuple<string, uint>(destAccountID.ToString(), destAccountID));
+                }
+                var args = new Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32>>>(item1, item2, item3);
+                input = new FunctionInput(args);
+                var groupId = Helper.convertUInt32ToGuid(sourceID / config.numAccountsPerGroup);
+                var destination = client.GetGrain<ICustomerAccountGroupGrain>(groupId);
+                task = destination.StartTransaction("MultiTransfer", input);
             }
-            return transferInformation;
+            return task;
         }
+
 
     }
 }

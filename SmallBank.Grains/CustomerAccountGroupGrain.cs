@@ -14,9 +14,10 @@ namespace SmallBank.Grains
     using DepositCheckingInput = Tuple<Tuple<String, UInt32>, float>;
     using BalanceInput = String;
     //Source AccountID, Destination AccountID, Destination Grain ID, Amount
-    using TransferInput = Tuple<Tuple<String, UInt32>, Tuple<String, UInt32>, UInt32, float>;
+    using TransferInput = Tuple<Tuple<String, UInt32>, Tuple<String, UInt32>, float>;
     //Source AccountID, Amount, List<Tuple<Account Name, Account ID, Grain ID>>
-    using MultiTransferInput = Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32, UInt32>>>; 
+    using MultiTransferInput = Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32>>>;
+    using InitAccountInput = Tuple<UInt32, UInt32>;
 
     [Serializable]
     public class CustomerAccountGroup : ICloneable
@@ -24,28 +25,69 @@ namespace SmallBank.Grains
         public Dictionary<String, UInt32> account;
         public Dictionary<UInt32, float> savingAccount;
         public Dictionary<UInt32, float> checkingAccount;
+        public uint GroupID;
+
+        public CustomerAccountGroup()
+        {
+            account = new Dictionary<string, UInt32>();
+            savingAccount = new Dictionary<UInt32, float>();
+            checkingAccount = new Dictionary<UInt32, float>();
+        }
         object ICloneable.Clone()
         {
             var clonedCustomerAccount = new CustomerAccountGroup();
             clonedCustomerAccount.account = new Dictionary<string, UInt32>(account);
             clonedCustomerAccount.savingAccount = new Dictionary<UInt32, float>(savingAccount);
             clonedCustomerAccount.checkingAccount = new Dictionary<UInt32, float>(checkingAccount);
+            clonedCustomerAccount.GroupID = this.GroupID;
             return clonedCustomerAccount;
         }
     }
 
 
-    class CustomerAccountGroupGrain : TransactionExecutionGrain<CustomerAccountGroup>, ICustomerAccountGroupGrain
+    public class CustomerAccountGroupGrain : TransactionExecutionGrain<CustomerAccountGroup>, ICustomerAccountGroupGrain
     {
-        private UInt32 MapCustomerIdToGroup(UInt32 id)
+        public uint numAccountPerGroup = 1;
+
+        private UInt32 MapCustomerIdToGroup(UInt32 accountID)
         {
-            return id; //You can can also range/hash partition
+            return accountID / numAccountPerGroup; //You can can also range/hash partition
         }
+
+
         public CustomerAccountGroupGrain() : base("SmallBank.Grains.CustomerAccountGroupGrain")
         {
         }
 
-        async Task<FunctionResult> ICustomerAccountGroupGrain.Amalgamate(FunctionInput fin)
+        public async Task<FunctionResult> InitBankAccounts(FunctionInput fin)
+        {
+            TransactionContext context = fin.context;
+            FunctionResult ret = new FunctionResult();
+            try
+            {
+                var myState = await state.ReadWrite(context);
+                var tuple = (InitAccountInput)fin.inputObject;
+                numAccountPerGroup = tuple.Item1;
+                myState.GroupID = tuple.Item2;
+
+                uint minAccountID = myState.GroupID * numAccountPerGroup;
+                for(uint i=0; i<numAccountPerGroup; i++)
+                {
+                    uint accountId = minAccountID + i;
+                    myState.account.Add(accountId.ToString(), accountId);
+                    myState.savingAccount.Add(accountId, uint.MaxValue);
+                    myState.checkingAccount.Add(accountId, uint.MaxValue);
+                }
+            }
+            catch (Exception)
+            {
+                ret.setException();
+            }
+            return ret;
+        }
+
+
+        public async Task<FunctionResult> Amalgamate(FunctionInput fin)
         {
             TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
@@ -83,7 +125,7 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        async Task<FunctionResult> ICustomerAccountGroupGrain.Balance(FunctionInput fin)
+        public async Task<FunctionResult> Balance(FunctionInput fin)
         {
             TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult(-1);
@@ -114,7 +156,7 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        async Task<FunctionResult> ICustomerAccountGroupGrain.DepositChecking(FunctionInput fin)
+        public async Task<FunctionResult> DepositChecking(FunctionInput fin)
         {
             TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
@@ -142,7 +184,7 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        async Task<FunctionResult> ICustomerAccountGroupGrain.MultiTransfer(FunctionInput fin)
+        public async Task<FunctionResult> MultiTransfer(FunctionInput fin)
         {
             TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
@@ -152,7 +194,6 @@ namespace SmallBank.Grains
                 var inputTuple = (MultiTransferInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
-
                 if (!String.IsNullOrEmpty(custName))
                 {
                     id = myState.account[custName];
@@ -165,16 +206,30 @@ namespace SmallBank.Grains
                 }
                 else
                 {
-                    List<Tuple<String, UInt32, UInt32>> destinations = inputTuple.Item3;
+                    List<Tuple<String, UInt32>> destinations = inputTuple.Item3;
                     List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
                     foreach (var tuple in destinations){
-                        var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(tuple.Item2));
+                        var gID = MapCustomerIdToGroup(tuple.Item2);
                         FunctionInput funcInput = new FunctionInput(fin, new DepositCheckingInput(new Tuple<String, UInt32>(tuple.Item1, tuple.Item2), inputTuple.Item2));
-                        FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositSaving", funcInput);
-                        tasks.Add(destination.Execute(funcCall));
+                        if (gID == myState.GroupID)
+                        {
+                            Task<FunctionResult> localCall = DepositChecking(funcInput);
+                            tasks.Add(localCall);
+                        }
+                        else
+                        {
+                            var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
+                            FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
+                            tasks.Add(destination.Execute(funcCall));
+                        }
                     }
                     await Task.WhenAll(tasks);
-                    myState.checkingAccount[id] -= inputTuple.Item2;
+                    foreach(Task<FunctionResult> task in tasks)
+                    {
+                        ret.mergeWithFunctionResult(task.Result);
+                    }
+                    myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                        
                 }
             }
             catch (Exception)
@@ -184,7 +239,8 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        async Task<FunctionResult> ICustomerAccountGroupGrain.TransactSaving(FunctionInput fin)
+
+        public async Task<FunctionResult> TransactSaving(FunctionInput fin)
         {
             TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
@@ -220,7 +276,7 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        async Task<FunctionResult> ICustomerAccountGroupGrain.Transfer(FunctionInput fin)
+        public async Task<FunctionResult> Transfer(FunctionInput fin)
         {
             TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
@@ -235,24 +291,33 @@ namespace SmallBank.Grains
                 {
                     id = myState.account[custName];
                 }
-
-                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item4)
+                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item3)
                 {
                     ret.setException();
                     return ret;
                 }
+                var gID = this.MapCustomerIdToGroup(inputTuple.Item2.Item2);
+                FunctionInput funcInput = new FunctionInput(fin, new DepositCheckingInput(inputTuple.Item2, inputTuple.Item3));
+                Task<FunctionResult> task;
+                if (gID == myState.GroupID)
+                {
+                    task = DepositChecking(funcInput);
+                }
+                else
+                {
+                    var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
+                    FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
+                    task = destination.Execute(funcCall);
+                }
 
-                var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(inputTuple.Item3));
-                FunctionInput funcInput = new FunctionInput(fin, new DepositCheckingInput(inputTuple.Item2, inputTuple.Item4));
-                FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
-                Task<FunctionResult> task = destination.Execute(funcCall);
                 await task;
                 if (task.Result.hasException() == true)
                 {
                     ret.setException();
                     return ret;
                 }
-                myState.checkingAccount[id] -= inputTuple.Item4;              
+                ret.mergeWithFunctionResult(task.Result);
+                myState.checkingAccount[id] -= inputTuple.Item3;              
             }
             catch (Exception)
             {
@@ -261,7 +326,7 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        async Task<FunctionResult> ICustomerAccountGroupGrain.WriteCheck(FunctionInput fin)
+        public async Task<FunctionResult> WriteCheck(FunctionInput fin)
         {
             TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
@@ -298,5 +363,7 @@ namespace SmallBank.Grains
             }
             return ret;
         }
+
+
     }
 }

@@ -22,5 +22,7 @@ namespace SmallBank.Interfaces
         Task<FunctionResult> Transfer(FunctionInput fin);
 
         Task<FunctionResult> MultiTransfer(FunctionInput fin);
+
+        Task<FunctionResult> InitBankAccounts(FunctionInput fin);
     }
 }

@@ -269,6 +269,7 @@
   <ItemGroup>
     <Compile Include="ClientConfiguration.cs" />
     <Compile Include="GrainTests\AccountGrainTest.cs" />
+    <Compile Include="GrainTests\MiniBankTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SystemTests\CommonStateManagementTest.cs" />
     <Compile Include="SystemTests\ScheduleListInsertionTest.cs" />
@@ -296,6 +297,14 @@
     <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj">
       <Project>{07953dc2-b94e-4ad5-8455-4556b56993fb}</Project>
       <Name>Concurrency.Interface</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\SmallBank.Grains\SmallBank.Grains.csproj">
+      <Project>{a5b30f91-bff5-4191-9030-eb44aa85f540}</Project>
+      <Name>SmallBank.Grains</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj">
+      <Project>{2b92ff54-0fd5-405f-ba9b-127d6242ff3a}</Project>
+      <Name>SmallBank.Interfaces</Name>
     </ProjectReference>
     <ProjectReference Include="..\TPCC.Grains\TPCC.Grains.csproj">
       <Project>{4ff2dbad-6461-46e1-a1f1-93eacab979c3}</Project>

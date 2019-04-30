@@ -14,6 +14,8 @@ using Utilities;
 using System.Threading;
 using Utilities;
 using Orleans.Hosting;
+using Concurrency.Interface.Nondeterministic;
+using SmallBank.Interfaces;
 
 namespace OrleansClient
 {
@@ -74,6 +76,7 @@ namespace OrleansClient
                             options.ServiceId = "AccountTransferApp";
                         })
                         .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(IAccountGrain).Assembly).WithReferences())
+                        .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(ICustomerAccountGroupGrain).Assembly).WithReferences())
                         .ConfigureLogging(logging => logging.AddConsole())
                         .Build();
 
@@ -150,20 +153,65 @@ namespace OrleansClient
         private static async Task DoClientWork(IClusterClient client)
         {
 
-            var Test = new GlobalCoordinatorTest(client);
-            await Test.SpawnCoordinator();
-            await Test.ConcurrentDetTransaction();
+            //var Test = new GlobalCoordinatorTest(client);
+            //await Test.SpawnCoordinator();
+            //await Test.ConcurrentDetTransaction();
+            await MiniBankMultiTransfer(client);
         }
 
-        
-        private static async Task RunPerformanceTestOnThroughput(IClusterClient client)
+        private static async Task MiniBankMultiTransfer(IClusterClient client)
         {
-            TestThroughput test = new TestThroughput(n2);
-            if (initActor)
-                await test.initializeGrain(client);
-            await test.DoTest(client, N, false);
+
+             IConfigurationManagerGrain configGrain;
+             Random rand = new Random();
+              uint numOfCoordinators = 5;
+              int batchIntervalMsecs = 1000;
+              int backoffIntervalMsecs = 1000;
+              int idleIntervalTillBackOffSecs = 10;
+             uint numGroup = 10;
+            uint numAccountsPerGroup = 100;
+             int maxNonDetWaitingLatencyInMs = 1000;
+             ConcurrencyType nonDetCCType = ConcurrencyType.TIMESTAMP;
+
+            //Spawn Configuration grain
+            configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
+            var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMs);
+            var coordConfig = new CoordinatorGrainConfiguration(batchIntervalMsecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numOfCoordinators);
+            await configGrain.UpdateNewConfiguration(exeConfig);
+            await configGrain.UpdateNewConfiguration(coordConfig);
+
+            List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
+            for (uint i = 0; i < numGroup; i++)
+            {
+                var localArgs = new Tuple<uint, uint>(numAccountsPerGroup, i);
+                var localInput = new FunctionInput(localArgs);
+                ICustomerAccountGroupGrain target = client.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(i));
+                tasks.Add(target.StartTransaction("InitBankAccounts", localInput));
+            }
+            await Task.WhenAll(tasks);
+
+
+            uint numDestinationAccount = 2;
+            uint sourceID = 201;
+            Tuple<String, UInt32> item1 = new Tuple<string, uint>(sourceID.ToString(), sourceID);
+            float item2 = 10;
+            List<Tuple<string, uint>> item3 = new List<Tuple<string, uint>>();
+            List<uint> destinationIDs = new List<uint>();
+            for (uint i = 0; i < numDestinationAccount; i++)
+            {
+                uint destAccountID = 301;
+                item3.Add(new Tuple<string, uint>(destAccountID.ToString(), destAccountID));
+            }
+            var args = new Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32>>>(item1, item2, item3);
+            var input = new FunctionInput(args);
+            var groupGUID = Helper.convertUInt32ToGuid(sourceID/ numAccountsPerGroup);
+            var destination = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
+            Task<FunctionResult> task = destination.StartTransaction("MultiTransfer", input);
+            await task;
+
 
         }
+
 
         private static async Task TestTransaction(IClusterClient client)
         {
@@ -234,23 +282,6 @@ namespace OrleansClient
             {
                 Console.WriteLine($"\n\n {e.ToString()}\n\n");
             }
-
-            //Deterministic Transactions
-
-            //try
-            //{
-            //    Task t1 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
-            //    Task t2 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
-            //    Task t3 = atm.StartTransaction(grainAccessInformation, "Transfer", input);
-
-            //    await Task.WhenAll(t1, t2, t3);
-            //}
-            //catch (Exception e)
-            //{
-            //    Console.WriteLine($"\n\n {e.ToString()}\n\n");
-            //}
-
-
         }
 
 

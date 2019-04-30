@@ -46,6 +46,7 @@ namespace AccountTransfer.Grains
             FunctionResult ret = new FunctionResult();
             try
             {
+
                 Balance balance = await state.ReadWrite(context);
                 var amount = (float)input;
                 balance.value += amount;
