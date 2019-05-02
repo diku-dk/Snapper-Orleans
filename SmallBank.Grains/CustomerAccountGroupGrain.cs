@@ -32,6 +32,8 @@ namespace SmallBank.Grains
             account = new Dictionary<string, UInt32>();
             savingAccount = new Dictionary<UInt32, float>();
             checkingAccount = new Dictionary<UInt32, float>();
+
+            
         }
         object ICloneable.Clone()
         {
@@ -59,6 +61,8 @@ namespace SmallBank.Grains
         {
         }
 
+
+
         public async Task<FunctionResult> InitBankAccounts(FunctionInput fin)
         {
             TransactionContext context = fin.context;
@@ -78,6 +82,7 @@ namespace SmallBank.Grains
                     myState.savingAccount.Add(accountId, uint.MaxValue);
                     myState.checkingAccount.Add(accountId, uint.MaxValue);
                 }
+                Console.WriteLine("Loaded!");
             }
             catch (Exception)
             {

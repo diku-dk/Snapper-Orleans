@@ -20,9 +20,8 @@ namespace ExperimentProcess
         IDiscreteDistribution detDistribution;
         IDiscreteDistribution grainDistribution;
         IDiscreteDistribution transferAmountDistribution;
-        IClusterClient client;
 
-        public void generateBenchmark(WorkloadConfiguration workloadConfig, IClusterClient client)
+        public void generateBenchmark(WorkloadConfiguration workloadConfig)
         {
             config = workloadConfig;
             if (config.distribution == Utilities.Distribution.ZIPFIAN)
@@ -39,7 +38,7 @@ namespace ExperimentProcess
             transactionTypeDistribution = new DiscreteUniform(0, 99, new Random());
             detDistribution = new DiscreteUniform(0, 99, new Random());
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
-            this.client = client;
+
         }
 
         //getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer
@@ -62,6 +61,11 @@ namespace ExperimentProcess
 
         public Boolean isDet()
         {
+            if (config.deterministicTxnPercent == 0)
+                return false;
+            else if (config.deterministicTxnPercent == 100)
+                return true;
+
             var sample = detDistribution.Sample();
             if (sample < config.deterministicTxnPercent)
                 return true;
@@ -69,16 +73,12 @@ namespace ExperimentProcess
                 return false;
         }
 
-        public Task<FunctionResult> Execute(uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
+        public Task<FunctionResult> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
         {
+            //return Task.FromResult<FunctionResult>(new FunctionResult());
             var grain = client.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(grainId));
             if (isDet())
             {
-                if(grainAccessInfo == null)
-                {
-                    grainAccessInfo = new Dictionary<Guid, Tuple<string, int>>();
-                    grainAccessInfo.Add(Helper.convertUInt32ToGuid(grainId), new Tuple<string, int>(functionName, 1));
-                }
                 return grain.StartTransaction(grainAccessInfo, functionName, input);
             } else
             {
@@ -90,7 +90,8 @@ namespace ExperimentProcess
         {
             return grainId * config.numAccountsPerGroup + (uint)accountIdDistribution.Sample();
         }
-        public Task<FunctionResult> newTransaction()
+
+        public Task<FunctionResult> newTransaction(IClusterClient client)
         {
             TxnType type = nextTransactionType();
             Task<FunctionResult> task = null;
@@ -101,8 +102,7 @@ namespace ExperimentProcess
             {
                 groupId = (uint)accountIdDistribution.Sample();
                 var accountId = getAccountForGrain(groupId);
-                
-                var destination = client.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(groupId));
+               
                 switch (type)
                 {
                     case TxnType.Balance:
@@ -111,17 +111,14 @@ namespace ExperimentProcess
                     case TxnType.DepositChecking:
                         Tuple<Tuple<String, UInt32>, float> args1 = new Tuple<Tuple<string, uint>, float>(new Tuple<string, uint>(accountId.ToString(), accountId), transferAmountDistribution.Sample());
                         input = new FunctionInput(args1);
-                        task = destination.StartTransaction("DepositChecking", input);
                         break;
                     case TxnType.TransactSaving:
                         Tuple<String, float> args2 = new Tuple<string, float>(accountId.ToString(), transferAmountDistribution.Sample());
                         input = new FunctionInput(args2);
-                        task = destination.StartTransaction("TransactSaving", input);
                         break;
                     case TxnType.WriteCheck:
                         Tuple<String, float> args3 = new Tuple<string, float>(accountId.ToString(), transferAmountDistribution.Sample());
                         input = new FunctionInput(args3);
-                        task = destination.StartTransaction("WriteCheck", input);
                         break;
                     default:
                         break;
@@ -178,7 +175,7 @@ namespace ExperimentProcess
                 var args = new Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32>>>(item1, item2, item3);
                 input = new FunctionInput(args);
             }
-            task = Execute(groupId, type.ToString(), input, grainAccessInfo);
+            task = Execute(client, groupId, type.ToString(), input, grainAccessInfo);
             return task;
         }
     }

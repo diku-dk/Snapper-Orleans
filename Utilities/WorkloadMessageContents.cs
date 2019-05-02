@@ -4,8 +4,8 @@ using System.Text;
 
 namespace Utilities
 {
-    public enum TxnType { DET, NONDET, HYBRID };
-    public enum Benchmark {SMALLBANK};
+  
+    public enum BenchmarkType {SMALLBANK};
     public enum Distribution { ZIPFIAN, UNIFORM}
 
     [Serializable]
@@ -14,8 +14,7 @@ namespace Utilities
         public int totalTransactions;
         public int numWorkerNodes;
         public int numThreadsPerWorkerNodes;
-        public TxnType type;
-        public Benchmark benchmark;
+        public BenchmarkType benchmark;
         public Distribution distribution;
 
         //SmallBank Specific configurations

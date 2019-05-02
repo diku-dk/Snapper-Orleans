@@ -8,6 +8,9 @@ using Orleans;
 using ExperimentProcess;
 using Concurrency.Interface;
 using Concurrency.Interface.Nondeterministic;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using SmallBank.Interfaces;
 
 namespace ExperimentConductor
 {
@@ -32,6 +35,7 @@ namespace ExperimentConductor
         static IClusterClient client;
         static Boolean LocalCluster = true;
         static IConfigurationManagerGrain configGrain;
+        static bool configGrainUp = false;
 
         static void PushToWorkers(Object obj) {
             // Task Ventilator
@@ -89,7 +93,7 @@ namespace ExperimentConductor
             if(configGrain == null)
             {
                 ClientConfiguration config = new ClientConfiguration();
-                IClusterClient client = null;
+                
                 if (LocalCluster)
                     client = await config.StartClientWithRetries();
                 else
@@ -100,9 +104,45 @@ namespace ExperimentConductor
                 await configGrain.UpdateNewConfiguration(exeConfig);
                 await configGrain.UpdateNewConfiguration(coordConfig);
                 Console.WriteLine("Spawned the configuration grain.");
+                configGrainUp = true;
             }
         }
 
+        private static void GenerateWorkLoad(WorkloadConfiguration workload)
+        {
+            workload.numWorkerNodes = 1;
+            workload.numThreadsPerWorkerNodes = 2;
+            workload.totalTransactions = numOfWorkers * numOfThreadsPerWorker * 100;
+            workload.benchmark = BenchmarkType.SMALLBANK;
+            workload.distribution = Distribution.UNIFORM;
+
+            workload.numGroups = 100;
+            workload.numAccounts = 10000;
+            workload.numAccountsPerGroup = 100;
+            workload.mixture = new int[6] { 15, 5, 45, 10, 5, 20 };//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
+            workload.numAccountsMultiTransfer = 32;
+            workload.numGrainsMultiTransfer = 4;
+            workload.zipf = 1;
+            workload.deterministicTxnPercent = 100;
+            LoadGrains(workload);
+            //Task.Run(async () => { await LoadGrains(workload); }).GetAwaiter().GetResult();
+            //LoadGrains(workload).Wait();
+            //await LoadGrains(workload).ConfigureAwait(false);
+        }
+
+        private static async void LoadGrains(WorkloadConfiguration workload)
+        {
+            var tasks = new List<Task<FunctionResult>>(); 
+            for(uint i=0; i<workload.numGroups; i++)
+            {
+                var args = new Tuple<uint, uint>(workload.numAccountsPerGroup, i);
+                var input = new FunctionInput(args);
+                var groupGUID = Helper.convertUInt32ToGuid(i);
+                var destination = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
+                tasks.Add(destination.StartTransaction("InitBankAccounts", input));
+            }
+            await Task.WhenAll(tasks);
+        }
 
         static void Main(string[] args)
         {
@@ -112,21 +152,17 @@ namespace ExperimentConductor
                 workerAddress = args[0];
                 sinkAddress = args[1];
             }
+
+           
+            SpawnConfigurationCoordinator();
             var workLoad = new WorkloadConfiguration();
-            workLoad.numWorkerNodes = numOfWorkers;
-            workLoad.numThreadsPerWorkerNodes = numOfThreadsPerWorker;
-            workLoad.totalTransactions = numOfWorkers * numOfThreadsPerWorker * 10;
+            while (!configGrainUp)
+                Thread.Sleep(100);
+            GenerateWorkLoad(workLoad);
 
-            //Spawn the configuration coordinator
-            Thread spawnThread = new Thread(SpawnConfigurationCoordinator);
-            spawnThread.Start();
-            //spawnThread.Join();
-
-            Console.WriteLine("Started the conductor thread.");
             Thread conducterThread = new Thread(PushToWorkers);
             conducterThread.Start(workLoad);
-
-            Console.WriteLine("Started the sink thread.");
+            
             Thread sinkThread = new Thread(PullFromWorkers);
             sinkThread.Start();
 

@@ -14,6 +14,10 @@
     <PackageReference Include="Microsoft.Orleans.Core" Version="2.3.0" />
     <PackageReference Include="Microsoft.Orleans.OrleansAWSUtils" Version="2.3.0" />
     <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator" Version="2.3.0" />
+    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="2.3.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="NetMQ" Version="4.0.0.1" />
   </ItemGroup>
 
@@ -23,6 +27,8 @@
     <ProjectReference Include="..\Concurrency.Implementation\Concurrency.Implementation.csproj" />
     <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
     <ProjectReference Include="..\OrleansClient\OrleansClient.csproj" />
+    <ProjectReference Include="..\SmallBank.Grains\SmallBank.Grains.csproj" />
+    <ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj" />
     <ProjectReference Include="..\TPCC.Grains\TPCC.Grains.csproj" />
     <ProjectReference Include="..\TPCC.Interfaces\TPCC.Interfaces.csproj" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />

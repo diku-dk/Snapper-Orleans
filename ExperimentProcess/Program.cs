@@ -23,55 +23,31 @@ namespace ExperimentProcess
         static PushSocket sink = new PushSocket(sinkAddress);
         static WorkloadResults[] results;
         static volatile int finished = 0;
-    
+        static IBenchmark benchmark;
+        static WorkloadConfiguration config;
 
         private static async void ThreadWorkAsync(Object obj)
         {
-            ThreadWorkload workload = ((Tuple<ThreadWorkload, int>) obj).Item1;
-            int threadIndex = ((Tuple<ThreadWorkload, int>)obj).Item2;
-            ClientConfiguration config = new ClientConfiguration();
+
+            int threadIndex = (int)obj;
+            ClientConfiguration clientConfig = new ClientConfiguration();
             IClusterClient client = null;
             if (LocalCluster)
-                client = await config.StartClientWithRetries();
+                client = await clientConfig.StartClientWithRetries();
             else
-                client = await config.StartClientWithRetriesToCluster();
+                client = await clientConfig.StartClientWithRetriesToCluster();
 
             Stopwatch localWatch = new Stopwatch();
-            localWatch.Start();
+            
             Stopwatch globalWatch = new Stopwatch();
             int numCommit = 0;
-            
-            ITransactionExecutionGrain[] startGrains = new ITransactionExecutionGrain[workload.transactions.Count];
-            long[] latencies = new long[workload.transactions.Count];
-            int index = 0;
-            foreach (var transaction in workload.transactions)
-            {
-                String grainName = transaction.Item1;
-                var startGrainId = transaction.Item2;
-                startGrains[index++] = client.GetGrain<ITransactionExecutionGrain>(startGrainId, grainName);
-            }
-
-            index = 0;
+            int numofTransactions = config.totalTransactions;
+            long[] latencies = new long[numofTransactions];
             globalWatch.Start();
-            foreach (var transaction in workload.transactions)
+            for (int index = 0; index < numofTransactions; index++)
             {
-                String grainName = transaction.Item1;
-                var startGrainId = transaction.Item2;
-                var functionName = transaction.Item3;
-                var functionInputs = transaction.Item4;
-                var isDeterministic = transaction.Item5;
-                var accessInformation = transaction.Item6;
-
-                Task<FunctionResult> task;
                 localWatch.Restart();
-                if (isDeterministic)
-                {
-                    task = startGrains[index].StartTransaction(accessInformation, functionName, functionInputs);
-                }
-                else
-                {
-                    task = startGrains[index].StartTransaction(functionName, functionInputs);
-                }
+                Task<FunctionResult> task = benchmark.newTransaction(client);
                 await task;
                 localWatch.Stop();
                 if (task.Result.hasException() != true)
@@ -82,7 +58,6 @@ namespace ExperimentProcess
                 }
                 else
                     latencies[index] = -1;
-                index++;
             }
             globalWatch.Stop();
             
@@ -102,7 +77,7 @@ namespace ExperimentProcess
             average /= numCommit;
             float throughput = (float)numCommit / ((float)totalLatency / (float)1000);
 
-            WorkloadResults res = new WorkloadResults(workload.transactions.Count, numCommit, min, max, average, throughput);
+            WorkloadResults res = new WorkloadResults(numofTransactions, numCommit, min, max, average, throughput);
             results[threadIndex]= res;
             Interlocked.Increment(ref finished);
             Console.WriteLine($"{res.numSuccessFulTxns} of {res.numTxns} transactions are committed. Latency: {res.averageLatency}. Throughput: {res.throughput}.\n");
@@ -120,8 +95,19 @@ namespace ExperimentProcess
                     var workloadMsg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(conductor.ReceiveFrameBytes());
                     //Parse the workloadMsg
                     Debug.Assert(workloadMsg.msgType == Utilities.MsgType.WORKLOAD_CONFIG);
-                    var workload = Helper.deserializeFromByteArray<WorkloadConfiguration>(workloadMsg.contents);
-                    var numOfThreads = workload.numThreadsPerWorkerNodes;
+                    config = Helper.deserializeFromByteArray<WorkloadConfiguration>(workloadMsg.contents);
+                    switch (config.benchmark)
+                    {
+                        case BenchmarkType.SMALLBANK:
+                            benchmark = new SmallBankBenchmark();
+                            break;
+                        default:
+                            benchmark = new SmallBankBenchmark();
+                            break;
+                    }
+                    benchmark.generateBenchmark(config);
+
+                    var numOfThreads = config.numThreadsPerWorkerNodes;
                     clients = new IClusterClient[numOfThreads];
                     //Spawn Threads
                     Thread[] threads = new Thread[numOfThreads];
@@ -131,7 +117,7 @@ namespace ExperimentProcess
                         int threadIndex = i;
                         Thread thread = new Thread(ThreadWorkAsync);
                         threads[threadIndex] = thread;
-                        thread.Start(new Tuple<ThreadWorkload, int>(new ThreadWorkload(workload), threadIndex));                        
+                        thread.Start(threadIndex);                        
                     }
                     foreach (var thread in threads)
                     {
@@ -144,6 +130,7 @@ namespace ExperimentProcess
                 }
             }
         }
+
 
 
         public static void AggregateAndSendToSink(Object obj)
@@ -175,37 +162,6 @@ namespace ExperimentProcess
             var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_RESULTS);
             msg.contents = Helper.serializeToByteArray<WorkloadResults>(result);
             sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
-        }
-
-
-        public class ThreadWorkload
-        {
-            //Tuple<GrainName, Grain ID, Function Name, Function Inputs, isDeterministic, Access Information>
-            public List<Tuple<String, Guid, String, FunctionInput, Boolean, Dictionary<Guid, Tuple<String, int>>>> transactions;
-          
-            public ThreadWorkload(WorkloadConfiguration config)
-            {
-                transactions = new List<Tuple<string, Guid, string, FunctionInput, bool, Dictionary<Guid, Tuple<string, int>>>>();
-                int numOfTransactions = config.totalTransactions / (config.numWorkerNodes * config.numThreadsPerWorkerNodes);
-
-                for(int i=0; i< numOfTransactions; i++)
-                {
-                    var args = new TransferInput(1, 2, 10);
-                    var grainName = "AccountTransfer.Grains.AccountGrain";
-                    var startGrainId = Helper.convertUInt32ToGuid(1);
-                    var functionName = "Transfer";
-                    var functionInputs = new FunctionInput(args);
-                    var isDeterministic = false;
-                    var accessInformation = new Dictionary<Guid, Tuple<string, int>>();
-                    transactions.Add(new Tuple<string, Guid, string, FunctionInput, bool, Dictionary<Guid, Tuple<string, int>>>
-                        (grainName, startGrainId, functionName, functionInputs, isDeterministic, accessInformation));
-                }
-
-            }
-            public ThreadWorkload()
-            {
-                transactions = new List<Tuple<string, Guid, string, FunctionInput, bool, Dictionary<Guid, Tuple<string, int>>>>();
-            }
         }
         
 

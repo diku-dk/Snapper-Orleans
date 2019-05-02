@@ -9,7 +9,7 @@ namespace ExperimentProcess
 {
     interface IBenchmark
     {
-        void generateBenchmark(WorkloadConfiguration workloadConfig, IClusterClient client);
-        Task<FunctionResult> newTransaction();
+        void generateBenchmark(WorkloadConfiguration workloadConfig);
+        Task<FunctionResult> newTransaction(IClusterClient client);
     }
 }
