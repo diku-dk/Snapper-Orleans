@@ -69,13 +69,26 @@ namespace Utilities
             foreach (var entry in r.grainsInNestedFunctions)
                 if(this.grainsInNestedFunctions.ContainsKey(entry.Key) == false)
                     this.grainsInNestedFunctions.Add(entry.Key,entry.Value);
-            Debug.Assert(this.beforeSet.Count == 0 && this.afterSet.Count == 0);
-            this.beforeSet = r.beforeSet;
-            this.afterSet = r.afterSet;
-            this.maxBeforeBid = r.maxBeforeBid;
-            this.minAfterBid = r.minAfterBid;
-            this.grainWithHighestBeforeBid = this.grainWithHighestBeforeBid;
-            isBeforeAfterConsecutive = r.isBeforeAfterConsecutive;
+
+            if(this.beforeSet.Count == 0 && this.afterSet.Count == 0)
+            {
+                this.grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
+                this.maxBeforeBid = r.maxBeforeBid;
+                this.minAfterBid = r.minAfterBid;
+                this.beforeSet = r.beforeSet;
+                this.afterSet = r.afterSet;
+            } else
+            {
+                this.beforeSet.UnionWith(r.beforeSet);
+                this.afterSet.UnionWith(r.afterSet);
+                if (this.maxBeforeBid < r.maxBeforeBid)
+                {
+                    this.maxBeforeBid = r.maxBeforeBid;
+                    grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
+                }
+                this.minAfterBid = (this.minAfterBid > r.minAfterBid) ? r.minAfterBid : this.minAfterBid;
+                isBeforeAfterConsecutive &= r.isBeforeAfterConsecutive;
+            }            
         }
 
         public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, Boolean consecutive, Tuple<Guid, string>  tuple)

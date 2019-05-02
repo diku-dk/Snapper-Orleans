@@ -26,6 +26,7 @@ namespace Utilities
         public int numAccountsMultiTransfer;
         public int numGrainsMultiTransfer;
         public float zipf;
+        public float deterministicTxnPercent;
     }
 
     [Serializable]
