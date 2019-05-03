@@ -23,7 +23,7 @@ namespace ExperimentConductor
         Random rand = new Random();
         static readonly uint numOfCoordinators = 5;
         static readonly int maxAccounts = 100;
-        static readonly int batchIntervalMsecs = 1000;
+        static readonly int batchIntervalMsecs = 10;
         static readonly int backoffIntervalMsecs = 1000;
         static readonly int idleIntervalTillBackOffSecs = 10;
         readonly int maxTransferAmount = 10;
@@ -46,8 +46,8 @@ namespace ExperimentConductor
             WorkloadConfiguration workload = (WorkloadConfiguration)obj;
             using (var workers = new PushSocket(workerAddress))
             {
-                Console.WriteLine("Press enter when worker are ready");
-                Console.ReadLine();
+                //Console.WriteLine("Press enter when worker are ready");
+                //Console.ReadLine();
 
                 //the first message it "0" and signals start of batch
                 //see the Sink.csproj Program.cs file for where this is used
@@ -75,10 +75,10 @@ namespace ExperimentConductor
                     {
                         var resultMsg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
                         //Parse the workloadResult
-                        Debug.Assert(resultMsg.msgType == Utilities.MsgType.WORKLOAD_RESULTS);
-                        results[taskNumber] = Helper.deserializeFromByteArray<WorkloadResults>(resultMsg.contents);
-                        var res = results[taskNumber];
-                        Console.WriteLine($"{res.numSuccessFulTxns} of {res.numTxns} transactions are committed. Latency: {res.averageLatency}. Throughput: {res.throughput}.\n");
+                        Debug.Assert(resultMsg.msgType == Utilities.MsgType.AGGREGATED_WORKLOAD_RESULTS);
+                        AggregatedWorkloadResults result = Helper.deserializeFromByteArray<AggregatedWorkloadResults>(resultMsg.contents);
+                   
+                        Console.WriteLine($"{result.results.Count} threads reported results.\n");
                     }
                     Console.ReadLine();
                     //Calculate and report the results
@@ -112,7 +112,8 @@ namespace ExperimentConductor
         {
             workload.numWorkerNodes = 1;
             workload.numThreadsPerWorkerNodes = 2;
-            workload.totalTransactions = numOfWorkers * numOfThreadsPerWorker * 100;
+            workload.epochInMiliseconds = 2000;
+            workload.numEpoch = 5;
             workload.benchmark = BenchmarkType.SMALLBANK;
             workload.distribution = Distribution.UNIFORM;
 
@@ -123,11 +124,9 @@ namespace ExperimentConductor
             workload.numAccountsMultiTransfer = 32;
             workload.numGrainsMultiTransfer = 4;
             workload.zipf = 1;
-            workload.deterministicTxnPercent = 100;
+            workload.deterministicTxnPercent = 50;
             LoadGrains(workload);
-            //Task.Run(async () => { await LoadGrains(workload); }).GetAwaiter().GetResult();
-            //LoadGrains(workload).Wait();
-            //await LoadGrains(workload).ConfigureAwait(false);
+            Console.WriteLine("Generated workload configuration");
         }
 
         private static async void LoadGrains(WorkloadConfiguration workload)

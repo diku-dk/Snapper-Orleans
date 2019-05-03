@@ -82,7 +82,6 @@ namespace SmallBank.Grains
                     myState.savingAccount.Add(accountId, uint.MaxValue);
                     myState.checkingAccount.Add(accountId, uint.MaxValue);
                 }
-                Console.WriteLine("Loaded!");
             }
             catch (Exception)
             {

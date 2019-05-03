@@ -11,7 +11,8 @@ namespace Utilities
     [Serializable]
     public class WorkloadConfiguration
     {
-        public int totalTransactions;
+        public int epochInMiliseconds;
+        public int numEpoch;
         public int numWorkerNodes;
         public int numThreadsPerWorkerNodes;
         public BenchmarkType benchmark;
@@ -31,21 +32,36 @@ namespace Utilities
     [Serializable]
     public class WorkloadResults
     {
-        public int numTxns;
-        public int numSuccessFulTxns;
-        public long minLatency;
-        public long maxLatency;
-        public long averageLatency;
-        public float throughput;
+        public int numCommitted;
+        public int numTransactions;
+        public long startTime;
+        public long endTime;
+        public List<long> latencies;
 
-        public WorkloadResults(int numTxns, int numSuccessFulTxns, long minLatency, long maxLatency, long averageLatency, float throughput)
+        public WorkloadResults(int numTransactions, int numCommitted, long startTime, long endTime, List<long> latencies)
         {
-            this.numTxns = numTxns;
-            this.numSuccessFulTxns = numSuccessFulTxns;
-            this.minLatency = minLatency;
-            this.maxLatency = maxLatency;
-            this.averageLatency = averageLatency;
-            this.throughput = throughput;
+            this.numTransactions = numTransactions;
+            this.numCommitted = numCommitted;
+            this.startTime = startTime;
+            this.endTime = endTime;
+            this.latencies = latencies;
+        }
+
+
+    }
+
+    [Serializable]
+    public class AggregatedWorkloadResults
+    {
+        public List<List<WorkloadResults>> results;
+
+        public AggregatedWorkloadResults(List<WorkloadResults>[] input)
+        {
+            results = new List<List<WorkloadResults>>();
+            for(int i=0; i<input.Length; i++)
+            {
+                results.Add(input[i]);
+            }
         }
 
 

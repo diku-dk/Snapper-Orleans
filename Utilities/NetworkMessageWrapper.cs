@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Utilities
 {
-    public enum MsgType { WORKLOAD_CONFIG, WORKLOAD_RESULTS };
+    public enum MsgType { WORKLOAD_CONFIG, WORKLOAD_RESULTS, AGGREGATED_WORKLOAD_RESULTS };
 
     [Serializable]
     public class NetworkMessageWrapper 

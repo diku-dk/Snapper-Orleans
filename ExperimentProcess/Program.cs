@@ -21,10 +21,11 @@ namespace ExperimentProcess
         static String sinkAddress = "@tcp://localhost:5558";
         static String conductorAddress = ">tcp://localhost:5575";
         static PushSocket sink = new PushSocket(sinkAddress);
-        static WorkloadResults[] results;
+        static List<WorkloadResults>[] results;
         static volatile int finished = 0;
         static IBenchmark benchmark;
         static WorkloadConfiguration config;
+        static Barrier[] barriers;
 
         private static async void ThreadWorkAsync(Object obj)
         {
@@ -36,51 +37,41 @@ namespace ExperimentProcess
                 client = await clientConfig.StartClientWithRetries();
             else
                 client = await clientConfig.StartClientWithRetriesToCluster();
-
+            results[threadIndex] = new List<WorkloadResults>();
             Stopwatch localWatch = new Stopwatch();
-            
             Stopwatch globalWatch = new Stopwatch();
             int numCommit = 0;
-            int numofTransactions = config.totalTransactions;
-            long[] latencies = new long[numofTransactions];
-            globalWatch.Start();
-            for (int index = 0; index < numofTransactions; index++)
+            int numTransaction = 0;
+            var latencies = new List<long>();
+
+            for(int eIndex = 0; eIndex < config.numEpoch; eIndex++)
             {
-                localWatch.Restart();
-                Task<FunctionResult> task = benchmark.newTransaction(client);
-                await task;
-                localWatch.Stop();
-                if (task.Result.hasException() != true)
+                globalWatch.Restart();
+                long startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                while (globalWatch.ElapsedMilliseconds < config.epochInMiliseconds)
                 {
-                    numCommit++;
-                    var latency = localWatch.ElapsedMilliseconds;
-                    latencies[index] = latency;
+                    localWatch.Restart();
+                    Task<FunctionResult> task = benchmark.newTransaction(client);
+                    await task;
+                    numTransaction++;
+                    localWatch.Stop();
+                    if (task.Result.hasException() != true)
+                    {
+                        numCommit++;
+                        var latency = localWatch.ElapsedMilliseconds;
+                        latencies.Add(latency);
+                    }
                 }
-                else
-                    latencies[index] = -1;
+                long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                globalWatch.Stop();
+                WorkloadResults res = new WorkloadResults(numTransaction, numCommit, startTime, endTime, latencies);
+                results[threadIndex].Add(res);
+                barriers[eIndex].SignalAndWait();
+                Console.WriteLine($"Completed epoch {eIndex} at {DateTime.Now.ToString()}");
             }
-            globalWatch.Stop();
-            
-            var totalLatency = globalWatch.ElapsedMilliseconds;
 
-            long min = long.MaxValue;
-            long max = long.MinValue;
-            long average = 0;
-            foreach( var latency in latencies){
-                if(latency != -1)
-                {
-                    min = min > latency ? latency : min;
-                    max = max < latency ? latency : max;
-                    average += latency;
-                }
-            }
-            average /= numCommit;
-            float throughput = (float)numCommit / ((float)totalLatency / (float)1000);
-
-            WorkloadResults res = new WorkloadResults(numofTransactions, numCommit, min, max, average, throughput);
-            results[threadIndex]= res;
             Interlocked.Increment(ref finished);
-            Console.WriteLine($"{res.numSuccessFulTxns} of {res.numTxns} transactions are committed. Latency: {res.averageLatency}. Throughput: {res.throughput}.\n");
+            //Console.WriteLine($"{res.numSuccessFulTxns} of {res.numTxns} transactions are committed. Latency: {res.averageLatency}. Throughput: {res.throughput}.\n");
         }
 
 
@@ -108,10 +99,15 @@ namespace ExperimentProcess
                     benchmark.generateBenchmark(config);
 
                     var numOfThreads = config.numThreadsPerWorkerNodes;
+                    var numOfEpochs = config.numEpoch;
+
+                    barriers = new Barrier[numOfEpochs];
+                    for(int i=0; i<barriers.Length; i++)
+                        barriers[i] = new Barrier(participantCount: numOfThreads);
                     clients = new IClusterClient[numOfThreads];
                     //Spawn Threads
                     Thread[] threads = new Thread[numOfThreads];
-                    results = new WorkloadResults[numOfThreads];
+                    results = new List<WorkloadResults>[numOfThreads];
                     for(int i=0; i< numOfThreads; i++)
                     {
                         int threadIndex = i;
@@ -140,27 +136,10 @@ namespace ExperimentProcess
             {
                 Thread.Sleep(10000);
             }
-            long min = long.MaxValue;
-            long max = long.MinValue;
-            long average = 0;
-            int committed = 0;
-            int totalTxns = 0;
-            float throughput = 0;
-            foreach (var res in results)
-            {
-                min = min < res.minLatency ? min : res.minLatency;
-                max = max > res.maxLatency ? max : res.maxLatency;
-                committed += res.numSuccessFulTxns;
-                totalTxns += res.numTxns;
-                average += res.averageLatency;
-                throughput += res.throughput;
-            }
-            average /= results.Length;
-            throughput /= results.Length;
-
-            var result = new WorkloadResults(totalTxns, committed, min, max, average, throughput);
-            var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_RESULTS);
-            msg.contents = Helper.serializeToByteArray<WorkloadResults>(result);
+            
+            var result = new AggregatedWorkloadResults(results);
+            var msg = new NetworkMessageWrapper(Utilities.MsgType.AGGREGATED_WORKLOAD_RESULTS);
+            msg.contents = Helper.serializeToByteArray<AggregatedWorkloadResults>(result);
             sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
         }
         
