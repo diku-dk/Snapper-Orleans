@@ -125,6 +125,7 @@ namespace ExperimentConductor
             workload.numGrainsMultiTransfer = 4;
             workload.zipf = 1;
             workload.deterministicTxnPercent = 50;
+            workload.grainImplementationType = ImplementationType.SNAPPER;
             LoadGrains(workload);
             Console.WriteLine("Generated workload configuration");
         }

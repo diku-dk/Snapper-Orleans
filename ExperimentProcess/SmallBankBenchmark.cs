@@ -76,14 +76,28 @@ namespace ExperimentProcess
         public Task<FunctionResult> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
         {
             //return Task.FromResult<FunctionResult>(new FunctionResult());
-            var grain = client.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(grainId));
-            if (isDet())
+            switch(config.grainImplementationType)
             {
-                return grain.StartTransaction(grainAccessInfo, functionName, input);
-            } else
-            {
-                return grain.StartTransaction(functionName, input);
+                case ImplementationType.SNAPPER:
+                    var grain = client.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(grainId));
+                    if (isDet())
+                    {
+                        return grain.StartTransaction(grainAccessInfo, functionName, input);
+                    }
+                    else
+                    {
+                        return grain.StartTransaction(functionName, input);
+                    }
+                case ImplementationType.ORLEANSEVENTUAL:
+                    var eventuallyConsistentGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(Helper.convertUInt32ToGuid(grainId));
+                    return eventuallyConsistentGrain.StartTransaction(functionName, input);
+                case ImplementationType.ORLEANSTXN:
+                    var txnGrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(Helper.convertUInt32ToGuid(grainId));
+                    return txnGrain.StartTransaction(functionName, input);
+                default:
+                    return null;
             }
+                
         }
 
         private uint getAccountForGrain(uint grainId)

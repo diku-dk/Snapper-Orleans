@@ -6,6 +6,7 @@ namespace Utilities
 {
   
     public enum BenchmarkType {SMALLBANK};
+    public enum ImplementationType { SNAPPER, ORLEANSEVENTUAL, ORLEANSTXN };
     public enum Distribution { ZIPFIAN, UNIFORM}
 
     [Serializable]
@@ -27,6 +28,7 @@ namespace Utilities
         public int numGrainsMultiTransfer;
         public float zipf;
         public float deterministicTxnPercent;
+        public ImplementationType grainImplementationType;
     }
 
     [Serializable]
