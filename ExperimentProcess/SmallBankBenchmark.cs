@@ -114,7 +114,7 @@ namespace ExperimentProcess
             Dictionary<Guid, Tuple<String, int>> grainAccessInfo = null;
             if (type != TxnType.Transfer && type!= TxnType.MultiTransfer)
             {
-                groupId = (uint)accountIdDistribution.Sample();
+                groupId = (uint)grainDistribution.Sample();
                 var accountId = getAccountForGrain(groupId);
                
                 switch (type)
