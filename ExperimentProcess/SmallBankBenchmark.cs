@@ -45,16 +45,20 @@ namespace ExperimentProcess
         public TxnType nextTransactionType()
         {
             int type = transactionTypeDistribution.Sample();
-            int baseCounter = 0;            
-            if (type < (baseCounter += config.mixture[0]))
+            int baseCounter = config.mixture[0];            
+            if (type < baseCounter)
                 return TxnType.Balance;
-            else if (type < (baseCounter += config.mixture[1]))
+            baseCounter += config.mixture[1];
+            if (type < baseCounter)
                 return TxnType.DepositChecking;
-            else if (type < (baseCounter += config.mixture[2]))
+            baseCounter += config.mixture[2];
+            if (type < baseCounter)
                 return TxnType.Transfer;
-            else if (type < (baseCounter += config.mixture[3]))
+            baseCounter += config.mixture[3];
+            if (type < baseCounter)
                 return TxnType.TransactSaving;
-            else if (type < (baseCounter += config.mixture[4]))
+            baseCounter += config.mixture[4];
+            if (type < baseCounter)
                 return TxnType.WriteCheck;
             else
                 return TxnType.MultiTransfer;
