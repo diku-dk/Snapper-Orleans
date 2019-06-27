@@ -27,13 +27,13 @@ namespace ExperimentProcess
             if (config.distribution == Utilities.Distribution.ZIPFIAN)
             {
                 accountIdDistribution = new Zipf(config.zipf, (int)config.numAccountsPerGroup - 1, new Random());
-                grainDistribution = new Zipf(config.zipf, (int)config.numAccounts / (int)config.numAccountsPerGroup - 1, new Random());
+                grainDistribution = new Zipf(config.zipf, ((int)config.numAccounts / (int)config.numAccountsPerGroup) - 1, new Random());
             }
 
             else if (config.distribution == Utilities.Distribution.UNIFORM)
             {
                 accountIdDistribution = new DiscreteUniform(0, (int)config.numAccountsPerGroup - 1, new Random());
-                grainDistribution = new DiscreteUniform(0, (int)config.numAccounts / (int)config.numAccountsPerGroup - 1, new Random());
+                grainDistribution = new DiscreteUniform(0, ((int)config.numAccounts / (int)config.numAccountsPerGroup) - 1, new Random());
             }
             transactionTypeDistribution = new DiscreteUniform(0, 99, new Random());
             detDistribution = new DiscreteUniform(0, 99, new Random());
@@ -45,15 +45,16 @@ namespace ExperimentProcess
         public TxnType nextTransactionType()
         {
             int type = transactionTypeDistribution.Sample();
-            if (type < config.mixture[0])
+            int baseCounter = 0;            
+            if (type < (baseCounter += config.mixture[0]))
                 return TxnType.Balance;
-            else if (type < config.mixture[1])
+            else if (type < (baseCounter += config.mixture[1]))
                 return TxnType.DepositChecking;
-            else if (type < config.mixture[2])
+            else if (type < (baseCounter += config.mixture[2]))
                 return TxnType.Transfer;
-            else if (type < config.mixture[3])
+            else if (type < (baseCounter += config.mixture[3]))
                 return TxnType.TransactSaving;
-            else if (type < config.mixture[4])
+            else if (type < (baseCounter += config.mixture[4]))
                 return TxnType.WriteCheck;
             else
                 return TxnType.MultiTransfer;
