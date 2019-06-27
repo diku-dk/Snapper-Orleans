@@ -19,7 +19,7 @@ namespace ExperimentConductor
         static String workerAddress = "@tcp://localhost:5575";
         static String sinkAddress = ">tcp://localhost:5558";
         static int numOfWorkers = 1; 
-        static int numOfThreadsPerWorker = 2;
+        static int numOfThreadsPerWorker = 4;
         Random rand = new Random();
         static readonly uint numOfCoordinators = 5;
         static readonly int maxAccounts = 100;
@@ -111,21 +111,23 @@ namespace ExperimentConductor
         private static void GenerateWorkLoad(WorkloadConfiguration workload)
         {
             workload.numWorkerNodes = 1;
-            workload.numThreadsPerWorkerNodes = 2;
-            workload.epochInMiliseconds = 2000;
-            workload.numEpoch = 5;
+            workload.numThreadsPerWorkerNodes = 4;
+            workload.epochInMiliseconds = 10000;
+            workload.numEpoch = 2;
             workload.benchmark = BenchmarkType.SMALLBANK;
             workload.distribution = Distribution.UNIFORM;
 
             workload.numGroups = 100;
             workload.numAccounts = 10000;
             workload.numAccountsPerGroup = 100;
-            workload.mixture = new int[6] { 15, 5, 45, 10, 5, 20 };//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
+            //workload.mixture = new int[6] { 15, 5, 45, 10, 5, 20 };//{getBalance, depositChecking, transder,transacSaving, writeCheck, multiTransfer}
+            workload.mixture = new int[6] { 100, 0, 0, 0, 0, 0 };//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
+
             workload.numAccountsMultiTransfer = 32;
             workload.numGrainsMultiTransfer = 4;
             workload.zipf = 1;
-            workload.deterministicTxnPercent = 50;
-            workload.grainImplementationType = ImplementationType.SNAPPER;
+            workload.deterministicTxnPercent = 0;
+            workload.grainImplementationType = ImplementationType.ORLEANSEVENTUAL;
             LoadGrains(workload);
             Console.WriteLine("Generated workload configuration");
         }
@@ -138,7 +140,7 @@ namespace ExperimentConductor
                 var args = new Tuple<uint, uint>(workload.numAccountsPerGroup, i);
                 var input = new FunctionInput(args);
                 var groupGUID = Helper.convertUInt32ToGuid(i);
-                var destination = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
+                var destination = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(groupGUID);
                 tasks.Add(destination.StartTransaction("InitBankAccounts", input));
             }
             await Task.WhenAll(tasks);

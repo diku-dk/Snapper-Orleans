@@ -47,7 +47,7 @@ namespace OrleansSiloHost
                 .Configure<ClusterOptions>(options =>
                 {
                     options.ClusterId = "dev";
-                    options.ServiceId = "AccountTransferApp";
+                    options.ServiceId = "Snapper";
                 })
                 .Configure<GrainCollectionOptions>(options =>
                 {
@@ -82,13 +82,18 @@ namespace OrleansSiloHost
             var builder = new SiloHostBuilder()
                 .Configure<ClusterOptions>(options =>
                 {
-                    options.ClusterId = "dev";
-                    options.ServiceId = "AccountTransferApp";
+                    options.ClusterId = "ec2";
+                    options.ServiceId = "Snapper";
+                })
+                .Configure<GrainCollectionOptions>(options =>
+                {
+                    // Set the value of CollectionAge to 1000 minutes for all grain
+                    options.CollectionAge = TimeSpan.FromMinutes(1000);
+                    // Override the value of CollectionAge to 5 minutes for MyGrainImplementation
+                    //options.ClassSpecificCollectionAge[typeof(MyGrainImplementation).FullName] = TimeSpan.FromMinutes(5);
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .UseDynamoDBClustering(dynamoDBOptions)
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(CustomerAccountGroupGrain).Assembly).WithReferences())
                 .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
             var host = builder.Build();

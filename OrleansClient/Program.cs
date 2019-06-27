@@ -73,10 +73,8 @@ namespace OrleansClient
                         .Configure<ClusterOptions>(options =>
                         {
                             options.ClusterId = "dev";
-                            options.ServiceId = "AccountTransferApp";
+                            options.ServiceId = "Snapper";
                         })
-                        .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(IAccountGrain).Assembly).WithReferences())
-                        .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(ICustomerAccountGroupGrain).Assembly).WithReferences())
                         .ConfigureLogging(logging => logging.AddConsole())
                         .Build();
 
@@ -122,8 +120,8 @@ namespace OrleansClient
                     client = new ClientBuilder()
                         .Configure<ClusterOptions>(options =>
                         {
-                            options.ClusterId = "dev";
-                            options.ServiceId = "AccountTransferApp";
+                            options.ClusterId = "ec2";
+                            options.ServiceId = "Snapper";
                         })
                         .UseDynamoDBClustering(dynamoDBOptions)
                         .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(IAccountGrain).Assembly).WithReferences())

@@ -40,7 +40,7 @@ namespace Test
                                     .Configure<ClusterOptions>(options =>
                                     {
                                         options.ClusterId = "dev";
-                                        options.ServiceId = "AccountTransferApp";
+                                        options.ServiceId = "Snapper";
                                     })
                                     .ConfigureLogging(logging => logging.AddConsole())
                                     .Build();

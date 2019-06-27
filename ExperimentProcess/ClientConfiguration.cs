@@ -41,10 +41,9 @@ namespace ExperimentProcess
                         .Configure<ClusterOptions>(options =>
                         {
                             options.ClusterId = "dev";
-                            options.ServiceId = "AccountTransferApp";
+                            options.ServiceId = "Snapper";
                         })
                         .UseDynamoDBClustering(dynamoDBOptions)
-                        .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(IAccountGrain).Assembly).WithReferences())
                         //.ConfigureLogging(logging => logging.AddConsole())
                         .Build();
 
@@ -82,8 +81,8 @@ namespace ExperimentProcess
                                     .UseLocalhostClustering()
                                     .Configure<ClusterOptions>(options =>
                                     {
-                                        options.ClusterId = "dev";
-                                        options.ServiceId = "AccountTransferApp";
+                                        options.ClusterId = "ec2";
+                                        options.ServiceId = "Snapper";
                                     })
                                     //.ConfigureLogging(logging => logging.AddConsole())
                                     .Build();
