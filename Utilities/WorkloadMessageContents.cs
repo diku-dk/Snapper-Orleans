@@ -9,18 +9,19 @@ namespace Utilities
     public enum ImplementationType { SNAPPER, ORLEANSEVENTUAL, ORLEANSTXN };
     public enum Distribution { ZIPFIAN, UNIFORM}
 
+   
     [Serializable]
     public class WorkloadConfiguration
     {
-        public int epochInMiliseconds;
-        public int numEpoch;
+        public int numClientsToSiloPerWorkerNode;
         public int numWorkerNodes;
-        public int numThreadsPerWorkerNodes;
+        public int numThreadsPerWorkerNode;
+        public int asyncMsgSizePerThread;
         public BenchmarkType benchmark;
+        public int numEpochs;
+        public int epochInMiliseconds;
         public Distribution distribution;
-
         //SmallBank Specific configurations
-        public uint numGroups;
         public uint numAccounts;
         public uint numAccountsPerGroup;
         public int[] mixture;//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}

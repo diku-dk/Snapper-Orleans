@@ -16,133 +16,171 @@ namespace ExperimentProcess
 {
     class Program
     {
-        static Boolean LocalCluster = true;
+        static Boolean LocalCluster = false;
         static IClusterClient[] clients;
         static String sinkAddress = "@tcp://localhost:5558";
         static String conductorAddress = ">tcp://localhost:5575";
         static PushSocket sink = new PushSocket(sinkAddress);
-        static List<WorkloadResults>[] results;
-        static volatile int finished = 0;
-        static IBenchmark benchmark;
+        static WorkloadResults[] results;        
+        static IBenchmark[] benchmarks;
         static WorkloadConfiguration config;
         static Barrier[] barriers;
+        static CountdownEvent[] threadAcks;
+        static bool initializationDone = false;
+        static Thread[] threads;
 
         private static async void ThreadWorkAsync(Object obj)
         {
 
             int threadIndex = (int)obj;
-            ClientConfiguration clientConfig = new ClientConfiguration();
-            IClusterClient client = null;
-            if (LocalCluster)
-                client = await clientConfig.StartClientWithRetries();
-            else
-                client = await clientConfig.StartClientWithRetriesToCluster();
-            results[threadIndex] = new List<WorkloadResults>();
-            Stopwatch localWatch = new Stopwatch();
-            Stopwatch globalWatch = new Stopwatch();
-            int numCommit = 0;
-            int numTransaction = 0;
-            var latencies = new List<long>();
+            var globalWatch = new Stopwatch();
+            var benchmark = benchmarks[threadIndex];
+            IClusterClient client = clients[threadIndex % config.numClientsToSiloPerWorkerNode];
 
-            for(int eIndex = 0; eIndex < config.numEpoch; eIndex++)
+            for(int eIndex = 0; eIndex < config.numEpochs; eIndex++)
             {
+                int numCommit = 0;
+                int numTransaction = 0;
+                var latencies = new List<long>();
+                //Wait for all threads to arrive at barrier point
+                barriers[eIndex].SignalAndWait();
                 globalWatch.Restart();
                 long startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                var tasks = new List<Task<FunctionResult>>();
+                var reqs = new Dictionary<Task<FunctionResult>, long>();
                 while (globalWatch.ElapsedMilliseconds < config.epochInMiliseconds)
                 {
-                    localWatch.Restart();
-                    Task<FunctionResult> task = benchmark.newTransaction(client);
-                    await task;
-                    numTransaction++;
-                    localWatch.Stop();
-                    if (task.Result.hasException() != true)
-                    {
-                        numCommit++;
-                        var latency = localWatch.ElapsedMilliseconds;
-                        latencies.Add(latency);
+                    for(int i=0;i<config.asyncMsgSizePerThread;i++) {
+                        var asyncReqStartTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;                        
+                        Task<FunctionResult> task = benchmark.newTransaction(client);
+                        reqs.Add(task, asyncReqStartTime);
+                        tasks.Add(task);
+                        numTransaction++;
+                    }
+
+                    while(tasks.Count != 0) {
+                        var task = await Task.WhenAny(tasks);
+                        var asyncReqEndTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                        if (task.Result.hasException() != true) {
+                            numCommit++;
+                            var latency = asyncReqEndTime - reqs[task];
+                            latencies.Add(latency);
+                        }
+                        tasks.Remove(task);
+                        reqs.Remove(task);
                     }
                 }
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
                 WorkloadResults res = new WorkloadResults(numTransaction, numCommit, startTime, endTime, latencies);
-                results[threadIndex].Add(res);
-                barriers[eIndex].SignalAndWait();
-                Console.WriteLine($"Completed epoch {eIndex} at {DateTime.Now.ToString()}");
+                results[threadIndex] = res;
+                //Signal the completion of epoch
+                threadAcks[eIndex].Signal();
             }
-
-            Interlocked.Increment(ref finished);
-            //Console.WriteLine($"{res.numSuccessFulTxns} of {res.numTxns} transactions are committed. Latency: {res.averageLatency}. Throughput: {res.throughput}.\n");
         }
 
+        private static void InitializeThreads() {
+            barriers = new Barrier[config.numEpochs];
+            threadAcks = new CountdownEvent[config.numEpochs];
+            for(int i=0; i<config.numEpochs; i++) {
+                barriers[i] = new Barrier(config.numThreadsPerWorkerNode+1);
+                threadAcks[i] = new CountdownEvent(config.numThreadsPerWorkerNode);
+            }                
+            
+            //Spawn Threads        
+            threads = new Thread[config.numThreadsPerWorkerNode];
+            for(int i=0; i< config.numThreadsPerWorkerNode;i++) {
+                int threadIndex = i;
+                Thread thread = new Thread(ThreadWorkAsync);
+                threads[threadIndex] = thread;
+                thread.Start(threadIndex);                        
+            }            
+        }
 
+        private static async Task InitializeClients() {
+            clients = new IClusterClient[config.numClientsToSiloPerWorkerNode];
+            ClientConfiguration clientConfig = new ClientConfiguration();
+
+            for(int i=0;i<config.numClientsToSiloPerWorkerNode;i++) {
+                if (LocalCluster)
+                    clients[i] = await clientConfig.StartClientWithRetries();
+            else
+                clients[i] = await clientConfig.StartClientWithRetriesToCluster();
+            }
+        }
+        private static async void Initialize() {
+            benchmarks = new SmallBankBenchmark[config.numThreadsPerWorkerNode];
+            results = new WorkloadResults[config.numThreadsPerWorkerNode];
+
+            for(int i=0;i<config.numThreadsPerWorkerNode;i++) {
+                switch(config.benchmark) {
+                    case BenchmarkType.SMALLBANK:
+                        benchmarks[i] = new SmallBankBenchmark();
+                        benchmarks[i].generateBenchmark(config);
+                        break;
+                    default:
+                        throw new Exception("Unknown benchmark type");
+                }
+
+            }
+            
+            InitializeThreads();
+            await InitializeClients();
+            initializationDone = true;
+        }
 
         static void ProcessWork()
         {
             Console.WriteLine("====== WORKER ======");
             using (var conductor = new PullSocket(conductorAddress))
             {
-                while (true)
-                {
-                    var workloadMsg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(conductor.ReceiveFrameBytes());
-                    //Parse the workloadMsg
-                    Debug.Assert(workloadMsg.msgType == Utilities.MsgType.WORKLOAD_CONFIG);
-                    config = Helper.deserializeFromByteArray<WorkloadConfiguration>(workloadMsg.contents);
-                    switch (config.benchmark)
-                    {
-                        case BenchmarkType.SMALLBANK:
-                            benchmark = new SmallBankBenchmark();
-                            break;
-                        default:
-                            benchmark = new SmallBankBenchmark();
-                            break;
-                    }
-                    benchmark.generateBenchmark(config);
+                var epoch=0;
+                //Acknowledge the conductor thread
+                var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKER_CONNECT);
+                sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
+                Console.WriteLine("Connected to conductor");
 
-                    var numOfThreads = config.numThreadsPerWorkerNodes;
-                    var numOfEpochs = config.numEpoch;
+                //Wait to receive workload msg
+                msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(conductor.ReceiveFrameBytes());
+                Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT);
+                config = Helper.deserializeFromByteArray<WorkloadConfiguration>(msg.contents);
+                Console.WriteLine("Received workload message from conductor");
 
-                    barriers = new Barrier[numOfEpochs];
-                    for(int i=0; i<barriers.Length; i++)
-                        barriers[i] = new Barrier(participantCount: numOfThreads);
-                    clients = new IClusterClient[numOfThreads];
-                    //Spawn Threads
-                    Thread[] threads = new Thread[numOfThreads];
-                    results = new List<WorkloadResults>[numOfThreads];
-                    for(int i=0; i< numOfThreads; i++)
-                    {
-                        int threadIndex = i;
-                        Thread thread = new Thread(ThreadWorkAsync);
-                        threads[threadIndex] = thread;
-                        thread.Start(threadIndex);                        
-                    }
-                    foreach (var thread in threads)
-                    {
-                        thread.Join();
-                    }
+                //Initialize threads and other data-structures for epoch runs
+                Initialize();
+                while(!initializationDone) 
+                    Thread.Sleep(100);
 
-                    Thread aggregate = new Thread(AggregateAndSendToSink);
-                    aggregate.Start(numOfThreads);
-                    aggregate.Join();
+                Console.WriteLine("Finished initialization, sending ACK to conductor");
+                //Send an ACK
+                msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_INIT_ACK);
+                sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
+
+                for(int i=0;i<config.numEpochs;i++) {
+                    //Wait for EPOCH RUN signal
+                    msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(conductor.ReceiveFrameBytes());
+                    Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH);
+                    Console.WriteLine($"Received signal from conductor. Running epoch {i}");
+                    //Signal the barrier
+                    barriers[i].SignalAndWait();
+                    //Wait for all threads to finish the epoch
+                    threadAcks[i].Wait();
+                    var result = AggregateAcrossThreadsForEpoch(i);
+                    msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH_ACK);
+                    msg.contents = Helper.serializeToByteArray<WorkloadResults>(result);
+                    sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
+                }
+
+                Console.WriteLine("Finished running epochs, exiting");
+                foreach (var thread in threads) {
+                    thread.Join();
                 }
             }
         }
 
-
-
-        public static void AggregateAndSendToSink(Object obj)
-        {
-            int expectedResults = (int)obj;
-            while(finished < expectedResults)
-            {
-                Thread.Sleep(10000);
-            }
-            
-            var result = new AggregatedWorkloadResults(results);
-            var msg = new NetworkMessageWrapper(Utilities.MsgType.AGGREGATED_WORKLOAD_RESULTS);
-            msg.contents = Helper.serializeToByteArray<AggregatedWorkloadResults>(result);
-            sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
+        private static WorkloadResults AggregateAcrossThreadsForEpoch(int epochNumber) {
+            return null;
         }
-        
 
         static void Main(string[] args)
         {
