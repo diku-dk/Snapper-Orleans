@@ -33,7 +33,7 @@ namespace ExperimentConductor
         private static void AggregateResultsAndPrint() {
             Trace.Assert(workload.numEpochs >= 1);
             Trace.Assert(numWorkerNodes >= 1);
-            var aggLatencies = new List<long>();
+            var aggLatencies = new List<double>();
             var throughPutAccumulator = new List<float>();
             var abortRateAccumulator = new List<float>();
             for (int epochNumber = 0; epochNumber < workload.numEpochs; epochNumber++)
@@ -50,7 +50,7 @@ namespace ExperimentConductor
                     aggEndTime = (results[epochNumber,workerNode].endTime < aggEndTime) ? results[epochNumber,workerNode].endTime : aggEndTime;
                     aggLatencies.AddRange(results[epochNumber,workerNode].latencies);
                 }
-                float committedTxnThroughput = (float)aggNumCommitted / (float) (aggEndTime - aggStartTime);
+                float committedTxnThroughput = (float)aggNumCommitted * 1000 / (float) (aggEndTime - aggStartTime);
                 float abortRate = (float)(aggNumTransactions - aggNumCommitted) / (float) aggNumTransactions;
                 throughPutAccumulator.Add(committedTxnThroughput);
                 abortRateAccumulator.Add(abortRate);
@@ -61,11 +61,12 @@ namespace ExperimentConductor
             Console.WriteLine($"Mean Throughput = { throughputMeanAndSd.Item1}, standard deviation = { throughputMeanAndSd.Item2}");
             Console.WriteLine($"Mean Abort rate = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
             //Compute quantiles
-            var aggLatenciesArray = Array.ConvertAll(aggLatencies.ToArray(), e => Convert.ToDouble(e));
-            Console.Write("Latency Percentiles follow ");
+            //var aggLatenciesArray = Array.ConvertAll(aggLatencies.ToArray(), e => Convert.ToDouble(e));
+            //var aggLatenciesArray = aggLatencies.ToArray();
+            Console.Write("Latency (msec) Percentiles follow ");
             foreach (var percentile in workload.percentilesToCalculate)
             {
-                var lat = ArrayStatistics.PercentileInplace(aggLatenciesArray, percentile);
+                var lat = ArrayStatistics.PercentileInplace(aggLatencies.ToArray(), percentile);
                 Console.WriteLine($", {percentile} = {lat}");
             }            
         }
