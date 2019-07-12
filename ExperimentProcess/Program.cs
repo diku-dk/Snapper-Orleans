@@ -179,7 +179,21 @@ namespace ExperimentProcess
         }
 
         private static WorkloadResults AggregateAcrossThreadsForEpoch(int epochNumber) {
-            return null;
+            Trace.Assert(results.Length >= 1);
+            int aggNumCommitted = results[0].numCommitted;
+            int aggNumTransactions = results[0].numTransactions;
+            long aggStartTime = results[0].startTime;
+            long aggEndTime = results[0].endTime;
+            List<long> aggLatencies = new List<long>();
+            for(int i=1;i<results.Length;i++)
+            {
+                aggNumCommitted += results[i].numCommitted;
+                aggNumTransactions += results[i].numTransactions;
+                aggStartTime = (results[i].startTime < aggStartTime) ? results[i].startTime : aggStartTime;
+                aggEndTime = (results[i].endTime < aggEndTime) ? results[i].endTime : aggEndTime;
+                aggLatencies.AddRange(results[i].latencies);
+            }
+            return new WorkloadResults(aggNumTransactions, aggNumCommitted, aggStartTime, aggEndTime, aggLatencies);
         }
 
         static void Main(string[] args)

@@ -11,6 +11,7 @@ using Concurrency.Interface.Nondeterministic;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using SmallBank.Interfaces;
+using MathNet.Numerics.Statistics;
 
 namespace ExperimentConductor
 {
@@ -27,9 +28,46 @@ namespace ExperimentConductor
         static WorkloadConfiguration workload;
         static ExecutionGrainConfiguration exeConfig;
         static CoordinatorGrainConfiguration coordConfig;
+        static WorkloadResults[,] results;
 
         private static void AggregateResultsAndPrint() {
-            //TODO aggregation and printing/saving of experimental results
+            Trace.Assert(workload.numEpochs >= 1);
+            Trace.Assert(numWorkerNodes >= 1);
+            var aggLatencies = new List<long>();
+            var throughPutAccumulator = new List<float>();
+            var abortRateAccumulator = new List<float>();
+            for (int epochNumber = 0; epochNumber < workload.numEpochs; epochNumber++)
+            {                
+                int aggNumCommitted = results[epochNumber,0].numCommitted;
+                int aggNumTransactions = results[epochNumber, 0].numTransactions;
+                long aggStartTime = results[epochNumber,0].startTime;
+                long aggEndTime = results[epochNumber,0].endTime;
+                for (int workerNode = 1; workerNode < numWorkerNodes; workerNode++)
+                {
+                    aggNumCommitted += results[epochNumber,workerNode].numCommitted;
+                    aggNumTransactions += results[epochNumber,workerNode].numTransactions;
+                    aggStartTime = (results[epochNumber,workerNode].startTime < aggStartTime) ? results[epochNumber,workerNode].startTime : aggStartTime;
+                    aggEndTime = (results[epochNumber,workerNode].endTime < aggEndTime) ? results[epochNumber,workerNode].endTime : aggEndTime;
+                    aggLatencies.AddRange(results[epochNumber,workerNode].latencies);
+                }
+                float committedTxnThroughput = (float)aggNumCommitted / (float) (aggEndTime - aggStartTime);
+                float abortRate = (float)(aggNumTransactions - aggNumCommitted) / (float) aggNumTransactions;
+                throughPutAccumulator.Add(committedTxnThroughput);
+                abortRateAccumulator.Add(abortRate);
+            }
+            //Compute statistics on the accumulators, maybe a better way is to maintain a sorted list
+            var throughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(throughPutAccumulator.ToArray());
+            var abortRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(abortRateAccumulator.ToArray());
+            Console.WriteLine($"Mean Throughput = { throughputMeanAndSd.Item1}, standard deviation = { throughputMeanAndSd.Item2}");
+            Console.WriteLine($"Mean Abort rate = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
+            //Compute quantiles
+            var aggLatenciesArray = Array.ConvertAll(aggLatencies.ToArray(), e => Convert.ToDouble(e));
+            Console.Write("Latency Percentiles follow ");
+            foreach (var percentile in workload.percentilesToCalculate)
+            {
+                var lat = ArrayStatistics.PercentileInplace(aggLatenciesArray, percentile);
+                Console.WriteLine($", {percentile} = {lat}");
+            }            
         }
         private static void WaitForWorkerAcksAndReset() {
                 ackedWorkers.Wait();
@@ -76,7 +114,7 @@ namespace ExperimentConductor
                 // Collects results from workers via that socket
                 Console.WriteLine("====== SINK ======");
 
-                WorkloadResults[,] results = new WorkloadResults[workload.numEpochs,numWorkerNodes];
+                results = new WorkloadResults[workload.numEpochs,numWorkerNodes];
                 //socket to receive results on
                 using (var sink = new PullSocket(sinkAddress))
                 {
@@ -140,6 +178,7 @@ namespace ExperimentConductor
             workload.zipf = 1;
             workload.deterministicTxnPercent = 0;
             workload.grainImplementationType = ImplementationType.ORLEANSEVENTUAL;
+            workload.percentilesToCalculate = new int[] { 25, 50, 75, 90, 99};
 
 
             var nonDetCCType = ConcurrencyType.TIMESTAMP;

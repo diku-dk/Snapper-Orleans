@@ -30,6 +30,7 @@ namespace Utilities
         public float zipf;
         public float deterministicTxnPercent;
         public ImplementationType grainImplementationType;
+        public int[] percentilesToCalculate;
     }
 
     [Serializable]
