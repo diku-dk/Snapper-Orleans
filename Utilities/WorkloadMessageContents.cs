@@ -40,9 +40,9 @@ namespace Utilities
         public int numTransactions;
         public long startTime;
         public long endTime;
-        public List<long> latencies;
+        public List<double> latencies;
 
-        public WorkloadResults(int numTransactions, int numCommitted, long startTime, long endTime, List<long> latencies)
+        public WorkloadResults(int numTransactions, int numCommitted, long startTime, long endTime, List<double> latencies)
         {
             this.numTransactions = numTransactions;
             this.numCommitted = numCommitted;

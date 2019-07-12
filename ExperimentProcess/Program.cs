@@ -41,35 +41,35 @@ namespace ExperimentProcess
             {
                 int numCommit = 0;
                 int numTransaction = 0;
-                var latencies = new List<long>();
+                var latencies = new List<double>();
                 //Wait for all threads to arrive at barrier point
                 barriers[eIndex].SignalAndWait();
                 globalWatch.Restart();
-                long startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 var tasks = new List<Task<FunctionResult>>();
-                var reqs = new Dictionary<Task<FunctionResult>, long>();
-                while (globalWatch.ElapsedMilliseconds < config.epochInMiliseconds)
+                var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
+                do
                 {
-                    for(int i=0;i<config.asyncMsgSizePerThread;i++) {
-                        var asyncReqStartTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;                        
-                        Task<FunctionResult> task = benchmark.newTransaction(client);
-                        reqs.Add(task, asyncReqStartTime);
-                        tasks.Add(task);
-                        numTransaction++;
+                    while(tasks.Count < config.asyncMsgSizePerThread)
+                    {
+                        //Pipeline remaining tasks
+                        var asyncReqStartTime = globalWatch.Elapsed;
+                        var newTask = benchmark.newTransaction(client);
+                        reqs.Add(newTask, asyncReqStartTime);
+                        tasks.Add(newTask);
+                        numTransaction++;                        
+                    } 
+                    var task = await Task.WhenAny(tasks);
+                    var asyncReqEndTime = globalWatch.Elapsed;
+                    if (task.Result.hasException() != true)
+                    {
+                        numCommit++;
+                        var latency = asyncReqEndTime - reqs[task];
+                        latencies.Add(latency.TotalMilliseconds);
                     }
-
-                    while(tasks.Count != 0) {
-                        var task = await Task.WhenAny(tasks);
-                        var asyncReqEndTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-                        if (task.Result.hasException() != true) {
-                            numCommit++;
-                            var latency = asyncReqEndTime - reqs[task];
-                            latencies.Add(latency);
-                        }
-                        tasks.Remove(task);
-                        reqs.Remove(task);
-                    }
-                }
+                    tasks.Remove(task);
+                    reqs.Remove(task);
+                } while (globalWatch.ElapsedMilliseconds < config.epochInMiliseconds);
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
                 WorkloadResults res = new WorkloadResults(numTransaction, numCommit, startTime, endTime, latencies);
