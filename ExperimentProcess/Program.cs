@@ -16,7 +16,7 @@ namespace ExperimentProcess
 {
     class Program
     {
-        static Boolean LocalCluster = false;
+        static Boolean LocalCluster = true;
         static IClusterClient[] clients;
         static String sinkAddress = "@tcp://localhost:5558";
         static String conductorAddress = ">tcp://localhost:5575";
@@ -126,11 +126,10 @@ namespace ExperimentProcess
                     default:
                         throw new Exception("Unknown benchmark type");
                 }
-
-            }
+            }            
             
-            InitializeThreads();
             await InitializeClients();
+            InitializeThreads();
             initializationDone = true;
         }
 
@@ -139,7 +138,6 @@ namespace ExperimentProcess
             Console.WriteLine("====== WORKER ======");
             using (var conductor = new PullSocket(conductorAddress))
             {
-                var epoch=0;
                 //Acknowledge the conductor thread
                 var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKER_CONNECT);
                 sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));

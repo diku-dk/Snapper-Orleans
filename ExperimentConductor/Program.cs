@@ -21,7 +21,7 @@ namespace ExperimentConductor
         static String sinkAddress = ">tcp://localhost:5558";
         static int numWorkerNodes = 1; 
         static IClusterClient client;
-        static Boolean LocalCluster = false;
+        static Boolean LocalCluster = true;
         static IConfigurationManagerGrain configGrain;
         static bool asyncInitializationDone = false;
         static CountdownEvent ackedWorkers;
@@ -71,8 +71,9 @@ namespace ExperimentConductor
             }            
         }
         private static void WaitForWorkerAcksAndReset() {
-                ackedWorkers.Wait();
-                ackedWorkers = new CountdownEvent(numWorkerNodes); //Reset for next ack
+            ackedWorkers.Wait();
+            ackedWorkers.Reset(numWorkerNodes); //Reset for next ack, can potentially race with signal
+            //ackedWorkers.AddCount(numWorkerNodes); 
         }
         static void PushToWorkers() {
             // Task Ventilator
@@ -85,9 +86,9 @@ namespace ExperimentConductor
                 WaitForWorkerAcksAndReset();
                 //Send the workload configuration
                 Console.WriteLine($"{numWorkerNodes} worker nodes have connected to Conductor");
-                var netMessage = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_INIT);
-                netMessage.contents = Helper.serializeToByteArray<WorkloadConfiguration>(workload);
-                workers.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(netMessage));
+                var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_INIT);
+                msg.contents = Helper.serializeToByteArray<WorkloadConfiguration>(workload);
+                workers.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
                 Console.WriteLine("Sent workload configuration to workers");
                 //Wait for acks for the workload configuration
                 WaitForWorkerAcksAndReset();
@@ -95,8 +96,8 @@ namespace ExperimentConductor
                 for(int i=0;i<workload.numEpochs;i++) {
                     //Send the command to run an epoch
                     Console.WriteLine($"Running Epoch {i} on worker nodes");
-                    var msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH);
-                    workers.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(netMessage));
+                    msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH);
+                    workers.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
                     WaitForWorkerAcksAndReset();
                     Console.WriteLine($"Finished running epoch {i} on worker nodes");
                 }
@@ -123,13 +124,17 @@ namespace ExperimentConductor
                         var msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
                         Trace.Assert(msg.msgType == Utilities.MsgType.WORKER_CONNECT);
                         ackedWorkers.Signal();
+
+                        msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
+                        Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT_ACK);
+                        ackedWorkers.Signal();
                     }
 
                     //Wait for epoch acks
                     for(int i=0;i<workload.numEpochs;i++) {
-                        for(int j=0;i<numWorkerNodes;j++) {
+                        for(int j=0;j<numWorkerNodes;j++) {
                             var msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
-                            Trace.Assert(msg.msgType != Utilities.MsgType.RUN_EPOCH_ACK);
+                            Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH_ACK);
                             results[i,j] = Helper.deserializeFromByteArray<WorkloadResults>(msg.contents);
                             ackedWorkers.Signal();
                         }                        
@@ -163,9 +168,10 @@ namespace ExperimentConductor
         private static void GenerateWorkLoad()
         {
             workload.numWorkerNodes = numWorkerNodes;
+            workload.numClientsToSiloPerWorkerNode = 1;
             workload.numThreadsPerWorkerNode = 16;
-            workload.epochInMiliseconds = 10000;
-            workload.numEpochs = 2;
+            workload.epochInMiliseconds = 100;
+            workload.numEpochs = 6;
             workload.asyncMsgSizePerThread = 1000;
             
             workload.benchmark = BenchmarkType.SMALLBANK;
