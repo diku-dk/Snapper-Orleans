@@ -56,10 +56,10 @@ namespace ExperimentProcess
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client);
                         reqs.Add(newTask, asyncReqStartTime);
-                        tasks.Add(newTask);
-                        numTransaction++;                        
+                        tasks.Add(newTask);                      
                     } 
                     var task = await Task.WhenAny(tasks);
+                    numTransaction++; //Count transactions now
                     var asyncReqEndTime = globalWatch.Elapsed;
                     if (task.Result.hasException() != true)
                     {
@@ -69,9 +69,14 @@ namespace ExperimentProcess
                     }
                     tasks.Remove(task);
                     reqs.Remove(task);
-                } while (globalWatch.ElapsedMilliseconds < config.epochInMiliseconds);
+                } while (globalWatch.ElapsedMilliseconds < config.epochInMiliseconds);                
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
+                //Wait for the tasks exceeding epoch time but do not count them
+                if (tasks.Count != 0)
+                {                    
+                    await Task.WhenAll(tasks);
+                }
                 WorkloadResults res = new WorkloadResults(numTransaction, numCommit, startTime, endTime, latencies);
                 results[threadIndex] = res;
                 //Signal the completion of epoch
@@ -184,7 +189,7 @@ namespace ExperimentProcess
             int aggNumTransactions = results[0].numTransactions;
             long aggStartTime = results[0].startTime;
             long aggEndTime = results[0].endTime;
-            List<long> aggLatencies = new List<long>();
+            var aggLatencies = new List<double>();
             for(int i=1;i<results.Length;i++)
             {
                 aggNumCommitted += results[i].numCommitted;
