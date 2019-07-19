@@ -71,7 +71,8 @@ namespace ExperimentConductor
             {
                 var lat = ArrayStatistics.PercentileInplace(aggLatencies.ToArray(), percentile);
                 Console.Write($", {percentile} = {lat}");
-            }            
+            }
+            Console.WriteLine();
         }
         private static void WaitForWorkerAcksAndReset() {
             ackedWorkers.Wait();
@@ -103,10 +104,6 @@ namespace ExperimentConductor
                     WaitForWorkerAcksAndReset();
                     Console.WriteLine($"Finished running epoch {i} on worker nodes");
                 }
-
-                Console.WriteLine("Aggregating results");
-                AggregateResultsAndPrint();
-                Console.WriteLine("Finished aggregating results, exiting");
             }
         }
 
