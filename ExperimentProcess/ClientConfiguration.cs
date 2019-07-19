@@ -30,7 +30,7 @@ namespace ExperimentProcess
                     Action<DynamoDBGatewayOptions> dynamoDBOptions = options => {
                         options.AccessKey = "AKIAJILO2SVPTNUZB55Q";
                         options.SecretKey = "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";
-                        options.TableName = "XLibMembershipTable";
+                        options.TableName = "SnapperMembershipTable";
                         options.Service = "eu-west-1";
                         options.WriteCapacityUnits = 10;
                         options.ReadCapacityUnits = 10;
@@ -40,7 +40,7 @@ namespace ExperimentProcess
                     client = new ClientBuilder()
                         .Configure<ClusterOptions>(options =>
                         {
-                            options.ClusterId = "dev";
+                            options.ClusterId = "ec2";
                             options.ServiceId = "Snapper";
                         })
                         .UseDynamoDBClustering(dynamoDBOptions)
@@ -81,7 +81,7 @@ namespace ExperimentProcess
                                     .UseLocalhostClustering()
                                     .Configure<ClusterOptions>(options =>
                                     {
-                                        options.ClusterId = "ec2";
+                                        options.ClusterId = "dev";
                                         options.ServiceId = "Snapper";
                                     })
                                     //.ConfigureLogging(logging => logging.AddConsole())

@@ -72,7 +72,7 @@ namespace OrleansSiloHost
             Action<DynamoDBClusteringOptions> dynamoDBOptions = options => {
                 options.AccessKey = "AKIAJILO2SVPTNUZB55Q";
                 options.SecretKey = "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";
-                options.TableName = "XLibMembershipTable";
+                options.TableName = "SnapperMembershipTable";
                 options.Service = "eu-west-1";
                 options.WriteCapacityUnits = 10;
                 options.ReadCapacityUnits = 10;
