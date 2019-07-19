@@ -19,7 +19,8 @@ namespace ExperimentConductor
     {
         static String workerAddress = "@tcp://localhost:5575";
         static String sinkAddress = ">tcp://localhost:5558";
-        static int numWorkerNodes = 1; 
+        static int numWorkerNodes = 3;
+        static int numWarmupEpoch = 0;
         static IClusterClient client;
         static Boolean LocalCluster = true;
         static IConfigurationManagerGrain configGrain;
@@ -36,12 +37,14 @@ namespace ExperimentConductor
             var aggLatencies = new List<double>();
             var throughPutAccumulator = new List<float>();
             var abortRateAccumulator = new List<float>();
-            for (int epochNumber = 0; epochNumber < workload.numEpochs; epochNumber++)
+            //Skip the epochs upto warm up epochs
+            for (int epochNumber = numWarmupEpoch; epochNumber < workload.numEpochs; epochNumber++)
             {                
                 int aggNumCommitted = results[epochNumber,0].numCommitted;
                 int aggNumTransactions = results[epochNumber, 0].numTransactions;
                 long aggStartTime = results[epochNumber,0].startTime;
                 long aggEndTime = results[epochNumber,0].endTime;
+                aggLatencies.AddRange(results[epochNumber, 0].latencies);
                 for (int workerNode = 1; workerNode < numWorkerNodes; workerNode++)
                 {
                     aggNumCommitted += results[epochNumber,workerNode].numCommitted;
@@ -58,8 +61,8 @@ namespace ExperimentConductor
             //Compute statistics on the accumulators, maybe a better way is to maintain a sorted list
             var throughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(throughPutAccumulator.ToArray());
             var abortRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(abortRateAccumulator.ToArray());
-            Console.WriteLine($"Mean Throughput = { throughputMeanAndSd.Item1}, standard deviation = { throughputMeanAndSd.Item2}");
-            Console.WriteLine($"Mean Abort rate = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
+            Console.WriteLine($"Mean Throughput per second = { throughputMeanAndSd.Item1}, standard deviation = { throughputMeanAndSd.Item2}");
+            Console.WriteLine($"Mean Abort rate (%) = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
             //Compute quantiles
             //var aggLatenciesArray = Array.ConvertAll(aggLatencies.ToArray(), e => Convert.ToDouble(e));
             //var aggLatenciesArray = aggLatencies.ToArray();
@@ -67,13 +70,12 @@ namespace ExperimentConductor
             foreach (var percentile in workload.percentilesToCalculate)
             {
                 var lat = ArrayStatistics.PercentileInplace(aggLatencies.ToArray(), percentile);
-                Console.WriteLine($", {percentile} = {lat}");
+                Console.Write($", {percentile} = {lat}");
             }            
         }
         private static void WaitForWorkerAcksAndReset() {
             ackedWorkers.Wait();
-            ackedWorkers.Reset(numWorkerNodes); //Reset for next ack, can potentially race with signal
-            //ackedWorkers.AddCount(numWorkerNodes); 
+            ackedWorkers.Reset(numWorkerNodes); //Reset for next ack, not thread-safe but provides visibility, ok for us to use due to lock-stepped (distributed producer/consumer) usage pattern i.e., Reset will never called concurrently with other functions (Signal/Wait)            
         }
         static void PushToWorkers() {
             // Task Ventilator
@@ -170,9 +172,9 @@ namespace ExperimentConductor
             workload.numWorkerNodes = numWorkerNodes;
             workload.numClientsToSiloPerWorkerNode = 1;
             workload.numThreadsPerWorkerNode = 16;
-            workload.epochInMiliseconds = 100;
-            workload.numEpochs = 6;
-            workload.asyncMsgSizePerThread = 1000;
+            workload.epochInMiliseconds = 10000;
+            workload.numEpochs = 3;
+            workload.asyncMsgSizePerThread = 1;
             
             workload.benchmark = BenchmarkType.SMALLBANK;
             workload.distribution = Distribution.UNIFORM;
