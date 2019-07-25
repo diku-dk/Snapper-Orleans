@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Threading;
 using System.Diagnostics;
+using System.Configuration;
+using System.Collections.Specialized;
 using NetMQ.Sockets;
 using NetMQ;
 using Utilities;
@@ -35,7 +37,7 @@ namespace ExperimentProcess
             int threadIndex = (int)obj;
             var globalWatch = new Stopwatch();
             var benchmark = benchmarks[threadIndex];
-            IClusterClient client = clients[threadIndex % config.numClientsToSiloPerWorkerNode];
+            IClusterClient client = clients[threadIndex % config.numConnToClusterPerWorkerNode];
 
             for(int eIndex = 0; eIndex < config.numEpochs; eIndex++)
             {
@@ -50,7 +52,7 @@ namespace ExperimentProcess
                 var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
                 do
                 {
-                    while(tasks.Count < config.asyncMsgSizePerThread)
+                    while(tasks.Count < config.asyncMsgLengthPerThread)
                     {
                         //Pipeline remaining tasks
                         var asyncReqStartTime = globalWatch.Elapsed;
@@ -69,7 +71,7 @@ namespace ExperimentProcess
                     }
                     tasks.Remove(task);
                     reqs.Remove(task);
-                } while (globalWatch.ElapsedMilliseconds < config.epochInMiliseconds);                
+                } while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs);                
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
                 //Wait for the tasks exceeding epoch time but do not count them
@@ -103,10 +105,10 @@ namespace ExperimentProcess
         }
 
         private static async Task InitializeClients() {
-            clients = new IClusterClient[config.numClientsToSiloPerWorkerNode];
+            clients = new IClusterClient[config.numConnToClusterPerWorkerNode];
             ClientConfiguration clientConfig = new ClientConfiguration();
 
-            for(int i=0;i<config.numClientsToSiloPerWorkerNode;i++) {
+            for(int i=0;i<config.numConnToClusterPerWorkerNode;i++) {
                 if (LocalCluster)
                     clients[i] = await clientConfig.StartClientWithRetries();
             else
@@ -200,9 +202,15 @@ namespace ExperimentProcess
             return new WorkloadResults(aggNumTransactions, aggNumCommitted, aggStartTime, aggEndTime, aggLatencies);
         }
 
+        private static void InitializeValuesFromConfigFile()
+        {
+            var benchmarkFrameWorkSection = ConfigurationManager.GetSection("BenchmarkFrameworkConfig") as NameValueCollection;
+            LocalCluster = bool.Parse(benchmarkFrameWorkSection["LocalCluster"]);
+        }
         static void Main(string[] args)
         {
             Console.WriteLine("Worker is Started...");
+            InitializeValuesFromConfigFile();
             ProcessWork();
         }
     }

@@ -13,13 +13,13 @@ namespace Utilities
     [Serializable]
     public class WorkloadConfiguration
     {
-        public int numClientsToSiloPerWorkerNode;
+        public int numConnToClusterPerWorkerNode;
         public int numWorkerNodes;
         public int numThreadsPerWorkerNode;
-        public int asyncMsgSizePerThread;
+        public int asyncMsgLengthPerThread;
         public BenchmarkType benchmark;
         public int numEpochs;
-        public int epochInMiliseconds;
+        public int epochDurationMSecs;
         public Distribution distribution;
         //SmallBank Specific configurations
         public uint numAccounts;
@@ -27,7 +27,7 @@ namespace Utilities
         public int[] mixture;//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
         public int numAccountsMultiTransfer;
         public int numGrainsMultiTransfer;
-        public float zipf;
+        public float zipfianConstant;
         public float deterministicTxnPercent;
         public ImplementationType grainImplementationType;
         public int[] percentilesToCalculate;

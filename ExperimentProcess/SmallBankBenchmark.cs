@@ -26,8 +26,8 @@ namespace ExperimentProcess
             config = workloadConfig;
             if (config.distribution == Utilities.Distribution.ZIPFIAN)
             {
-                accountIdDistribution = new Zipf(config.zipf, (int)config.numAccountsPerGroup - 1, new Random());
-                grainDistribution = new Zipf(config.zipf, ((int)config.numAccounts / (int)config.numAccountsPerGroup) - 1, new Random());
+                accountIdDistribution = new Zipf(config.zipfianConstant, (int)config.numAccountsPerGroup - 1, new Random());
+                grainDistribution = new Zipf(config.zipfianConstant, ((int)config.numAccounts / (int)config.numAccountsPerGroup) - 1, new Random());
             }
 
             else if (config.distribution == Utilities.Distribution.UNIFORM)

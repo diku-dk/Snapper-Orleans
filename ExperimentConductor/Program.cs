@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Configuration;
+using System.Collections.Specialized;
 using NetMQ.Sockets;
 using NetMQ;
 using System.Diagnostics;
@@ -19,10 +21,10 @@ namespace ExperimentConductor
     {
         static String workerAddress = "@tcp://localhost:5575";
         static String sinkAddress = ">tcp://localhost:5558";
-        static int numWorkerNodes = 3;
-        static int numWarmupEpoch = 0;
+        static int numWorkerNodes;
+        static int numWarmupEpoch;
         static IClusterClient client;
-        static Boolean LocalCluster = true;
+        static Boolean LocalCluster;
         static IConfigurationManagerGrain configGrain;
         static bool asyncInitializationDone = false;
         static CountdownEvent ackedWorkers;
@@ -31,39 +33,55 @@ namespace ExperimentConductor
         static CoordinatorGrainConfiguration coordConfig;
         static WorkloadResults[,] results;
 
-        private static void GenerateWorkLoad()
+        private static void GenerateWorkLoadFromSettingsFile()
         {
-            workload.numWorkerNodes = numWorkerNodes;
-            workload.numClientsToSiloPerWorkerNode = 1;
-            workload.numThreadsPerWorkerNode = 16;
-            workload.epochInMiliseconds = 10000;
-            workload.numEpochs = 3;
-            workload.asyncMsgSizePerThread = 1;
+            //Parse and initialize benchmarkframework section
+            var benchmarkFrameWorkSection = ConfigurationManager.GetSection("BenchmarkFrameworkConfig") as NameValueCollection;
+            LocalCluster = bool.Parse(benchmarkFrameWorkSection["LocalCluster"]);
+            workload.numWorkerNodes = int.Parse(benchmarkFrameWorkSection["numWorkerNodes"]);
+            numWorkerNodes = workload.numWorkerNodes;
+            workload.numConnToClusterPerWorkerNode = int.Parse(benchmarkFrameWorkSection["numConnToClusterPerWorkerNode"]);
+            workload.numThreadsPerWorkerNode = int.Parse(benchmarkFrameWorkSection["numThreadsPerWorkerNode"]);
+            workload.epochDurationMSecs = int.Parse(benchmarkFrameWorkSection["epochDurationMSecs"]);
+            workload.numEpochs = int.Parse(benchmarkFrameWorkSection["numEpochs"]);
+            numWarmupEpoch = int.Parse(benchmarkFrameWorkSection["numWarmupEpoch"]);
+            workload.asyncMsgLengthPerThread = int.Parse(benchmarkFrameWorkSection["asyncMsgLengthPerThread"]);
+            workload.percentilesToCalculate = Array.ConvertAll<string,int>(benchmarkFrameWorkSection["percentilesToCalculate"].Split(","), x=>int.Parse(x));
 
-            workload.benchmark = BenchmarkType.SMALLBANK;
-            workload.distribution = Distribution.UNIFORM;
-            workload.numAccounts = 10000;
-            workload.numAccountsPerGroup = 10;
-            //workload.mixture = new int[6] { 15, 5, 45, 10, 5, 20 };//{getBalance, depositChecking, transder,transacSaving, writeCheck, multiTransfer}
-            workload.mixture = new int[6] { 100, 0, 0, 0, 0, 0 };//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
-            workload.numAccountsMultiTransfer = 32;
-            workload.numGrainsMultiTransfer = 4;
-            workload.zipf = 1;
-            workload.deterministicTxnPercent = 0;
-            workload.grainImplementationType = ImplementationType.ORLEANSEVENTUAL;
-            workload.percentilesToCalculate = new int[] { 25, 50, 75, 90, 99 };
+            //Parse Snapper configuration
+            var snapperConfigSection = ConfigurationManager.GetSection("SnapperConfig") as NameValueCollection;
+            var nonDetCCType = Enum.Parse<ConcurrencyType>(snapperConfigSection["nonDetCCType"]);
+            var maxNonDetWaitingLatencyInMSecs = int.Parse(snapperConfigSection["maxNonDetWaitingLatencyInMSecs"]);
+            var batchIntervalMSecs = int.Parse(snapperConfigSection["batchIntervalMSecs"]);
+            var idleIntervalTillBackOffSecs = int.Parse(snapperConfigSection["idleIntervalTillBackOffSecs"]);
+            var backoffIntervalMsecs = int.Parse(snapperConfigSection["backoffIntervalMsecs"]);            
+            var numCoordinators = uint.Parse(snapperConfigSection["numCoordinators"]);
+            //Create the configuration objects to be used for ConfigurationGrain
+            exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMSecs);
+            coordConfig = new CoordinatorGrainConfiguration(batchIntervalMSecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
 
+            //Parse workload specific configuration, assumes only one defined in file
 
-            var nonDetCCType = ConcurrencyType.TIMESTAMP;
-            int maxNonDetWaitingLatencyInMs = 10000;
-            int batchIntervalMsecs = 1000;
-            int backoffIntervalMsecs = 10000;
-            int idleIntervalTillBackOffSecs = 30000;
-            uint numOfCoordinators = 5;
-
-            exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMs);
-            coordConfig = new CoordinatorGrainConfiguration(batchIntervalMsecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numOfCoordinators);
+            var benchmarkConfig = ConfigurationManager.GetSection("BenchmarkConfig") as NameValueCollection;
+            workload.benchmark = Enum.Parse<BenchmarkType>(benchmarkConfig["benchmark"]);
+            workload.distribution = Enum.Parse<Distribution>(benchmarkConfig["distribution"]);
+            workload.zipfianConstant = float.Parse(benchmarkConfig["zipfianConstant"]);
+            workload.deterministicTxnPercent = float.Parse(benchmarkConfig["deterministicTxnPercent"]);            
+            workload.mixture = Array.ConvertAll<string, int>(benchmarkFrameWorkSection["mixture"].Split(","), x => int.Parse(x));
+            switch (workload.benchmark)
+            {
+                case BenchmarkType.SMALLBANK:
+                    workload.numAccounts = uint.Parse(benchmarkConfig["numAccounts"]);
+                    workload.numAccountsPerGroup = uint.Parse(benchmarkConfig["numAccountsPerGroup"]);
+                    workload.numAccountsMultiTransfer = int.Parse(benchmarkConfig["numAccountsMultiTransfer"]);
+                    workload.numGrainsMultiTransfer = int.Parse(benchmarkConfig["numGrainsMultiTransfer"]);
+                    workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfig["grainImplementationType"]);
+                    break;
+                default:
+                    throw new Exception("Unknown benchmark type");
+            }
             Console.WriteLine("Generated workload configuration");
+
         }
         private static void AggregateResultsAndPrint() {
             Trace.Assert(workload.numEpochs >= 1);
@@ -239,7 +257,7 @@ namespace ExperimentConductor
             //numWorkerNodes = Convert.ToInt32(numNodes);
             ackedWorkers = new CountdownEvent(numWorkerNodes);            
             workload = new WorkloadConfiguration();
-            GenerateWorkLoad();
+            GenerateWorkLoadFromSettingsFile();
         }
         static void Main(string[] args)
         {
