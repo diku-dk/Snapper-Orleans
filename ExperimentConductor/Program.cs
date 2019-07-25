@@ -31,6 +31,40 @@ namespace ExperimentConductor
         static CoordinatorGrainConfiguration coordConfig;
         static WorkloadResults[,] results;
 
+        private static void GenerateWorkLoad()
+        {
+            workload.numWorkerNodes = numWorkerNodes;
+            workload.numClientsToSiloPerWorkerNode = 1;
+            workload.numThreadsPerWorkerNode = 16;
+            workload.epochInMiliseconds = 10000;
+            workload.numEpochs = 3;
+            workload.asyncMsgSizePerThread = 1;
+
+            workload.benchmark = BenchmarkType.SMALLBANK;
+            workload.distribution = Distribution.UNIFORM;
+            workload.numAccounts = 10000;
+            workload.numAccountsPerGroup = 10;
+            //workload.mixture = new int[6] { 15, 5, 45, 10, 5, 20 };//{getBalance, depositChecking, transder,transacSaving, writeCheck, multiTransfer}
+            workload.mixture = new int[6] { 100, 0, 0, 0, 0, 0 };//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
+            workload.numAccountsMultiTransfer = 32;
+            workload.numGrainsMultiTransfer = 4;
+            workload.zipf = 1;
+            workload.deterministicTxnPercent = 0;
+            workload.grainImplementationType = ImplementationType.ORLEANSEVENTUAL;
+            workload.percentilesToCalculate = new int[] { 25, 50, 75, 90, 99 };
+
+
+            var nonDetCCType = ConcurrencyType.TIMESTAMP;
+            int maxNonDetWaitingLatencyInMs = 10000;
+            int batchIntervalMsecs = 1000;
+            int backoffIntervalMsecs = 10000;
+            int idleIntervalTillBackOffSecs = 30000;
+            uint numOfCoordinators = 5;
+
+            exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMs);
+            coordConfig = new CoordinatorGrainConfiguration(batchIntervalMsecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numOfCoordinators);
+            Console.WriteLine("Generated workload configuration");
+        }
         private static void AggregateResultsAndPrint() {
             Trace.Assert(workload.numEpochs >= 1);
             Trace.Assert(numWorkerNodes >= 1);
@@ -162,42 +196,7 @@ namespace ExperimentConductor
                 Console.WriteLine("Spawned the configuration grain.");
             }
             asyncInitializationDone = true;
-        }
-
-        private static void GenerateWorkLoad()
-        {
-            workload.numWorkerNodes = numWorkerNodes;
-            workload.numClientsToSiloPerWorkerNode = 1;
-            workload.numThreadsPerWorkerNode = 16;
-            workload.epochInMiliseconds = 10000;
-            workload.numEpochs = 3;
-            workload.asyncMsgSizePerThread = 1;
-            
-            workload.benchmark = BenchmarkType.SMALLBANK;
-            workload.distribution = Distribution.UNIFORM;
-            workload.numAccounts = 10000;
-            workload.numAccountsPerGroup = 10;
-            //workload.mixture = new int[6] { 15, 5, 45, 10, 5, 20 };//{getBalance, depositChecking, transder,transacSaving, writeCheck, multiTransfer}
-            workload.mixture = new int[6] { 100, 0, 0, 0, 0, 0 };//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
-            workload.numAccountsMultiTransfer = 32;
-            workload.numGrainsMultiTransfer = 4;
-            workload.zipf = 1;
-            workload.deterministicTxnPercent = 0;
-            workload.grainImplementationType = ImplementationType.ORLEANSEVENTUAL;
-            workload.percentilesToCalculate = new int[] { 25, 50, 75, 90, 99};
-
-
-            var nonDetCCType = ConcurrencyType.TIMESTAMP;
-            int maxNonDetWaitingLatencyInMs = 10000;
-            int batchIntervalMsecs = 1000;
-            int backoffIntervalMsecs = 10000;
-            int idleIntervalTillBackOffSecs = 30000;
-            uint numOfCoordinators = 5;
-
-            exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMs);
-            coordConfig = new CoordinatorGrainConfiguration(batchIntervalMsecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numOfCoordinators);
-            Console.WriteLine("Generated workload configuration");
-        }
+        }        
 
         private static async void LoadGrains()
         {

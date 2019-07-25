@@ -188,6 +188,7 @@ namespace ExperimentProcess
             long aggStartTime = results[0].startTime;
             long aggEndTime = results[0].endTime;
             var aggLatencies = new List<double>();
+            aggLatencies.AddRange(results[0].latencies);
             for(int i=1;i<results.Length;i++)
             {
                 aggNumCommitted += results[i].numCommitted;
