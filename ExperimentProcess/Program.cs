@@ -168,7 +168,7 @@ namespace ExperimentProcess
                     barriers[i].SignalAndWait();
                     //Wait for all threads to finish the epoch
                     threadAcks[i].Wait();
-                    var result = AggregateAcrossThreadsForEpoch(i);
+                    var result = AggregateAcrossThreadsForEpoch();
                     msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH_ACK);
                     msg.contents = Helper.serializeToByteArray<WorkloadResults>(result);
                     sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
@@ -181,7 +181,7 @@ namespace ExperimentProcess
             }
         }
 
-        private static WorkloadResults AggregateAcrossThreadsForEpoch(int epochNumber) {
+        private static WorkloadResults AggregateAcrossThreadsForEpoch() {
             Trace.Assert(results.Length >= 1);
             int aggNumCommitted = results[0].numCommitted;
             int aggNumTransactions = results[0].numTransactions;
