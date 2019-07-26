@@ -21,7 +21,7 @@ namespace ExperimentProcess
         static Boolean LocalCluster = true;
         static IClusterClient[] clients;
         static String sinkAddress = "@tcp://localhost:5558";
-        static String conductorAddress = ">tcp://localhost:5575";
+        static String controllerAddress = ">tcp://localhost:5575";
         static PushSocket sink = new PushSocket(sinkAddress);
         static WorkloadResults[] results;        
         static IBenchmark[] benchmarks;
@@ -138,34 +138,34 @@ namespace ExperimentProcess
         static void ProcessWork()
         {
             Console.WriteLine("====== WORKER ======");
-            using (var conductor = new PullSocket(conductorAddress))
+            using (var controller = new PullSocket(controllerAddress))
             {
-                //Acknowledge the conductor thread
+                //Acknowledge the controller thread
                 var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKER_CONNECT);
                 sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
-                Console.WriteLine("Connected to conductor");
+                Console.WriteLine("Connected to controller");
 
                 //Wait to receive workload msg
-                msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(conductor.ReceiveFrameBytes());
+                msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(controller.ReceiveFrameBytes());
                 Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT);
                 config = Helper.deserializeFromByteArray<WorkloadConfiguration>(msg.contents);
-                Console.WriteLine("Received workload message from conductor");
+                Console.WriteLine("Received workload message from controller");
 
                 //Initialize threads and other data-structures for epoch runs
                 Initialize();
                 while(!initializationDone) 
                     Thread.Sleep(100);
 
-                Console.WriteLine("Finished initialization, sending ACK to conductor");
+                Console.WriteLine("Finished initialization, sending ACK to controller");
                 //Send an ACK
                 msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_INIT_ACK);
                 sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
 
                 for(int i=0;i<config.numEpochs;i++) {
                     //Wait for EPOCH RUN signal
-                    msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(conductor.ReceiveFrameBytes());
+                    msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(controller.ReceiveFrameBytes());
                     Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH);
-                    Console.WriteLine($"Received signal from conductor. Running epoch {i}");
+                    Console.WriteLine($"Received signal from controller. Running epoch {i} across {config.numThreadsPerWorkerNode} worker threads");
                     //Signal the barrier
                     barriers[i].SignalAndWait();
                     //Wait for all threads to finish the epoch

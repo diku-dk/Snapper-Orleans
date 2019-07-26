@@ -34,7 +34,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", 
 		{CDF720FD-C893-4799-A03D-A4EE2CFB81A4} = {CDF720FD-C893-4799-A03D-A4EE2CFB81A4}
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExperimentConductor", "ExperimentConductor\ExperimentConductor.csproj", "{010025A7-EF4E-4B8D-8ECA-5A222A91D020}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExperimentController", "ExperimentController\ExperimentController.csproj", "{010025A7-EF4E-4B8D-8ECA-5A222A91D020}"
 	ProjectSection(ProjectDependencies) = postProject
 		{5E31DAD0-3493-4D6A-81B1-A0A03483305C} = {5E31DAD0-3493-4D6A-81B1-A0A03483305C}
 	EndProjectSection

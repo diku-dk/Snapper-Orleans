@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 using SmallBank.Interfaces;
 using MathNet.Numerics.Statistics;
 
-namespace ExperimentConductor
+namespace ExperimentController
 {
     class Program
     {
@@ -61,21 +61,20 @@ namespace ExperimentConductor
             coordConfig = new CoordinatorGrainConfiguration(batchIntervalMSecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
 
             //Parse workload specific configuration, assumes only one defined in file
-
-            var benchmarkConfig = ConfigurationManager.GetSection("BenchmarkConfig") as NameValueCollection;
-            workload.benchmark = Enum.Parse<BenchmarkType>(benchmarkConfig["benchmark"]);
-            workload.distribution = Enum.Parse<Distribution>(benchmarkConfig["distribution"]);
-            workload.zipfianConstant = float.Parse(benchmarkConfig["zipfianConstant"]);
-            workload.deterministicTxnPercent = float.Parse(benchmarkConfig["deterministicTxnPercent"]);            
-            workload.mixture = Array.ConvertAll<string, int>(benchmarkFrameWorkSection["mixture"].Split(","), x => int.Parse(x));
+            var benchmarkConfigSection = ConfigurationManager.GetSection("BenchmarkConfig") as NameValueCollection;
+            workload.benchmark = Enum.Parse<BenchmarkType>(benchmarkConfigSection["benchmark"]);
+            workload.distribution = Enum.Parse<Distribution>(benchmarkConfigSection["distribution"]);
+            workload.zipfianConstant = float.Parse(benchmarkConfigSection["zipfianConstant"]);
+            workload.deterministicTxnPercent = float.Parse(benchmarkConfigSection["deterministicTxnPercent"]);            
+            workload.mixture = Array.ConvertAll<string, int>(benchmarkConfigSection["mixture"].Split(","), x => int.Parse(x));
             switch (workload.benchmark)
             {
                 case BenchmarkType.SMALLBANK:
-                    workload.numAccounts = uint.Parse(benchmarkConfig["numAccounts"]);
-                    workload.numAccountsPerGroup = uint.Parse(benchmarkConfig["numAccountsPerGroup"]);
-                    workload.numAccountsMultiTransfer = int.Parse(benchmarkConfig["numAccountsMultiTransfer"]);
-                    workload.numGrainsMultiTransfer = int.Parse(benchmarkConfig["numGrainsMultiTransfer"]);
-                    workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfig["grainImplementationType"]);
+                    workload.numAccounts = uint.Parse(benchmarkConfigSection["numAccounts"]);
+                    workload.numAccountsPerGroup = uint.Parse(benchmarkConfigSection["numAccountsPerGroup"]);
+                    workload.numAccountsMultiTransfer = int.Parse(benchmarkConfigSection["numAccountsMultiTransfer"]);
+                    workload.numGrainsMultiTransfer = int.Parse(benchmarkConfigSection["numGrainsMultiTransfer"]);
+                    workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfigSection["grainImplementationType"]);
                     break;
                 default:
                     throw new Exception("Unknown benchmark type");
@@ -113,6 +112,7 @@ namespace ExperimentConductor
             //Compute statistics on the accumulators, maybe a better way is to maintain a sorted list
             var throughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(throughPutAccumulator.ToArray());
             var abortRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(abortRateAccumulator.ToArray());
+            Console.WriteLine($"Results across {workload.numEpochs} with first {numWarmupEpoch} epochs being for warmup follows");
             Console.WriteLine($"Mean Throughput per second = { throughputMeanAndSd.Item1}, standard deviation = { throughputMeanAndSd.Item2}");
             Console.WriteLine($"Mean Abort rate (%) = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
             //Compute quantiles
@@ -137,24 +137,24 @@ namespace ExperimentConductor
             Console.WriteLine("====== VENTILATOR ======");
             using (var workers = new PushSocket(workerAddress))
             {                
-                //Wait for the workers to connect to conductor
+                //Wait for the workers to connect to controller
                 WaitForWorkerAcksAndReset();
                 //Send the workload configuration
-                Console.WriteLine($"{numWorkerNodes} worker nodes have connected to Conductor");
+                Console.WriteLine($"{numWorkerNodes} worker nodes have connected to Controller");
                 var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_INIT);
                 msg.contents = Helper.serializeToByteArray<WorkloadConfiguration>(workload);
                 workers.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
-                Console.WriteLine("Sent workload configuration to workers");
+                Console.WriteLine($"Sent workload configuration to {numWorkerNodes} worker nodes");
                 //Wait for acks for the workload configuration
                 WaitForWorkerAcksAndReset();
 
                 for(int i=0;i<workload.numEpochs;i++) {
                     //Send the command to run an epoch
-                    Console.WriteLine($"Running Epoch {i} on worker nodes");
+                    Console.WriteLine($"Running Epoch {i} on {numWorkerNodes} worker nodes");
                     msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH);
                     workers.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
                     WaitForWorkerAcksAndReset();
-                    Console.WriteLine($"Finished running epoch {i} on worker nodes");
+                    Console.WriteLine($"Finished running epoch {i} on {numWorkerNodes} worker nodes");
                 }
             }
         }
@@ -272,7 +272,7 @@ namespace ExperimentConductor
             //Create the workload grains, load with data
             LoadGrains();
 
-            //Start the conductor thread
+            //Start the controller thread
             Thread conducterThread = new Thread(PushToWorkers);
             conducterThread.Start();
             
