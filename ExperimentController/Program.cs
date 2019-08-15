@@ -27,6 +27,7 @@ namespace ExperimentController
         static Boolean LocalCluster;
         static IConfigurationManagerGrain configGrain;
         static bool asyncInitializationDone = false;
+        static bool loadingDone = false;
         static CountdownEvent ackedWorkers;
         static WorkloadConfiguration workload;
         static ExecutionGrainConfiguration exeConfig;
@@ -248,7 +249,8 @@ namespace ExperimentController
             }
             if(tasks.Count > 0) {
                 await Task.WhenAll(tasks);
-            }            
+            }
+            loadingDone = true;
         }
 
         private static void GetWorkloadSettings() {
@@ -271,6 +273,10 @@ namespace ExperimentController
 
             //Create the workload grains, load with data
             LoadGrains();
+            while(!loadingDone)
+            {
+                Thread.Sleep(100);
+            }
 
             //Start the controller thread
             Thread conducterThread = new Thread(PushToWorkers);
