@@ -3,7 +3,11 @@ using System.Collections.Generic;
 using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using Utilities;
+using Orleans.Runtime;
 using Orleans;
+using Orleans.Core;
+using Orleans.Transactions;
+using Orleans.Transactions.Abstractions;
 
 
 namespace SmallBank.Grains
@@ -20,9 +24,14 @@ namespace SmallBank.Grains
     using InitAccountInput = Tuple<UInt32, UInt32>;
 
     class OrleansTransactionalAccountGroupGrain : Orleans.Grain, IOrleansTransactionalAccountGroupGrain
-    {
-        CustomerAccountGroup state = new CustomerAccountGroup();
+    {   
         public uint numAccountPerGroup = 1;
+        private readonly ITransactionalState<CustomerAccountGroup> state;
+
+        public OrleansTransactionalAccountGroupGrain([TransactionalState("state")]ITransactionalState<CustomerAccountGroup> state)
+        {
+            this.state = state ?? throw new ArgumentNullException(nameof(state));
+        }
 
         private UInt32 MapCustomerIdToGroup(UInt32 accountID)
         {
@@ -31,12 +40,12 @@ namespace SmallBank.Grains
 
         private async Task<FunctionResult> Balance(FunctionInput fin)
         {
-            TransactionContext context = fin.context;
+            Utilities.TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult(-1);
 
             try
             {
-                var myState = state;
+                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
                 var custName = (BalanceInput)fin.inputObject;
                 if (myState.account.ContainsKey(custName))
                 {
@@ -63,11 +72,11 @@ namespace SmallBank.Grains
 
         private async Task<FunctionResult> DepositChecking(FunctionInput fin)
         {
-            TransactionContext context = fin.context;
+            Utilities.TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
             try
             {
-                var myState = state;
+                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
                 var inputTuple = (DepositCheckingInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
@@ -80,7 +89,8 @@ namespace SmallBank.Grains
                     ret.setException();
                     return ret;
                 }
-                myState.checkingAccount[id] += inputTuple.Item2; //Can also be negative for checking account                
+                await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] += inputTuple.Item2);
+                //myState.checkingAccount[id] += inputTuple.Item2; //Can also be negative for checking account                
             }
             catch (Exception)
             {
@@ -91,11 +101,11 @@ namespace SmallBank.Grains
 
         public async Task<FunctionResult> TransactSaving(FunctionInput fin)
         {
-            TransactionContext context = fin.context;
+            Utilities.TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
             try
             {
-                var myState = state;
+                var myState = await state.PerformUpdate<CustomerAccountGroup>(s => s);
                 var inputTuple = (TransactSavingInput)fin.inputObject;
                 if (myState.account.ContainsKey(inputTuple.Item1))
                 {
@@ -110,7 +120,8 @@ namespace SmallBank.Grains
                         ret.setException();
                         return ret;
                     }
-                    myState.savingAccount[id] -= inputTuple.Item2;
+                    await state.PerformUpdate<CustomerAccountGroup>(s => s.savingAccount[id] -= inputTuple.Item2);
+                    //myState.savingAccount[id] -= inputTuple.Item2;
                 }
                 else
                 {
@@ -127,11 +138,11 @@ namespace SmallBank.Grains
 
         private async Task<FunctionResult> Transfer(FunctionInput fin)
         {
-            TransactionContext context = fin.context;
+            Utilities.TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
             try
             {
-                var myState = state;
+                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
                 var inputTuple = (TransferInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
@@ -166,7 +177,8 @@ namespace SmallBank.Grains
                     return ret;
                 }
                 ret.mergeWithFunctionResult(task.Result);
-                myState.checkingAccount[id] -= inputTuple.Item3;
+                await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] -= inputTuple.Item3);
+                //myState.checkingAccount[id] -= inputTuple.Item3;
             }
             catch (Exception)
             {
@@ -177,11 +189,11 @@ namespace SmallBank.Grains
 
         public async Task<FunctionResult> WriteCheck(FunctionInput fin)
         {
-            TransactionContext context = fin.context;
+            Utilities.TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
             try
             {
-                var myState = state;
+                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
                 var inputTuple = (WriteCheckInput)fin.inputObject;
                 if (myState.account.ContainsKey(inputTuple.Item1))
                 {
@@ -193,11 +205,13 @@ namespace SmallBank.Grains
                     }
                     if (myState.savingAccount[id] + myState.checkingAccount[id] < inputTuple.Item2)
                     {
-                        myState.checkingAccount[id] -= (inputTuple.Item2 + 1); //Pay a penalty                        
+                        await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] -= (inputTuple.Item2 + 1));
+                        //myState.checkingAccount[id] -= (inputTuple.Item2 + 1); //Pay a penalty                        
                     }
                     else
                     {
-                        myState.checkingAccount[id] -= inputTuple.Item2;
+                        await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] -= (inputTuple.Item2));
+                        //myState.checkingAccount[id] -= inputTuple.Item2;
                     }
                 }
                 else
@@ -215,11 +229,11 @@ namespace SmallBank.Grains
 
         public async Task<FunctionResult> MultiTransfer(FunctionInput fin)
         {
-            TransactionContext context = fin.context;
+            Utilities.TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
             try
             {
-                var myState = state;
+                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
                 var inputTuple = (MultiTransferInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
@@ -258,7 +272,8 @@ namespace SmallBank.Grains
                     {
                         ret.mergeWithFunctionResult(task.Result);
                     }
-                    myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                    await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count);
+                    //myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
                 }
             }
             catch (Exception)
@@ -270,22 +285,25 @@ namespace SmallBank.Grains
 
         public async Task<FunctionResult> InitBankAccounts(FunctionInput fin)
         {
-            TransactionContext context = fin.context;
+            Utilities.TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
             try
             {
-                var myState = state;
+                //var myState = state;
                 var tuple = (InitAccountInput)fin.inputObject;
                 numAccountPerGroup = tuple.Item1;
-                myState.GroupID = tuple.Item2;
-
-                uint minAccountID = myState.GroupID * numAccountPerGroup;
+                var groupId = tuple.Item2;
+                await state.PerformUpdate<CustomerAccountGroup>(s => s.GroupID = groupId);
+                uint minAccountID = groupId * numAccountPerGroup;
                 for (uint i = 0; i < numAccountPerGroup; i++)
                 {
                     uint accountId = minAccountID + i;
-                    myState.account.Add(accountId.ToString(), accountId);
-                    myState.savingAccount.Add(accountId, uint.MaxValue);
-                    myState.checkingAccount.Add(accountId, uint.MaxValue);
+                    await state.PerformUpdate<CustomerAccountGroup>(s => s.account.Add(accountId.ToString(), accountId));
+                    await state.PerformUpdate<CustomerAccountGroup>(s => s.savingAccount.Add(accountId, uint.MaxValue));
+                    await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount.Add(accountId, uint.MaxValue));
+                    //myState.account.Add(accountId.ToString(), accountId);
+                    //myState.savingAccount.Add(accountId, uint.MaxValue);
+                    //myState.checkingAccount.Add(accountId, uint.MaxValue);
                 }
             }
             catch (Exception)
@@ -298,11 +316,11 @@ namespace SmallBank.Grains
 
         public async Task<FunctionResult> Amalgamate(FunctionInput fin)
         {
-            TransactionContext context = fin.context;
+            Utilities.TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();
             try
             {
-                var myState = state;
+                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
                 var tuple = (AmalgamateInput)fin.inputObject;
                 var id = tuple.Item1;
                 float balance = 0;
@@ -323,8 +341,10 @@ namespace SmallBank.Grains
                 if (!ret.hasException())
                 {
                     //By ensuring state mutation on no exception, we make it deterministic
-                    myState.savingAccount[id] = 0;
-                    myState.checkingAccount[id] = 0;
+                    await state.PerformUpdate<CustomerAccountGroup>(s => s.savingAccount[id] = 0);
+                    await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] = 0);
+                    //myState.savingAccount[id] = 0;
+                    //myState.checkingAccount[id] = 0;
                 }
             }
             catch (Exception)

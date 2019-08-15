@@ -59,7 +59,8 @@ namespace OrleansSiloHost
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(CustomerAccountGroupGrain).Assembly).WithReferences())
                 .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
+                .AddMemoryGrainStorageAsDefault().UseTransactions();
             
             var host = builder.Build();
             await host.StartAsync();
@@ -94,7 +95,8 @@ namespace OrleansSiloHost
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .UseDynamoDBClustering(dynamoDBOptions)
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
+                .AddMemoryGrainStorageAsDefault().UseTransactions();
 
             var host = builder.Build();
             
