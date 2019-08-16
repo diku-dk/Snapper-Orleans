@@ -63,7 +63,17 @@ namespace ExperimentProcess
                     var task = await Task.WhenAny(tasks);
                     numTransaction++; //Count transactions now
                     var asyncReqEndTime = globalWatch.Elapsed;
-                    if (task.Result.hasException() != true)
+                    bool noException = true;
+                    try
+                    {
+                        //Needed to catch exception of individual task (not caught by Snapper's exception) which would not be thrown by WhenAny
+                        await task;
+                    } catch (Exception)
+                    {
+                        noException = false;
+                    }
+                    
+                    if (noException && task.Result.hasException() != true)
                     {
                         numCommit++;
                         var latency = asyncReqEndTime - reqs[task];
