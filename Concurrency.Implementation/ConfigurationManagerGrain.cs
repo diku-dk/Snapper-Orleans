@@ -43,8 +43,8 @@ namespace Concurrency.Implementation
 
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(CoordinatorGrainConfiguration config)
         {
-            if (config == null || coordinatorGrainGlobalConfig != null)
-                return;
+            if (config == null)
+                throw new ArgumentNullException(nameof(config));
 
             if (coordinatorGrainGlobalConfig == null)
             {
@@ -70,14 +70,17 @@ namespace Concurrency.Implementation
 
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(ExecutionGrainConfiguration config)
         {
-            if(config == null || executionGrainGlobalConfig != null)
+            if(config == null)
             {
-                return;
+                throw new ArgumentNullException(nameof(config));
             }
             //Support only single config changes for now
             if (this.executionGrainGlobalConfig == null)
             {
                 this.executionGrainGlobalConfig = config;
+            } else
+            {
+                throw new NotImplementedException("Cannot support multiple configuration updates for now");
             }
         }
 
