@@ -25,9 +25,8 @@ namespace ExperimentController
         static int numWarmupEpoch;
         static IClusterClient client;
         static Boolean LocalCluster;
-        static IConfigurationManagerGrain configGrain;
-        static bool asyncInitializationDone = false;
-        static bool loadingDone = false;
+        static volatile bool asyncInitializationDone = false;
+        static volatile bool loadingDone = false;
         static CountdownEvent ackedWorkers;
         static WorkloadConfiguration workload;
         static ExecutionGrainConfiguration exeConfig;
@@ -208,8 +207,8 @@ namespace ExperimentController
                     client = await config.StartClientWithRetriesToCluster();
             }
 
-            if(configGrain == null && workload.grainImplementationType == ImplementationType.SNAPPER) {
-                configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
+            if(workload.grainImplementationType == ImplementationType.SNAPPER) {
+                var configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
                 await configGrain.UpdateNewConfiguration(exeConfig);
                 await configGrain.UpdateNewConfiguration(coordConfig);
                 Console.WriteLine("Spawned the configuration grain.");
