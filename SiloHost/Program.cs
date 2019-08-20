@@ -15,6 +15,8 @@ namespace OrleansSiloHost
 {
     public class Program
     {
+        static readonly bool localCluster = true;
+        static readonly bool enableOrleansTxn = false;
         public static int Main(string[] args)
         {
             return RunMainAsync().Result;
@@ -24,8 +26,11 @@ namespace OrleansSiloHost
         {
             try
             {
-                var host = await StartSilo();
-                //var host = await StartClusterSilo();
+                ISiloHost host;
+                if (localCluster) 
+                    host = await StartSilo();
+                else
+                    host = await StartClusterSilo();
                 Console.WriteLine("Press Enter to terminate...");
                 Console.ReadLine();
 
@@ -42,6 +47,7 @@ namespace OrleansSiloHost
 
         private static async Task<ISiloHost> StartSilo()
         {
+
             var builder = new SiloHostBuilder()
                 .UseLocalhostClustering()
                 .Configure<ClusterOptions>(options =>
@@ -57,10 +63,10 @@ namespace OrleansSiloHost
                     //options.ClassSpecificCollectionAge[typeof(MyGrainImplementation).FullName] = TimeSpan.FromMinutes(5);
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(CustomerAccountGroupGrain).Assembly).WithReferences())
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(AccountGrain).Assembly).WithReferences())
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
-                .AddMemoryGrainStorageAsDefault().UseTransactions();
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+
+            if(enableOrleansTxn)
+                builder.AddMemoryGrainStorageAsDefault().UseTransactions();
             
             var host = builder.Build();
             await host.StartAsync();
@@ -95,11 +101,12 @@ namespace OrleansSiloHost
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .UseDynamoDBClustering(dynamoDBOptions)
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
-                .AddMemoryGrainStorageAsDefault().UseTransactions();
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
-            var host = builder.Build();
-            
+            if (enableOrleansTxn)
+                builder.AddMemoryGrainStorageAsDefault().UseTransactions();
+
+            var host = builder.Build();            
             await host.StartAsync();
             return host;
         }
