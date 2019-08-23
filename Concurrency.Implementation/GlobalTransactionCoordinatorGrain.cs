@@ -179,7 +179,7 @@ namespace Concurrency.Implementation
                 if (token.backoff)
                 {
                     //Block
-                    await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / coordinatorList.Count));
+                    await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / (coordinatorList.Count+1)));
                 }
                 else if (!token.idleToken)
                 {
@@ -194,7 +194,7 @@ namespace Concurrency.Implementation
                     {
                         //Token traverses full round being idle, enable backoff
                         token.backoff = true;
-                        await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / coordinatorList.Count));
+                        await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / (coordinatorList.Count+1)));
                     }                        
                 }
             } else
@@ -480,7 +480,7 @@ namespace Concurrency.Implementation
             } else
                 this.spawned = true;
             
-            waitingTime = TimeSpan.FromMilliseconds(2000);            
+            waitingTime = TimeSpan.FromMilliseconds(1);            
             this.batchIntervalMSecs = batchIntervalMSecs;
             if(idleIntervalTillBackOffSecs > 3600 )
             {
@@ -489,7 +489,7 @@ namespace Concurrency.Implementation
             this.idleIntervalTillBackOffSecs = idleIntervalTillBackOffSecs;
             batchInterval = TimeSpan.FromMilliseconds(batchIntervalMSecs);            
             this.backoffTimeIntervalMSecs = backoffIntervalMSecs;
-            disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
+            
 
             uint neighbourId = (myId + 1) % numofCoordinators;
             neighbour = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(neighbourId));
@@ -501,6 +501,7 @@ namespace Concurrency.Implementation
             }            
             this.myId = myId;
             this.neighbourId = neighbourId;
+            disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
             Console.WriteLine($"\n Coordinator {myId}: is initialized, my next neighbour is coordinator {neighbourId}");
         }
     }
