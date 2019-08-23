@@ -105,7 +105,7 @@ namespace ExperimentController
                     aggLatencies.AddRange(results[epochNumber,workerNode].latencies);
                 }
                 float committedTxnThroughput = (float)aggNumCommitted * 1000 / (float) (aggEndTime - aggStartTime);
-                float abortRate = (float)(aggNumTransactions - aggNumCommitted) / (float) aggNumTransactions;
+                float abortRate = (float)(aggNumTransactions - aggNumCommitted) * 100 / (float) aggNumTransactions;
                 throughPutAccumulator.Add(committedTxnThroughput);
                 abortRateAccumulator.Add(abortRate);
             }
