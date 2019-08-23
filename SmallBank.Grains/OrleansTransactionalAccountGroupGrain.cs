@@ -165,7 +165,7 @@ namespace SmallBank.Grains
                 }
                 else
                 {
-                    var destination = this.GrainFactory.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
+                    var destination = this.GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
                     FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
                     task = destination.StartTransaction("DepositChecking", funcInput);
                 }
@@ -262,7 +262,7 @@ namespace SmallBank.Grains
                         }
                         else
                         {
-                            var destination = this.GrainFactory.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
+                            var destination = this.GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
                             var task = destination.StartTransaction("DepositChecking", funcInput);
                             tasks.Add(task);
                         }
