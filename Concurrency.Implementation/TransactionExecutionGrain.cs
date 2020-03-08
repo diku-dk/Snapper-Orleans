@@ -34,8 +34,10 @@ namespace Concurrency.Implementation
         {            
             myPrimaryKey = this.GetPrimaryKey();
             var configTuple = await this.GrainFactory.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0)).GetConfiguration(myUserClassName, myPrimaryKey);
-            //Console.WriteLine($"Coordinator id = {configTuple.Item2}");
+            // configTuple: Tuple<ExecutionGrainConfiguration, uint>
+            // uint: coordinator ID
             myCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(configTuple.Item2));
+            // new HybridState<TState>(ConcurrencyType type)
             this.state = new HybridState<TState>(configTuple.Item1.nonDetCCConfiguration.nonDetConcurrencyManager);
             if(configTuple.Item1.logConfiguration.isLoggingEnabled)
             {
@@ -44,8 +46,6 @@ namespace Concurrency.Implementation
             batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();
             myScheduler = new TransactionScheduler(batchScheduleMap, configTuple.Item1.maxNonDetWaitingLatencyInMs, this.GrainFactory);
             coordinatorMap = new Dictionary<int, Guid>();
-            
-            //return base.OnActivateAsync();
         }
 
 
@@ -89,7 +89,7 @@ namespace Concurrency.Implementation
                 //canCommit = canCommit & serializable;
                 if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)
                 {
-                    Boolean serializable = this.CheckSerializability(context.transactionID, t1.Result).Result;
+                    Boolean serializable = this.CheckSerializability(t1.Result).Result;
                     canCommit = serializable;
                     if(canCommit)
                         canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
@@ -157,9 +157,17 @@ namespace Concurrency.Implementation
             }
             return canCommit;
         }
-
-        public async Task<Boolean> CheckSerializability(int tid, FunctionResult result)
+        // TODO: changed by Yijian
+        public async Task<Boolean> CheckSerializability(FunctionResult result)
         {
+            if (result.beforeSet.Count == 0) return true;
+            if (result.isBeforeAfterConsecutive && result.maxBeforeBid < result.minAfterBid) return true;
+            if (result.maxBeforeBid >= result.minAfterBid) return false;
+            // isBeforeAfterConsecutive = false && result.maxBeforeBid < result.minAfterBid
+            //TODO HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(result.maxBeforeBidPerGrain, result.grainsInNestedFunctions);
+            return true;
+
+            /*
             Boolean serializable = true;
             if (result.beforeSet.Count == 0)
             {
@@ -188,8 +196,7 @@ namespace Concurrency.Implementation
                     serializable = true;
                 }
             }
-            return serializable;
-
+            return serializable;*/
         }
 
         public async Task WaitForBatchCommit(int bid)
@@ -298,12 +305,21 @@ namespace Concurrency.Implementation
                 invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
 
             var beforeSet = myScheduler.getBeforeSet(tid, out maxBeforeBid);
-            var afterSet = myScheduler.getAfterSet(tid, out minAfterBid);
+
+            if (!invokeRet.maxBeforeBidPerGrain.ContainsKey(this.myPrimaryKey))
+                invokeRet.maxBeforeBidPerGrain.Add(myPrimaryKey, maxBeforeBid);
+            else
+            {
+                if (invokeRet.maxBeforeBidPerGrain[myPrimaryKey] < maxBeforeBid)
+                    invokeRet.maxBeforeBidPerGrain[myPrimaryKey] = maxBeforeBid;
+            }
+
+            var afterSet = myScheduler.getAfterSet(tid, maxBeforeBid, out minAfterBid);
             invokeRet.beforeSet.UnionWith(beforeSet);
             invokeRet.afterSet.UnionWith(afterSet);
-            if (maxBeforeBid == int.MinValue || minAfterBid == int.MaxValue)
-                isBeforeAfterConsecutive = false;
-            else if (batchScheduleMap[minAfterBid].lastBatchID == maxBeforeBid)
+            // TODO: chenged by Yijian
+            if (minAfterBid == int.MaxValue) isBeforeAfterConsecutive = false;
+            else if (batchScheduleMap[minAfterBid].lastBatchID == maxBeforeBid || maxBeforeBid == int.MinValue)
                 isBeforeAfterConsecutive = true;
             invokeRet.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive, new Tuple<Guid, string>(this.myPrimaryKey, this.myUserClassName));
         }

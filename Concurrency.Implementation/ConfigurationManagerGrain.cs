@@ -33,6 +33,7 @@ namespace Concurrency.Implementation
                 var grain = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grainId, grainClassName);
                 grainIndex.Add(tuple, grain);
             }
+            // must initialize coordinator first
             if(coordinatorGrainGlobalConfig == null)
             {
                 throw new Exception("No information about coordinators has been registered");
@@ -68,6 +69,7 @@ namespace Concurrency.Implementation
             }
         }
 
+        // called directly by client
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(ExecutionGrainConfiguration config)
         {
             if(config == null)
@@ -84,6 +86,7 @@ namespace Concurrency.Implementation
             }
         }
 
+        // TODO: used for what purpose???? (Yijian)
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(Dictionary<Tuple<string, Guid>, ExecutionGrainConfiguration> grainSpecificConfigs)
         {
             //Insert or update the existing configuration

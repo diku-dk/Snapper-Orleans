@@ -53,6 +53,7 @@ namespace Concurrency.Implementation.Logging
             await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), Helper.serializeToByteArray<LogFormat<TState>>(logRecord));
         }
 
+        // TODO: state is not written to log ? (Yijian)
         async Task ILoggingProtocol<TState>.HandleOnCommitIn2PC(ITransactionalState<TState> state, int tid, Guid coordinatorKey)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.COMMIT, coordinatorKey, tid);

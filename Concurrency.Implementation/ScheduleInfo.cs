@@ -119,6 +119,7 @@ namespace Concurrency.Implementation
                 nodes.Add(schedule.lastBatchID, prevNode);
                 prevNode.next = node;
                 node.prev = prevNode;
+                // TODO: at this time, prevNode.prev == null (Yijian)
             }
             if (node.id > tail.id)
                 tail = node;
@@ -146,34 +147,17 @@ namespace Concurrency.Implementation
             return result;
         }
 
-        public HashSet<int> getAfterSet(int tid, out int minAfterBid)
+        // TODO: changed by Yijian
+        public HashSet<int> getAfterSet(int tid, int maxBeforeBid, out int minAfterBid)
         {
+            minAfterBid = int.MaxValue;
             var result = new HashSet<int>();
-            var node = nodes[nonDetTxnToScheduleMap[tid]].next;
-            bool foundAll = false;
-            minAfterBid = node == null ? int.MaxValue : node.id;
-            while (node != null)
+            foreach (var key in nodes.Keys)
             {
-                if(node.isDet)
+                if (key > maxBeforeBid && nodes[key].isDet)
                 {
-                    result.Add(node.id);
-                }
-                if (node == tail)
-                {
-                    foundAll = true;
-                }
-                node = node.next;                
-            }
-
-            if(!foundAll)
-            {
-                minAfterBid = int.MaxValue;
-                foreach (var key in nodes.Keys) {
-                    if(key > tid && nodes[key].isDet)
-                    {
-                        result.Add(key);
-                        minAfterBid = minAfterBid > key ? key: minAfterBid;
-                    }
+                    result.Add(key);
+                    minAfterBid = minAfterBid > key ? key : minAfterBid;
                 }
             }
             return result;

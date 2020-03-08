@@ -39,8 +39,10 @@ namespace Utilities
         public int minAfterBid;
         public Boolean isBeforeAfterConsecutive = false;
         public Boolean readOnly = false;
-        public Tuple<Guid, String> grainWithHighestBeforeBid; 
+        public Tuple<Guid, String> grainWithHighestBeforeBid;
+        public Dictionary<Guid, int> maxBeforeBidPerGrain;
 
+        // TODO: chenged by Yijian
         public FunctionResult(Object resultObject, FunctionResult r)
         {
             this.resultObject = resultObject;
@@ -51,6 +53,9 @@ namespace Utilities
             this.isBeforeAfterConsecutive = r.isBeforeAfterConsecutive;
             this.beforeSet = new HashSet<int>();
             this.afterSet = new HashSet<int>();
+            this.maxBeforeBidPerGrain = new Dictionary<Guid, int>();
+            foreach (var entry in r.maxBeforeBidPerGrain)
+                this.maxBeforeBidPerGrain.Add(entry.Key, entry.Value);
         }
 
         public FunctionResult(Object resultObject=null)
@@ -61,6 +66,7 @@ namespace Utilities
             this.afterSet = new HashSet<int>();
             this.maxBeforeBid = int.MinValue;
             this.minAfterBid = int.MaxValue;
+            this.maxBeforeBidPerGrain = new Dictionary<Guid, int>();
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
@@ -69,6 +75,17 @@ namespace Utilities
             foreach (var entry in r.grainsInNestedFunctions)
                 if(this.grainsInNestedFunctions.ContainsKey(entry.Key) == false)
                     this.grainsInNestedFunctions.Add(entry.Key,entry.Value);
+
+            foreach (var entry in r.maxBeforeBidPerGrain)
+                if (this.maxBeforeBidPerGrain.ContainsKey(entry.Key) == false)
+                {
+                    this.maxBeforeBidPerGrain.Add(entry.Key, entry.Value);
+                }   
+                else
+                {
+                    if (this.maxBeforeBidPerGrain[entry.Key] < entry.Value)
+                        this.maxBeforeBidPerGrain[entry.Key] = entry.Value;
+                }
 
             if(this.beforeSet.Count == 0 && this.afterSet.Count == 0)
             {

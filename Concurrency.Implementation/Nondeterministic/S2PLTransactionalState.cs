@@ -15,7 +15,9 @@ namespace Concurrency.Implementation.Nondeterministic
         // In-memory version of the persistent state.        
         private TState activeState;
         private bool writeLockTaken;        
-        private int writeLockTakenByTid;        
+        private int writeLockTakenByTid;
+        // SemaphoreSlim can limit the number of threads that can concurrently get access to this state (Yijian)
+        // TODO: why not use ReaderWriterLock??? (Yijian) 这种lock可以wait，但不能自己die
         private SemaphoreSlim writeSemaphore;
         private SemaphoreSlim readSemaphore;
         private SortedSet<int> readers;
@@ -33,6 +35,7 @@ namespace Concurrency.Implementation.Nondeterministic
             aborters = new SortedSet<int>();
         }
 
+        // TODO: not referenced (Yijian)
         private async Task<TState> AccessState(int tid, TState committedState)
         {
             if (writeLockTaken)
@@ -85,26 +88,32 @@ namespace Concurrency.Implementation.Nondeterministic
                     return activeState;
                 } else
                 {
+                    // deadlock prevention: wait-die
+                    // Ti wants the lock that Tj holds, if Ti < Tj, Ti waits for Tj
                     if (tid < writeLockTakenByTid)
                     {
                         readers.Add(tid);
                         //Wait for writer
                         await readSemaphore.WaitAsync();                        
-                        return committedState.GetState();
-                    } else
+                        return committedState.GetState();   // TODO: committed state??? (Yijian)
+                    }
+                    else   // if Ti > Tj, abort Ti
                     {
                         aborters.Add(tid);
                         throw new DeadlockAvoidanceException($"Reader txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
                     }                 
                 }
-            } else
+            }
+            else
             {
                 readers.Add(tid);
-                Debug.Assert(writers.Count == 0);
+                Debug.Assert(writers.Count == 0);   // TODO: not satisfied!!!!
                 if (readers.Count == 1)
                 {
+                    // TODO: why need to get write lock????? (Yijian)
                     //First reader downs the semaphore if there are no writers waiting
-                    await writeSemaphore.WaitAsync(); //This should not block but is used to block subsequent writers                    
+                    await writeSemaphore.WaitAsync(); //This should not block but is used to block subsequent writers
+                    // TODO: not set writelock taken
                 }                                
                 return committedState.GetState();
             }
@@ -158,7 +167,8 @@ namespace Concurrency.Implementation.Nondeterministic
                     await readSemaphore.WaitAsync(); //This should never block but required to make subsequent readers block                    
                     writeLockTaken = true;
                     writeLockTakenByTid = tid;
-                } else
+                }
+                else
                 {
                     if(tid < readers.Max)
                     {
@@ -177,22 +187,30 @@ namespace Concurrency.Implementation.Nondeterministic
             }
             return activeState;
         }
-                
+
+        // the grain receives the Prepare message from coordinator
         public Task<bool> Prepare(int tid)
         {            
             if(aborters.Contains(tid))
             {
-                Debug.Assert(!writers.Contains(tid) && !readers.Contains(tid));
+                // TODO: txn requires read lock then wants to upgrade, it is in reader and aborter lists (Yijian)
+                // TODO: if abort, must have an exception, will not come to Prepare stage (Yijian)
+                // TODO: if come to Prepare stage, then it's not possible that
+                //       txn is added into writer list then aborter list
+                Debug.Assert(!writers.Contains(tid) && !readers.Contains(tid)); 
                 return Task.FromResult(false);
-            } else if(writeLockTaken && writeLockTakenByTid == tid && writers.Contains(tid))
+            }
+            else if(writeLockTaken && writeLockTakenByTid == tid && writers.Contains(tid))
             {
-                Debug.Assert(!readers.Contains(tid));
+                Debug.Assert(!readers.Contains(tid));   // TODO: why must not in reader ??? (Yijian)
                 return Task.FromResult(true);
-            } else if(readers.Contains(tid))
+            }
+            else if(readers.Contains(tid))
             {
                 Debug.Assert(!writers.Contains(tid));
                 return Task.FromResult(true);
-            } else
+            }
+            else
             {
                 //This code path must not be triggered
                 Debug.Assert(false);
@@ -221,7 +239,7 @@ namespace Concurrency.Implementation.Nondeterministic
                 }
                 else
                 {
-                    readSemaphore.Release();
+                    readSemaphore.Release();    // only release one semaphore
                     writeSemaphore.Release();
                     //Console.WriteLine($"writer releases sem, readers count = {readers.Count}, write sem value = {result}");
                 }

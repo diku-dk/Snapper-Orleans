@@ -29,13 +29,14 @@ namespace Concurrency.Implementation
         private float smoothingPreAllocationFactor = 0.5f;
 
         //Batch Schedule
+        // only include batches that are emitted from this coordinator
         private Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>> batchSchedulePerGrain;
         private Dictionary<int, Dictionary<Guid, String>> batchGrainClassName;
         private SortedSet<int> batchesWaitingForCommit;
 
 
         //Maintains the status of batch processing
-        private Dictionary<int, int> lastBatchIDMap;
+        private Dictionary<int, int> lastBatchIDMap;   // the last emitted batch before this batch among all coordinators
         private Dictionary<int, TaskCompletionSource<Boolean>> batchStatusMap;
         private int highestCommittedBatchID = -1;
 
@@ -56,6 +57,7 @@ namespace Concurrency.Implementation
         //Emitting status
         private Boolean isEmitTimerOn = false;
 
+        // TODO: log is not initialized (Yijian)
         private ILoggingProtocol<String> log;
 
         //For test only
@@ -348,7 +350,8 @@ namespace Concurrency.Implementation
             if (batchStatusMap.ContainsKey(curBatchID) == false)
                 batchStatusMap.Add(curBatchID, new TaskCompletionSource<Boolean>());
 
-            var v = typeof(IDeterministicTransactionCoordinator);
+            //TODO: changed by Yijian
+            //var v = typeof(IDeterministicTransactionCoordinator);
             if (log != null)
             {
                 HashSet<Guid> participants = new HashSet<Guid>();
@@ -465,7 +468,7 @@ namespace Concurrency.Implementation
             //Console.WriteLine($"\n Coordinator {this.myId} finished processing commit notification for batch {bid}");
         }
 
-        public Task<HashSet<int>> GetCompleteAfterSet(int tid, Dictionary<int, String> grains)
+        public Task<HashSet<int>> GetCompleteAfterSet(Dictionary<Guid, int> grains, Dictionary<Guid, String> names)
         {
             return null;
         }
