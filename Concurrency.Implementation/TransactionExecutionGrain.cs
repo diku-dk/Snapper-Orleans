@@ -305,15 +305,6 @@ namespace Concurrency.Implementation
                 invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
 
             var beforeSet = myScheduler.getBeforeSet(tid, out maxBeforeBid);
-
-            if (!invokeRet.maxBeforeBidPerGrain.ContainsKey(this.myPrimaryKey))
-                invokeRet.maxBeforeBidPerGrain.Add(myPrimaryKey, maxBeforeBid);
-            else
-            {
-                if (invokeRet.maxBeforeBidPerGrain[myPrimaryKey] < maxBeforeBid)
-                    invokeRet.maxBeforeBidPerGrain[myPrimaryKey] = maxBeforeBid;
-            }
-
             var afterSet = myScheduler.getAfterSet(tid, maxBeforeBid, out minAfterBid);
             invokeRet.beforeSet.UnionWith(beforeSet);
             invokeRet.afterSet.UnionWith(afterSet);
