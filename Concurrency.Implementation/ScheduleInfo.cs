@@ -154,7 +154,7 @@ namespace Concurrency.Implementation
             var result = new HashSet<int>();
             foreach (var key in nodes.Keys)
             {
-                if (key > maxBeforeBid && nodes[key].isDet)
+                if (key > maxBeforeBid && nodes[key].isDet && key > -1)
                 {
                     result.Add(key);
                     minAfterBid = minAfterBid > key ? key : minAfterBid;
