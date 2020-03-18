@@ -248,8 +248,7 @@ namespace ExperimentController
                         break;
                     case ImplementationType.SNAPPER:
                         var sntxnGrain = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
-                        //tasks.Add(sntxnGrain.StartTransaction("InitBankAccounts", input));
-                        await sntxnGrain.StartTransaction("InitBankAccounts", input);
+                        tasks.Add(sntxnGrain.StartTransaction("InitBankAccounts", input));
                         break;
                     default:
                         throw new Exception("Unknown grain implementation type");
