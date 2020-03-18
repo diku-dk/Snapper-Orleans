@@ -18,10 +18,12 @@ namespace ExperimentProcess
 {
     class Program
     {
-        static Boolean LocalCluster = true;
+        static Boolean LocalCluster;
         static IClusterClient[] clients;
-        static String sinkAddress = "@tcp://localhost:5558";
-        static String controllerAddress = ">tcp://localhost:5575";
+        //static String sinkAddress = ">tcp://localhost:5558";
+        //static String controllerAddress = ">tcp://localhost:5575";
+        static String sinkAddress = ">tcp://3.134.99.243:5558";         // controller public IP
+        static String controllerAddress = ">tcp://3.134.99.243:5575";   // controller public IP
         static PushSocket sink = new PushSocket(sinkAddress);
         static WorkloadResults[] results;        
         static IBenchmark[] benchmarks;
@@ -148,16 +150,24 @@ namespace ExperimentProcess
         static void ProcessWork()
         {
             Console.WriteLine("====== WORKER ======");
-            using (var controller = new PullSocket(controllerAddress))
+            // changed by Yijian
+            // using (var controller = new PullSocket(controllerAddress))
+            using (var controller = new SubscriberSocket(controllerAddress))
             {
+                controller.Subscribe("WORKLOAD_INIT");
                 //Acknowledge the controller thread
                 var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKER_CONNECT);
                 sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
                 Console.WriteLine("Connected to controller");
 
+                controller.Options.ReceiveHighWatermark = 1000;
+                var messageTopicReceived = controller.ReceiveFrameString();
+                var messageReceived = controller.ReceiveFrameBytes();
                 //Wait to receive workload msg
-                msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(controller.ReceiveFrameBytes());
+                msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(messageReceived);
                 Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT);
+                controller.Unsubscribe("WORKLOAD_INIT");
+                controller.Subscribe("RUN_EPOCH");
                 config = Helper.deserializeFromByteArray<WorkloadConfiguration>(msg.contents);
                 Console.WriteLine("Received workload message from controller");
 
@@ -172,8 +182,10 @@ namespace ExperimentProcess
                 sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
 
                 for(int i=0;i<config.numEpochs;i++) {
+                    messageTopicReceived = controller.ReceiveFrameString();
+                    messageReceived = controller.ReceiveFrameBytes();
                     //Wait for EPOCH RUN signal
-                    msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(controller.ReceiveFrameBytes());
+                    msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(messageReceived);
                     Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH);
                     Console.WriteLine($"Received signal from controller. Running epoch {i} across {config.numThreadsPerWorkerNode} worker threads");
                     //Signal the barrier

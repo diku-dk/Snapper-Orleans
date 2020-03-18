@@ -19,8 +19,10 @@ namespace ExperimentController
 {
     class Program
     {
-        static String workerAddress = "@tcp://localhost:5575";
-        static String sinkAddress = ">tcp://localhost:5558";
+        //static String workerAddress = "@tcp://localhost:5575";
+        //static String sinkAddress = "@tcp://localhost:5558";
+        static String workerAddress = "@tcp://*:5575";
+        static String sinkAddress = "@tcp://172.31.41.95:5558";    // controller private IP
         static int numWorkerNodes;
         static int numWarmupEpoch;
         static IClusterClient client;
@@ -134,25 +136,30 @@ namespace ExperimentController
             // Task Ventilator
             // Binds PUSH socket to tcp://localhost:5557
             // Sends batch of tasks to workers via that socket
-            Console.WriteLine("====== VENTILATOR ======");
-            using (var workers = new PushSocket(workerAddress))
+            Console.WriteLine("====== PUSH TO WORKERS ======");
+            // changed by Yijian
+            // using (var workers = new PushSocket(workerAddress))
+            using (var workers = new PublisherSocket(workerAddress))
             {                
                 //Wait for the workers to connect to controller
                 WaitForWorkerAcksAndReset();
-                //Send the workload configuration
                 Console.WriteLine($"{numWorkerNodes} worker nodes have connected to Controller");
+                //Send the workload configuration
+                Console.WriteLine($"Sent workload configuration to {numWorkerNodes} worker nodes");
                 var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_INIT);
                 msg.contents = Helper.serializeToByteArray<WorkloadConfiguration>(workload);
-                workers.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
-                Console.WriteLine($"Sent workload configuration to {numWorkerNodes} worker nodes");
+                // changed by Yijian
+                workers.SendMoreFrame("WORKLOAD_INIT").SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
+                
                 //Wait for acks for the workload configuration
                 WaitForWorkerAcksAndReset();
+                Console.WriteLine($"Receive workload configuration ack from {numWorkerNodes} worker nodes");
 
-                for(int i=0;i<workload.numEpochs;i++) {
+                for (int i = 0; i < workload.numEpochs; i++) {
                     //Send the command to run an epoch
                     Console.WriteLine($"Running Epoch {i} on {numWorkerNodes} worker nodes");
                     msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH);
-                    workers.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
+                    workers.SendMoreFrame("RUN_EPOCH").SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
                     WaitForWorkerAcksAndReset();
                     Console.WriteLine($"Finished running epoch {i} on {numWorkerNodes} worker nodes");
                 }
@@ -165,24 +172,29 @@ namespace ExperimentController
                 // Task Sink
                 // Bindd PULL socket to tcp://localhost:5558
                 // Collects results from workers via that socket
-                Console.WriteLine("====== SINK ======");
+                Console.WriteLine("====== PULL FROM WORKERS ======");
 
                 results = new WorkloadResults[workload.numEpochs,numWorkerNodes];
                 //socket to receive results on
                 using (var sink = new PullSocket(sinkAddress))
                 {
-                    for(int i=0;i<numWorkerNodes;i++) {
+                    for(int i = 0; i < numWorkerNodes; i++) {
                         var msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
                         Trace.Assert(msg.msgType == Utilities.MsgType.WORKER_CONNECT);
+                        Console.WriteLine($"Receive WORKER_CONNECT from worker {i}");
                         ackedWorkers.Signal();
+                    }
 
-                        msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
+                    for (int i = 0; i < numWorkerNodes; i++)
+                    {
+                        var msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
                         Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT_ACK);
+                        Console.WriteLine($"Receive WORKLOAD_INIT_ACT from worker {i}");
                         ackedWorkers.Signal();
                     }
 
                     //Wait for epoch acks
-                    for(int i=0;i<workload.numEpochs;i++) {
+                    for (int i=0;i<workload.numEpochs;i++) {
                         for(int j=0;j<numWorkerNodes;j++) {
                             var msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
                             Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH_ACK);
@@ -256,9 +268,11 @@ namespace ExperimentController
             //Console.WriteLine("Enter number of worker nodes");
             //var numNodes = Console.Read();
             //numWorkerNodes = Convert.ToInt32(numNodes);
-            ackedWorkers = new CountdownEvent(numWorkerNodes);            
+            // changed by Yijian
+            // fixed a bug, should generate workload first, then we can get the corrct value for numWorkerNodes
             workload = new WorkloadConfiguration();
             GenerateWorkLoadFromSettingsFile();
+            ackedWorkers = new CountdownEvent(numWorkerNodes); 
         }
         static void Main(string[] args)
         {
@@ -273,9 +287,7 @@ namespace ExperimentController
             //Create the workload grains, load with data
             LoadGrains();
             while(!loadingDone)
-            {
                 Thread.Sleep(100);
-            }
 
             //Start the controller thread
             Thread conducterThread = new Thread(PushToWorkers);
@@ -286,8 +298,8 @@ namespace ExperimentController
             sinkThread.Start();
 
             //Wait for the threads to exit
-            conducterThread.Join();
             sinkThread.Join();
+            conducterThread.Join();
 
             Console.WriteLine("Aggregating results and printing");
             AggregateResultsAndPrint();
