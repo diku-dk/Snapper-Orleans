@@ -319,8 +319,9 @@ namespace Concurrency.Implementation
 
             Dictionary<Guid, DeterministicBatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
             expectedAcksPerBatch.Add(curBatchID, curScheduleMap.Count);
-            //update thelast batch ID for each grain accessed by this batch
-            foreach(var item in curScheduleMap)
+
+            //update the last batch ID for each grain accessed by this batch
+            foreach (var item in curScheduleMap)
             {
                 Guid grain = item.Key;
                 DeterministicBatchSchedule schedule = item.Value;
@@ -335,11 +336,12 @@ namespace Concurrency.Implementation
             this.lastBatchIDMap.Add(curBatchID, token.lastBatchID);
             token.lastBatchID = curBatchID;
             //garbage collection
-            if(this.highestCommittedBatchID > token.highestCommittedBatchID)
+            if (this.highestCommittedBatchID > token.highestCommittedBatchID)
             {
                 List<Guid> expiredGrains = new List<Guid>();
                 foreach (var item in token.lastBatchPerGrain)
                 {
+                    // only when last batch is already committed, the next emmitted batch can have its lastBid = -1 again
                     if (item.Value <= this.highestCommittedBatchID)
                         expiredGrains.Add(item.Key);
                 }
@@ -347,10 +349,10 @@ namespace Concurrency.Implementation
                     token.lastBatchPerGrain.Remove(item);
                 token.highestCommittedBatchID = this.highestCommittedBatchID;
             }
-            if (batchStatusMap.ContainsKey(curBatchID) == false)
+
+            if (!batchStatusMap.ContainsKey(curBatchID))
                 batchStatusMap.Add(curBatchID, new TaskCompletionSource<Boolean>());
 
-            //TODO: changed by Yijian
             //var v = typeof(IDeterministicTransactionCoordinator);
             if (log != null)
             {
@@ -371,7 +373,6 @@ namespace Concurrency.Implementation
             this.detEmitPromiseMap[myEmitSequence].SetResult(true);
             this.deterministicTransactionRequests.Remove(myEmitSequence);
             this.detEmitPromiseMap.Remove(myEmitSequence);
-            //Console.WriteLine($"\n Coordinator {this.myId}: sent schedule for batch {curBatchID}, which contains {transactionList.Count} transactions.");
         }
 
         /*
@@ -435,6 +436,7 @@ namespace Concurrency.Implementation
 
         private async Task BroadcastCommit()
         {
+            Console.WriteLine($"\n Commit batch {this.highestCommittedBatchID} \n");
             List<Task> tasks = new List<Task>();
             foreach (var coordinator in this.coordinatorList)
             {

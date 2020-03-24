@@ -27,10 +27,7 @@ namespace Concurrency.Implementation
 
         public ScheduleNode InsertNonDetTransaction(int tid)
         {
-            if(nonDetTxnToScheduleMap.ContainsKey(tid))
-            {
-                return nodes[nonDetTxnToScheduleMap[tid]].prev;
-            }
+            if(nonDetTxnToScheduleMap.ContainsKey(tid)) return nodes[nonDetTxnToScheduleMap[tid]].prev;
             
             if (tail.isDet == true)
             {
@@ -41,7 +38,8 @@ namespace Concurrency.Implementation
                 tail.next = node;
                 node.prev = tail;
                 tail = node;                
-            } else
+            } 
+            else
             {
                 //Join the non-det tail, replace the promise
                 if(tail.executionPromise.Task.IsCompleted)
@@ -54,6 +52,7 @@ namespace Concurrency.Implementation
             return tail.prev;
         }
 
+        // Yijian's version
         public void insertDetBatch(DeterministicBatchSchedule schedule)
         {
             ScheduleNode node;
@@ -61,25 +60,62 @@ namespace Concurrency.Implementation
             {
                 node = new ScheduleNode(schedule.batchID, true);
                 nodes.Add(schedule.batchID, node);
-                
-            } else
-            {
-                node = nodes[schedule.batchID];
             } 
+            else node = nodes[schedule.batchID];
             
             if (nodes.ContainsKey(schedule.lastBatchID))
             {
                 ScheduleNode prevNode = nodes[schedule.lastBatchID];
-                if(prevNode.next == null)
+                if (prevNode.next == null)
                 {
                     prevNode.next = node;
                     node.prev = prevNode;
                 }
-                else if(prevNode.id != -1)
+                else
+                {
+                    Debug.Assert(prevNode.next.isDet == false && prevNode.next.next == null);
+                    prevNode.next.next = node;
+                    node.prev = prevNode.next;
+                }
+            }
+            else
+            {
+                ScheduleNode prevNode = new ScheduleNode(schedule.lastBatchID, true);
+                nodes.Add(schedule.lastBatchID, prevNode);
+                prevNode.next = node;
+                node.prev = prevNode;
+                // at this time, prevNode.prev == null (Yijian)
+            }
+
+            if (node.id > tail.id) tail = node;
+        }
+
+        /*
+        public void insertDetBatch(DeterministicBatchSchedule schedule)
+        {
+            ScheduleNode node;
+            if (!nodes.ContainsKey(schedule.batchID))
+            {
+                node = new ScheduleNode(schedule.batchID, true);
+                nodes.Add(schedule.batchID, node);
+
+            }
+            else node = nodes[schedule.batchID];
+
+            if (nodes.ContainsKey(schedule.lastBatchID))
+            {
+                ScheduleNode prevNode = nodes[schedule.lastBatchID];
+                if (prevNode.next == null)
+                {
+                    prevNode.next = node;
+                    node.prev = prevNode;
+                }
+                else if (prevNode.id != -1)
                 {
                     //There could only be one non-det node between prevNode and the inserted Node
                     Debug.Assert(prevNode.next.isDet == false);
-                    if (prevNode.next.executionPromise.Task.IsCompleted){
+                    if (prevNode.next.executionPromise.Task.IsCompleted)
+                    {
                         nodes.Remove(prevNode.next.id);
                         prevNode.next = node;
                         node.prev = prevNode;
@@ -90,17 +126,18 @@ namespace Concurrency.Implementation
                         node.prev = prevNode.next;
                     }
                 }
-                else
+                else   // prevNode = -1 && prevNode.next != null
                 {
                     ScheduleNode toConnect = prevNode.next;
-                    while(toConnect != null)
-                    {
+                    while (toConnect != null)
+                    {  
+                        // all det node connected with prevNode must have committed
                         if (toConnect.isDet || toConnect.executionPromise.Task.IsCompleted)
                         {
                             Debug.Assert(!(toConnect.isDet == false && toConnect.executionPromise.Task.IsCompleted == false && toConnect.next != null));
                             nodes.Remove(toConnect.id);
                         }
-                        else
+                        else // toConnect.isDet = false && execution promise hasn't completed
                         {
                             Debug.Assert(toConnect.next == null);
                             break;
@@ -123,8 +160,8 @@ namespace Concurrency.Implementation
             }
             if (node.id > tail.id)
                 tail = node;
-            
-        }
+
+        }*/
 
         public TaskCompletionSource<Boolean> getDependingPromise(int id)
         {
@@ -185,29 +222,6 @@ namespace Concurrency.Implementation
             node.prev = endOfChainToBeRemoved;
             endOfChainToBeRemoved.next = node;
         }
-
-        /*
-        //IMPORTANT: Remove the node ahead of me since the next node still depends on me
-        private void removePreviousScheduleNode(int scheduleId)
-        {
-            if(!nodes.ContainsKey(scheduleId))
-            {
-                throw new Exception($"Schedule does not exist {scheduleId}");
-            }
-            var node = nodes[scheduleId];
-            var nodeToBeRemoved = node.prev;
-            if(nodeToBeRemoved.id == -1)
-            {
-                return;
-            } else
-            {
-                nodeToBeRemoved.prev.next = node;
-                node.prev = nodeToBeRemoved.prev;
-                nodes.Remove(nodeToBeRemoved.id);
-            }            
-        }
-        */
-
 
         public void completeTransaction(int tid)
         {

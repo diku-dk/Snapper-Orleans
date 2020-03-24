@@ -295,7 +295,8 @@ namespace SmallBank.Grains
                 {
                     id = myState.account[custName];
                 }
-                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item3)
+                // if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item3)
+                if (!myState.checkingAccount.ContainsKey(id))
                 {
                     ret.setException();
                     return ret;
@@ -323,7 +324,7 @@ namespace SmallBank.Grains
                 ret.mergeWithFunctionResult(task.Result);
                 myState.checkingAccount[id] -= inputTuple.Item3;              
             }
-            catch (Exception)
+            catch (Exception e)
             {
                 ret.setException();
             }

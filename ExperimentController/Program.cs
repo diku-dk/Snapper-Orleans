@@ -19,10 +19,10 @@ namespace ExperimentController
 {
     class Program
     {
-        //static String workerAddress = "@tcp://localhost:5575";
-        //static String sinkAddress = "@tcp://localhost:5558";
-        static String workerAddress = "@tcp://*:5575";
-        static String sinkAddress = "@tcp://172.31.41.95:5558";    // controller private IP
+        static String workerAddress = "@tcp://localhost:5575";
+        static String sinkAddress = "@tcp://localhost:5558";
+        //static String workerAddress = "@tcp://*:5575";
+        //static String sinkAddress = "@tcp://172.31.42.128:5558";    // controller private IP
         static int numWorkerNodes;
         static int numWarmupEpoch;
         static IClusterClient client;
@@ -150,7 +150,7 @@ namespace ExperimentController
                 msg.contents = Helper.serializeToByteArray<WorkloadConfiguration>(workload);
                 // changed by Yijian
                 workers.SendMoreFrame("WORKLOAD_INIT").SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
-                
+                Console.WriteLine($"Coordinator waits for WORKLOAD_INIT_ACK");
                 //Wait for acks for the workload configuration
                 WaitForWorkerAcksAndReset();
                 Console.WriteLine($"Receive workload configuration ack from {numWorkerNodes} worker nodes");

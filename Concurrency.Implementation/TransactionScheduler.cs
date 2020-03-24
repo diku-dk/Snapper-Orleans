@@ -30,32 +30,25 @@ namespace Concurrency.Implementation
             this.grainFactory = grainFactory;
         }
 
-        // this function is called only when want to commit a nond-det transaction
+        // this function is called only when want to commit a non-det transaction
         public async Task waitForBatchCommit(int batchId)
         {
-            
             if (scheduleInfo.nodes.ContainsKey(batchId))
             {
                 var task = scheduleInfo.nodes[batchId].commitmentPromise.Task;
-                if (task.IsCompleted)
-                    return;
-                else
-                {
-                    await Task.WhenAny(Task.Delay(maxNonDetWaitingLatencyInMs), task);
-                }
-                if (task.IsCompleted)
-                    return;
-                else
+                if (task.IsCompleted) return;
+                else await Task.WhenAny(Task.Delay(maxNonDetWaitingLatencyInMs), task);
+                if (task.IsCompleted) return;
+                else   // task exceeds maxNonDetWaiting time
                 {
                     Debug.Assert(batchScheduleMap.ContainsKey(batchId));
                     var coordinatorID = batchScheduleMap[batchId].globalCoordinator;
                     IGlobalTransactionCoordinatorGrain coordinator = grainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(coordinatorID);
                     await coordinator.checkBatchCompletion(batchId);
-                }
-                    
+                }  
                 return;
-
             }
+            // if the batch is not in the grain anymore, it means it is committed
         }
 
         public async void RegisterDeterministicBatchSchedule(int batchID) 
@@ -87,11 +80,9 @@ namespace Concurrency.Implementation
         public async Task<int> waitForTurn(int bid, int tid)
         {
             //Check if the list of promises for this transaction exsists, if not, add it.
-            if (inBatchTransactionCompletionMap.ContainsKey(bid) == false)
-            {
+            if (!inBatchTransactionCompletionMap.ContainsKey(bid))
                 inBatchTransactionCompletionMap.Add(bid, new Dictionary<int, List<TaskCompletionSource<bool>>>());
-            }
-            if (inBatchTransactionCompletionMap[bid].ContainsKey(tid) == false)
+            if (!inBatchTransactionCompletionMap[bid].ContainsKey(tid))
             {
                 inBatchTransactionCompletionMap[bid].Add(tid, new List<TaskCompletionSource<bool>>());
                 //This promise is for the "-1" function call in this transaction
@@ -191,24 +182,104 @@ namespace Concurrency.Implementation
             scheduleInfo.completeTransaction(tid);
         }
 
-        // TODO: changed by Yijian
-        // this function is only used to do grabage collection
+        // changed by Yijian
+        // this function is only used to do grabage collection + set commit promise as true
+        // the commit promise is useful when try to commit a non-det txn, who needs to wait all previous batch commit
         // bid: current highest committed batch among all coordinators
         public void ackBatchCommit(int bid)
         {
             try
             {
-                int batchID = -1;
-                foreach (var key in scheduleInfo.nodes.Keys)
+                if (bid == -1) return;
+                var head = scheduleInfo.nodes[-1];
+                var node = head.next;
+                if (node == null) return;
+                while (node != null)
                 {
-                    if (key <= bid && scheduleInfo.nodes[key].isDet) batchID = Math.Max(batchID, key);
+                    if (node.isDet)
+                    {
+                        if (node.id <= bid)
+                        {
+                            node.commitmentPromise.SetResult(true);   // this is useful if next node is non-det
+                            scheduleInfo.nodes.Remove(node.id);
+                            batchScheduleMap.Remove(node.id);
+                            inBatchTransactionCompletionMap.Remove(node.id);
+                        }
+                        else break;   // meet a det node whose id > bid
+                    }
+                    else
+                    {
+                        // next node must be a det node
+                        if (node.next != null)
+                        {
+                            if (node.next.id <= bid)
+                            {
+                                //node.commitmentPromise.SetResult(true);
+                                scheduleInfo.nodes.Remove(node.id);
+                                scheduleInfo.nonDetBatchScheduleMap.Remove(node.id);
+                            }
+                            else break;
+                        }
+                    }
+                    if (node.next == null) break;
+                    node = node.next;
                 }
-                if (batchID == -1 || scheduleInfo.nodes[batchID].commitmentPromise.Task.IsCompleted) return;
-                // commitment promise is used when non-det txn is waiting for a batch commits
-                scheduleInfo.nodes[batchID].commitmentPromise.SetResult(true);
-                // TODO: remove all nodes before batchID, not including batchID, why (Yijian)
-                scheduleInfo.removePreviousNodes(batchID);
-                var lastBid = batchScheduleMap[batchID].lastBatchID;
+
+                // case 1: node.isDet = true && node.id <= bid && node.next = null
+                if (node.isDet && node.id <= bid)    // node should be removed
+                {
+                    Debug.Assert(node.next == null);
+                    head.next = null;
+                }
+                else  // node.isDet = false || node.id > bid
+                {
+                    // case 2: node.isDet = true && node.id > bid
+                    // case 3: node.isDet = false && node.next = null
+                    // case 4: node.isDet = false && node.next.id > bid
+                    Debug.Assert((node.isDet && node.id > bid) || (!node.isDet && (node.next == null || node.next.id > bid)));
+                    head.next = node;
+                    node.prev = head;
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"\n Exception(ackBatchCommit):: exception {e.Message}, {e.StackTrace}");
+            }
+            /*
+            try
+            {
+                if (bid == -1) return;
+                //When called by the coordinator of a non-det transaction, batch bid may not access this grain.
+                bool found = scheduleInfo.nodes.ContainsKey(bid);
+                var node = found ? scheduleInfo.nodes[bid] : scheduleInfo.tail;
+                if (!found)
+                {
+                    // traverse from the tail, might have some holes (Yijian)
+                    while (node != null && node.id > -1)
+                    {
+                        if (node.isDet == false || node.id > bid) node = node.prev;
+                        else
+                        {
+                            // isDet == true && -1 < id < bid
+                            bid = node.id;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) return;
+                }
+                // case 1: the batch bid is in Nodes (found = true)
+                // case 2: find the det node whose id < bid
+                if (node.commitmentPromise.Task.IsCompleted)   // exception
+                {
+                    Debug.Assert(found);
+                    return;
+                }
+
+                node.commitmentPromise.SetResult(true);
+                //scheduleInfo.nodes[bid].commitmentPromise.SetResult(true);
+                scheduleInfo.removePreviousNodes(bid);    // remove all nodes before bid, not including bid, why (Yijian)
+                var lastBid = batchScheduleMap[bid].lastBatchID;
                 // if not contains the key lastBid, it means another thread before this one has removed this batch
                 while (lastBid != -1 && batchScheduleMap.ContainsKey(lastBid))
                 {
@@ -220,70 +291,8 @@ namespace Concurrency.Implementation
             }
             catch (Exception e)
             {
-                Console.WriteLine($"\n Exception(ackBatchCommit):: exception {e.Message}");
-            }
-
-            /*
-            try
-            {
-                if (bid == -1) return;
-                //When called by the coordinator of a non-det transaction, batch bid may not access this grain.
-                bool found = scheduleInfo.nodes.ContainsKey(bid);
-                if (!found)
-                {
-                    // TODO: traverse from the tail, might have some holes (Yijian)
-                    var node = scheduleInfo.tail;
-                    while (node != null && node.id != -1)
-                    {
-                        if (node.isDet == false || node.id > bid)
-                        {
-                            node = node.prev;
-                        }
-                        else
-                        {
-                            // isDet == true && -1 < id < bid
-                            if (node.commitmentPromise.Task.IsCompleted == false)
-                            {
-                                bid = node.id;
-                                found = true;
-                                break;
-                            }
-                            else
-                            {
-                                // if commitment promise is set true
-                                return;
-                            }
-                        }
-                    }
-                    if (node == null || node.id == -1) return;
-                }
-                // case 1: the batch bid is in Nodes (found = true)
-                // case 2: find the det node whose id < bid
-                // if the comittment promise is already set true, it will just return
-                // because it means there's another thread before this one trying to delete old nodes
-                if (scheduleInfo.nodes[bid].commitmentPromise.Task.IsCompleted)
-                {
-                    Debug.Assert(found);
-                    return;
-                }
-
-                scheduleInfo.nodes[bid].commitmentPromise.SetResult(true);
-                scheduleInfo.removePreviousNodes(bid);    // TODO: remove all nodes before bid, not including bid, why (Yijian)
-                var lastBid = batchScheduleMap[bid].lastBatchID;
-                // if not contains the key lastBid, it means another thread before this one has removed this batch
-                while (lastBid != -1 && batchScheduleMap.ContainsKey(lastBid))
-                {
-                    DeterministicBatchSchedule schedule = batchScheduleMap[lastBid];
-                    inBatchTransactionCompletionMap.Remove(lastBid);
-                    batchScheduleMap.Remove(lastBid);
-                    lastBid = schedule.lastBatchID;
-                }
-            }
-            catch(Exception e)
-            {
-                Console.WriteLine($"\n Exception(ackBatchCommit):: exception {e.Message}");
+                Console.WriteLine($"\n Exception(ackBatchCommit):: exception {e.Message}, {e.StackTrace}");
             }*/
-
         }
 
         public HashSet<int> getBeforeSet(int tid, out int maxBeforeBid)

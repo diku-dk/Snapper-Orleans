@@ -20,10 +20,10 @@ namespace ExperimentProcess
     {
         static Boolean LocalCluster;
         static IClusterClient[] clients;
-        //static String sinkAddress = ">tcp://localhost:5558";
-        //static String controllerAddress = ">tcp://localhost:5575";
-        static String sinkAddress = ">tcp://3.134.99.243:5558";         // controller public IP
-        static String controllerAddress = ">tcp://3.134.99.243:5575";   // controller public IP
+        static String sinkAddress = ">tcp://localhost:5558";
+        static String controllerAddress = ">tcp://localhost:5575";
+        //static String sinkAddress = ">tcp://18.189.3.36:5558";         // controller public IP
+        //static String controllerAddress = ">tcp://18.189.3.36:5575";   // controller public IP
         static PushSocket sink = new PushSocket(sinkAddress);
         static WorkloadResults[] results;        
         static IBenchmark[] benchmarks;
@@ -40,7 +40,7 @@ namespace ExperimentProcess
             var globalWatch = new Stopwatch();
             var benchmark = benchmarks[threadIndex];
             IClusterClient client = clients[threadIndex % config.numConnToClusterPerWorkerNode];
-
+            Console.WriteLine("get into ThreadWorkAsync()");
             for(int eIndex = 0; eIndex < config.numEpochs; eIndex++)
             {
                 int numCommit = 0;
@@ -70,11 +70,11 @@ namespace ExperimentProcess
                     {
                         //Needed to catch exception of individual task (not caught by Snapper's exception) which would not be thrown by WhenAny
                         await task;
-                    } catch (Exception)
+                    } 
+                    catch (Exception)
                     {
                         noException = false;
                     }
-                    
                     if (noException && task.Result.hasException() != true)
                     {
                         numCommit++;
@@ -166,6 +166,7 @@ namespace ExperimentProcess
                 //Wait to receive workload msg
                 msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(messageReceived);
                 Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT);
+                Console.WriteLine("Receive workload configuration.");
                 controller.Unsubscribe("WORKLOAD_INIT");
                 controller.Subscribe("RUN_EPOCH");
                 config = Helper.deserializeFromByteArray<WorkloadConfiguration>(msg.contents);

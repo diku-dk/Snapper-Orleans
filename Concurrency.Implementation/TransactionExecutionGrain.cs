@@ -93,7 +93,8 @@ namespace Concurrency.Implementation
                     canCommit = serializable;
                     if(canCommit)
                         canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
-                } else
+                } 
+                else
                 {
                     Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
                 }
@@ -165,38 +166,7 @@ namespace Concurrency.Implementation
             if (result.maxBeforeBid >= result.minAfterBid) return false;
             // isBeforeAfterConsecutive = false && result.maxBeforeBid < result.minAfterBid
             //TODO HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(result.maxBeforeBidPerGrain, result.grainsInNestedFunctions);
-            return true;
-
-            /*
-            Boolean serializable = true;
-            if (result.beforeSet.Count == 0)
-            {
-                //If before set is empty, the schedule must be serializable
-                return true;
-            }
-            else if (result.isBeforeAfterConsecutive)
-            {
-                //The after set is complete
-                if (result.maxBeforeBid < result.minAfterBid)
-                    return true;
-                else
-                    serializable = false; //False Positive abort;
-            }
-            else
-            {
-                //The after set is not complete, there are holes between maxBeforeBid and minAfterBid
-                if (result.beforeSet.Overlaps(result.afterSet))
-                    serializable = false;
-                else if (result.maxBeforeBid > result.minAfterBid)
-                    serializable = false; //False Positive abort;
-                else
-                {
-                    //Go to GC for complete after set;
-                    //HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(tid, null);
-                    serializable = true;
-                }
-            }
-            return serializable;*/
+            return false;
         }
 
         public async Task WaitForBatchCommit(int bid)
@@ -241,10 +211,11 @@ namespace Concurrency.Implementation
          */
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
-            //Console.WriteLine($"\n {this.myPrimaryKey}: Received schedule for batch {schedule.batchID}, the previous batch is {schedule.lastBatchID}");        
+            //Console.WriteLine($"\n {this.myPrimaryKey}: receive bid {schedule.batchID}, last bid = {schedule.lastBatchID}, highest commit bid = {schedule.highestCommittedBatchId}");        
+            // Add by Yijian (can handle the situation when receive a schedule whose lastBatchID is also -1)
+            myScheduler.ackBatchCommit(schedule.highestCommittedBatchId);
             batchScheduleMap.Add(schedule.batchID, schedule);
             myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
-            myScheduler.ackBatchCommit(schedule.highestCommittedBatchId);
             return Task.CompletedTask;
         }
 
