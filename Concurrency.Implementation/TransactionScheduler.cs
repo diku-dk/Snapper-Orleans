@@ -58,7 +58,7 @@ namespace Concurrency.Implementation
 
             scheduleInfo.insertDetBatch(schedule);
             //Create the in batch promise map if not present
-            if (this.inBatchTransactionCompletionMap.ContainsKey(schedule.batchID) == false)
+            if (!this.inBatchTransactionCompletionMap.ContainsKey(schedule.batchID))
                 this.inBatchTransactionCompletionMap.Add(schedule.batchID, new Dictionary<int, List<TaskCompletionSource<bool>>>());
 
             //Check if this batch can be executed: 
@@ -69,10 +69,11 @@ namespace Concurrency.Implementation
             //Check if there is a buffered function call for this batch, if present, execute it
             int tid = schedule.curExecTransaction();
             //Console.WriteLine($"\n{this.GetType()}: next transaction to be executed is {tid}.\n");
-            if (inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid) && inBatchTransactionCompletionMap[schedule.batchID][tid].Count != 0)
+            if (inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid))
             {
+                Debug.Assert(inBatchTransactionCompletionMap[schedule.batchID][tid].Count > 1);
                 if (inBatchTransactionCompletionMap[schedule.batchID][tid][0].Task.IsCompleted == false)
-                       inBatchTransactionCompletionMap[schedule.batchID][tid][0].SetResult(true);
+                    inBatchTransactionCompletionMap[schedule.batchID][tid][0].SetResult(true);
             }
         }
 
@@ -105,13 +106,13 @@ namespace Concurrency.Implementation
                 //TODO: XXX: Assumption right now is that all non-deterministic transactions will execute as one big batch
                 if(scheduleInfo.getDependingPromise(schedule.batchID).Task.IsCompleted == false)
                 {
-                    //If it is not the trun for this batch, then await or its turn
+                    //If it is not the trun for this batch, then await for its turn
                     //Console.WriteLine($"Transaction {bid}:{tid}, waiting for batch {schedule.lastBatchID}.");
                     await scheduleInfo.getDependingPromise(schedule.batchID).Task;
                     //Console.WriteLine($"Transaction {bid}:{tid} passed point A");
                 }
                 //Check if this transaction cen be executed
-                int nextTid = batchScheduleMap[bid].curExecTransaction();
+                int nextTid = schedule.curExecTransaction();
                 if (tid == nextTid)
                 {
                     //Console.WriteLine($"\n\n{this.GetType()}: Set Promise for Tx: {tid} in batch {bid} within Execute(). \n\n");
@@ -145,14 +146,13 @@ namespace Concurrency.Implementation
 
             //Find the next transaction to be executed in this batch;
             int nextTid = schedule.curExecTransaction();
-            if(tid == nextTid)
+            if(tid == nextTid)  // txn tid will need to access this grain again
             {
                 //Within the same batch same transaction
-
                 inBatchTransactionCompletionMap[bid][tid][turnIndex].SetResult(true);
                 //Console.WriteLine($"Transaction {bid}:{tid} sets turn {turnIndex} as true.");
             }
-            else if (nextTid != -1)
+            else if (nextTid != -1)   // switch to next txn
             {
                 //Within the same batch but switching to another transaction
                 if (!inBatchTransactionCompletionMap[bid].ContainsKey(nextTid))
@@ -164,7 +164,7 @@ namespace Concurrency.Implementation
                 //Console.WriteLine($"Transaction {bid}:{nextTid} sets turn {0} as true.");
                 inBatchTransactionCompletionMap[bid][nextTid][0].SetResult(true);
             }
-            else
+            else  // nextTid = -1, which means current batch is completed
             {
                 //Finished the batch, need to switch to another batch or non-deterministic transaction                
                 switchingBatches = true;
@@ -214,7 +214,6 @@ namespace Concurrency.Implementation
                         {
                             if (node.next.id <= bid)
                             {
-                                //node.commitmentPromise.SetResult(true);
                                 scheduleInfo.nodes.Remove(node.id);
                                 scheduleInfo.nonDetBatchScheduleMap.Remove(node.id);
                             }
@@ -245,54 +244,6 @@ namespace Concurrency.Implementation
             {
                 Console.WriteLine($"\n Exception(ackBatchCommit):: exception {e.Message}, {e.StackTrace}");
             }
-            /*
-            try
-            {
-                if (bid == -1) return;
-                //When called by the coordinator of a non-det transaction, batch bid may not access this grain.
-                bool found = scheduleInfo.nodes.ContainsKey(bid);
-                var node = found ? scheduleInfo.nodes[bid] : scheduleInfo.tail;
-                if (!found)
-                {
-                    // traverse from the tail, might have some holes (Yijian)
-                    while (node != null && node.id > -1)
-                    {
-                        if (node.isDet == false || node.id > bid) node = node.prev;
-                        else
-                        {
-                            // isDet == true && -1 < id < bid
-                            bid = node.id;
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) return;
-                }
-                // case 1: the batch bid is in Nodes (found = true)
-                // case 2: find the det node whose id < bid
-                if (node.commitmentPromise.Task.IsCompleted)   // exception
-                {
-                    Debug.Assert(found);
-                    return;
-                }
-
-                node.commitmentPromise.SetResult(true);
-                //scheduleInfo.nodes[bid].commitmentPromise.SetResult(true);
-                scheduleInfo.removePreviousNodes(bid);    // remove all nodes before bid, not including bid, why (Yijian)
-                var lastBid = batchScheduleMap[bid].lastBatchID;
-                // if not contains the key lastBid, it means another thread before this one has removed this batch
-                while (lastBid != -1 && batchScheduleMap.ContainsKey(lastBid))
-                {
-                    DeterministicBatchSchedule schedule = batchScheduleMap[lastBid];
-                    inBatchTransactionCompletionMap.Remove(lastBid);
-                    batchScheduleMap.Remove(lastBid);
-                    lastBid = schedule.lastBatchID;
-                }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"\n Exception(ackBatchCommit):: exception {e.Message}, {e.StackTrace}");
-            }*/
         }
 
         public HashSet<int> getBeforeSet(int tid, out int maxBeforeBid)

@@ -382,30 +382,26 @@ namespace Concurrency.Implementation
         {
             //Console.WriteLine($"\n Coordinator: {myId} receives completion ack for batch {bid} from {executor_id}, expecting {expectedAcksPerBatch[bid]} acks. {batchSchedulePerGrain[bid].ContainsKey(executor_id)}");
             Debug.Assert(expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id));
-            if (expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id))
+            expectedAcksPerBatch[bid]--;
+            if (expectedAcksPerBatch[bid] == 0)
             {
-                expectedAcksPerBatch[bid]--;
-                if (expectedAcksPerBatch[bid] == 0)
+                Debug.Assert(lastBatchIDMap.ContainsKey(bid));
+                if (lastBatchIDMap[bid] == highestCommittedBatchID)
                 {
-                    Debug.Assert(lastBatchIDMap.ContainsKey(bid));
-                    if(lastBatchIDMap[bid] == highestCommittedBatchID)
-                    {
-                        //commit
-                        this.highestCommittedBatchID = bid;
-                        CleanUp(bid);
-                        if (log != null)
-                            await log.HandleOnCommitInDeterministicProtocol(bid);
-                        await BroadcastCommit();
-                    }
-                    else
-                    {
-                        //Put this batch into a list waiting for commit
-                        this.batchesWaitingForCommit.Add(bid);
-                    }
-                    
+                    //commit
+                    this.highestCommittedBatchID = bid;
+                    CleanUp(bid);
+                    if (log != null)
+                        await log.HandleOnCommitInDeterministicProtocol(bid);
+                    await BroadcastCommit();
                 }
+                else
+                {
+                    //Put this batch into a list waiting for commit
+                    this.batchesWaitingForCommit.Add(bid);
+                }
+
             }
-     
         }
 
         public void CleanUp(int bid)
@@ -420,23 +416,16 @@ namespace Concurrency.Implementation
 
         public async Task<bool> checkBatchCompletion(int bid)
         {
-            if (bid <= this.highestCommittedBatchID)
-                return true;
-
-            if (batchStatusMap.ContainsKey(bid) == false)
-            {
-                batchStatusMap.Add(bid, new TaskCompletionSource<bool>());
-            }
-
-            if (batchStatusMap[bid].Task.IsCompleted == false)
-                await batchStatusMap[bid].Task;
+            if (bid <= this.highestCommittedBatchID) return true;
+            if (batchStatusMap.ContainsKey(bid) == false) batchStatusMap.Add(bid, new TaskCompletionSource<bool>());
+            if (batchStatusMap[bid].Task.IsCompleted == false) await batchStatusMap[bid].Task;
             batchStatusMap.Remove(bid);
             return true;
         }
 
         private async Task BroadcastCommit()
         {
-            Console.WriteLine($"\n Commit batch {this.highestCommittedBatchID} \n");
+            //Console.WriteLine($"\n Commit batch {this.highestCommittedBatchID} \n");
             List<Task> tasks = new List<Task>();
             foreach (var coordinator in this.coordinatorList)
             {

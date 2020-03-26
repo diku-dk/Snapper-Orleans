@@ -62,7 +62,8 @@ namespace Concurrency.Implementation
             Task<FunctionResult> t1 = this.Execute(c1);
             Task t2 = myCoordinator.checkBatchCompletion(context.batchID);
             await Task.WhenAll(t1, t2);
-            //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
+            if (t1.Result.hasException())
+                Console.WriteLine($"Det txn {context.transactionID} has exception!!!!!!");
             return t1.Result;
         }
 
@@ -75,7 +76,7 @@ namespace Concurrency.Implementation
             try
             {
                 context = await myCoordinator.NewTransaction();
-                myScheduler.ackBatchCommit(context.highestBatchIdCommitted);
+                //myScheduler.ackBatchCommit(context.highestBatchIdCommitted);
                 functionCallInput.context = context;
                 context.coordinatorKey = this.myPrimaryKey;
                 //Console.WriteLine($"Transaction {context.transactionID}: is started.\n");
@@ -91,18 +92,11 @@ namespace Concurrency.Implementation
                 {
                     Boolean serializable = this.CheckSerializability(t1.Result).Result;
                     canCommit = serializable;
-                    if(canCommit)
-                        canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
+                    if (canCommit) canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
                 } 
-                else
-                {
-                    Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
-                }
-                    
-                if (canCommit)
-                {
-                    await Commit_2PC(context.transactionID, t1.Result);
-                }
+                else Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
+
+                if (canCommit) await Commit_2PC(context.transactionID, t1.Result);
                 else
                 {
                     await Abort_2PC(context.transactionID, t1.Result);
@@ -116,12 +110,13 @@ namespace Concurrency.Implementation
 
             if(t1.Result.beforeSet.Count != 0)
             {
+                //Console.WriteLine($"Non-det txn {context.transactionID} is waiting for batch {t1.Result.maxBeforeBid} to commit.");
                 if (t1.Result.grainWithHighestBeforeBid.Item1 == myPrimaryKey && t1.Result.grainWithHighestBeforeBid.Item2.Equals(this.myUserClassName))
+                {
                     await this.WaitForBatchCommit(t1.Result.maxBeforeBid);
-                else
-                    await this.GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);
+                }
+                else await this.GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);    
             }
-            //Console.WriteLine($"Transaction {context.transactionID}: Returned result to client.\n");
             return result;
         }
 
@@ -225,7 +220,8 @@ namespace Concurrency.Implementation
         public async Task<FunctionResult> Execute(FunctionCall call)
         {
             if (call.funcInput.context.isDeterministic == false)
-            {//Non-deterministic exection
+            {
+                //Non-deterministic exection
                 FunctionResult invokeRet = null;
                 try
                 {
@@ -247,6 +243,7 @@ namespace Concurrency.Implementation
                 int tid = call.funcInput.context.transactionID;
                 int bid = call.funcInput.context.batchID;
                 var myTurnIndex = await myScheduler.waitForTurn(bid, tid);
+
                 //Execute the function call;
                 var ret = await InvokeFunction(call);
                 if (myScheduler.ackComplete(bid, tid, myTurnIndex))
@@ -274,12 +271,12 @@ namespace Concurrency.Implementation
 
             if (!invokeRet.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey))
                 invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
-
+                
             var beforeSet = myScheduler.getBeforeSet(tid, out maxBeforeBid);
             var afterSet = myScheduler.getAfterSet(tid, maxBeforeBid, out minAfterBid);
             invokeRet.beforeSet.UnionWith(beforeSet);
             invokeRet.afterSet.UnionWith(afterSet);
-            // TODO: chenged by Yijian
+            // chenged by Yijian
             if (minAfterBid == int.MaxValue) isBeforeAfterConsecutive = false;
             else if (batchScheduleMap[minAfterBid].lastBatchID == maxBeforeBid || maxBeforeBid == int.MinValue)
                 isBeforeAfterConsecutive = true;
@@ -290,10 +287,7 @@ namespace Concurrency.Implementation
         {
             var context = call.funcInput.context;
             var key = (context.isDeterministic) ? context.batchID : context.transactionID;            
-            if(!coordinatorMap.ContainsKey(key))
-            {
-                coordinatorMap.Add(key, context.coordinatorKey);
-            }
+            if(!coordinatorMap.ContainsKey(key)) coordinatorMap.Add(key, context.coordinatorKey);
             FunctionInput functionCallInput = call.funcInput;                        
             MethodInfo mi = call.type.GetMethod(call.func);
             Task<FunctionResult> t = (Task<FunctionResult>)mi.Invoke(this, new object[] { functionCallInput });
@@ -309,8 +303,7 @@ namespace Concurrency.Implementation
         public async Task Abort(int tid)
         {
             //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Abort message for transaction {tid}. \n\n");
-            if (state == null)
-                return;
+            if (state == null) return;
 
             var tasks = new List<Task>();
             tasks.Add(this.state.Abort(tid));
@@ -325,15 +318,10 @@ namespace Concurrency.Implementation
 
         public async Task Commit(int tid)
         {
-            //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Commit message for transaction {tid}. \n\n");
-            if (state == null)
-                return;
-
-
+            if (state == null) return;
             var tasks = new List<Task>();
             tasks.Add(this.state.Commit(tid));
-            if (log != null)
-                tasks.Add(log.HandleOnCommitIn2PC(state, tid, coordinatorMap[tid]));
+            if (log != null) tasks.Add(log.HandleOnCommitIn2PC(state, tid, coordinatorMap[tid]));
             myScheduler.ackComplete((int)tid);
             Cleanup(tid);
             await Task.WhenAll(tasks);
@@ -344,15 +332,10 @@ namespace Concurrency.Implementation
          */
         public async Task<bool> Prepare(int tid)
         {
-            //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Prepare message for transaction {tid}. \n\n");
-
-            if (state == null)
-                return true;
-
+            if (state == null) return true;
             var prepareResult = await this.state.Prepare(tid);
-            if(prepareResult && log != null)
-            if (log != null)            
-                await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
+            if (prepareResult && log != null)
+            if (log != null) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
             return prepareResult;
         }
     }

@@ -65,7 +65,7 @@ namespace Concurrency.Implementation
             
             if (nodes.ContainsKey(schedule.lastBatchID))
             {
-                ScheduleNode prevNode = nodes[schedule.lastBatchID];
+                var prevNode = nodes[schedule.lastBatchID];
                 if (prevNode.next == null)
                 {
                     prevNode.next = node;
@@ -80,11 +80,30 @@ namespace Concurrency.Implementation
             }
             else
             {
-                ScheduleNode prevNode = new ScheduleNode(schedule.lastBatchID, true);
-                nodes.Add(schedule.lastBatchID, prevNode);
-                prevNode.next = node;
-                node.prev = prevNode;
-                // at this time, prevNode.prev == null (Yijian)
+                // last node is already deleted because it's committed
+                if (schedule.highestCommittedBatchId >= schedule.lastBatchID)
+                {
+                    var prevNode = nodes[-1];
+                    if (prevNode.next == null)
+                    {
+                        prevNode.next = node;
+                        node.prev = prevNode;
+                    }
+                    else
+                    {
+                        Debug.Assert(prevNode.next.isDet == false && prevNode.next.next == null);
+                        prevNode.next.next = node;
+                        node.prev = prevNode.next;
+                    }
+                }
+                else   // last node hasn't arrived yet
+                {
+                    var prevNode = new ScheduleNode(schedule.lastBatchID, true);
+                    nodes.Add(schedule.lastBatchID, prevNode);
+                    prevNode.next = node;
+                    node.prev = prevNode;
+                    // at this time, prevNode.prev == null (Yijian)
+                }
             }
 
             if (node.id > tail.id) tail = node;
@@ -176,9 +195,7 @@ namespace Concurrency.Implementation
             maxBeforeBid = node.id == -1 ? int.MinValue : node.id;
             while(node.id != -1 && !node.commitmentPromise.Task.IsCompleted)
             {   
-                if (node.isDet)
-                    result.Add(node.id);
-
+                if (node.isDet) result.Add(node.id);
                 node = node.prev;
             }
             return result;
@@ -232,9 +249,7 @@ namespace Concurrency.Implementation
             {
                 //Schedule node is completed
                 nodes[scheduleId].executionPromise.SetResult(true);
-                //Only deterministic batches trigger garbage collection
-                //removePreviousScheduleNode(scheduleId);
-                //nonDetBatchScheduleMap.Remove(scheduleId);                
+                //Only deterministic batches trigger garbage collection               
             }
         }
     }

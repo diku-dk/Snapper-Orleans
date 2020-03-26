@@ -41,19 +41,6 @@ namespace Utilities
         public Boolean readOnly = false;
         public Tuple<Guid, String> grainWithHighestBeforeBid;
 
-        // TODO: chenged by Yijian
-        public FunctionResult(Object resultObject, FunctionResult r)
-        {
-            this.resultObject = resultObject;
-            this.grainsInNestedFunctions = new Dictionary<Guid, String>();
-            foreach (var entry in r.grainsInNestedFunctions)
-                this.grainsInNestedFunctions.Add(entry.Key, entry.Value);
-            this.exception = r.exception;
-            this.isBeforeAfterConsecutive = r.isBeforeAfterConsecutive;
-            this.beforeSet = new HashSet<int>();
-            this.afterSet = new HashSet<int>();
-        }
-
         public FunctionResult(Object resultObject=null)
         {
             this.resultObject = resultObject;
@@ -68,9 +55,9 @@ namespace Utilities
         {
             this.exception |= r.exception;
             foreach (var entry in r.grainsInNestedFunctions)
-                if(this.grainsInNestedFunctions.ContainsKey(entry.Key) == false)
-                    this.grainsInNestedFunctions.Add(entry.Key,entry.Value);
-
+                if (this.grainsInNestedFunctions.ContainsKey(entry.Key) == false)
+                    this.grainsInNestedFunctions.Add(entry.Key, entry.Value);
+             
             if(this.beforeSet.Count == 0 && this.afterSet.Count == 0)
             {
                 this.grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
@@ -78,7 +65,8 @@ namespace Utilities
                 this.minAfterBid = r.minAfterBid;
                 this.beforeSet = r.beforeSet;
                 this.afterSet = r.afterSet;
-            } else
+            } 
+            else
             {
                 this.beforeSet.UnionWith(r.beforeSet);
                 this.afterSet.UnionWith(r.afterSet);
@@ -92,7 +80,7 @@ namespace Utilities
             }            
         }
 
-        public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, Boolean consecutive, Tuple<Guid, string>  tuple)
+        public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, Boolean consecutive, Tuple<Guid, string> tuple)
         {
 
             if(this.maxBeforeBid < maxBeforeBid)

@@ -170,16 +170,14 @@ namespace SmallBank.Grains
                 var inputTuple = (DepositCheckingInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
-                if (!String.IsNullOrEmpty(custName))
-                {
-                    id = myState.account[custName];
-                }
+                // changed by Yijian, not necessary to check if null or empty
+                //if (!String.IsNullOrEmpty(custName)) id = myState.account[custName];
                 if (!myState.checkingAccount.ContainsKey(id))
                 {
                     ret.setException();
                     return ret;
                 }
-                myState.checkingAccount[id] += inputTuple.Item2; //Can also be negative for checking account                
+                myState.checkingAccount[id] += inputTuple.Item2;             
             }
             catch (Exception)
             {
@@ -198,12 +196,10 @@ namespace SmallBank.Grains
                 var inputTuple = (MultiTransferInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
-                if (!String.IsNullOrEmpty(custName))
-                {
-                    id = myState.account[custName];
-                }
-
-                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item2 * inputTuple.Item3.Count)
+                // changed by Yijian, not necessary to check if null or empty
+                // if (!String.IsNullOrEmpty(custName)) id = myState.account[custName];
+                //if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item2 * inputTuple.Item3.Count)
+                if (!myState.checkingAccount.ContainsKey(id))
                 {
                     ret.setException();
                     return ret;
@@ -228,12 +224,8 @@ namespace SmallBank.Grains
                         }
                     }
                     await Task.WhenAll(tasks);
-                    foreach(Task<FunctionResult> task in tasks)
-                    {
-                        ret.mergeWithFunctionResult(task.Result);
-                    }
-                    myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
-                        
+                    foreach (Task<FunctionResult> task in tasks) ret.mergeWithFunctionResult(task.Result);
+                    if (!ret.hasException()) myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
                 }
             }
             catch (Exception)
@@ -242,7 +234,6 @@ namespace SmallBank.Grains
             }
             return ret;
         }
-
 
         public async Task<FunctionResult> TransactSaving(FunctionInput fin)
         {
@@ -260,11 +251,12 @@ namespace SmallBank.Grains
                         ret.setException();
                         return ret;
                     }
+                    /*
                     if (myState.savingAccount[id] < inputTuple.Item2)
                     {
                         ret.setException();
                         return ret;
-                    }
+                    }*/
                     myState.savingAccount[id] -= inputTuple.Item2;
                 }
                 else
@@ -290,11 +282,8 @@ namespace SmallBank.Grains
                 var inputTuple = (TransferInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
-
-                if (!String.IsNullOrEmpty(custName))
-                {
-                    id = myState.account[custName];
-                }
+                //changed by Yijian, not necessary to check if null or empty
+                //if (!String.IsNullOrEmpty(custName)) id = myState.account[custName];
                 // if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item3)
                 if (!myState.checkingAccount.ContainsKey(id))
                 {
@@ -304,25 +293,16 @@ namespace SmallBank.Grains
                 var gID = this.MapCustomerIdToGroup(inputTuple.Item2.Item2);
                 FunctionInput funcInput = new FunctionInput(fin, new DepositCheckingInput(inputTuple.Item2, inputTuple.Item3));
                 Task<FunctionResult> task;
-                if (gID == myState.GroupID)
-                {
-                    task = DepositChecking(funcInput);
-                }
+                if (gID == myState.GroupID) task = DepositChecking(funcInput);
                 else
                 {
                     var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
                     FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
                     task = destination.Execute(funcCall);
                 }
-
                 await task;
-                if (task.Result.hasException() == true)
-                {
-                    ret.setException();
-                    return ret;
-                }
                 ret.mergeWithFunctionResult(task.Result);
-                myState.checkingAccount[id] -= inputTuple.Item3;              
+                if (!ret.hasException()) myState.checkingAccount[id] -= inputTuple.Item3;
             }
             catch (Exception e)
             {
@@ -351,10 +331,7 @@ namespace SmallBank.Grains
                     {
                         myState.checkingAccount[id] -= (inputTuple.Item2 + 1); //Pay a penalty                        
                     }
-                    else
-                    {
-                        myState.checkingAccount[id] -= inputTuple.Item2;
-                    }
+                    else myState.checkingAccount[id] -= inputTuple.Item2;
                 }
                 else
                 {
