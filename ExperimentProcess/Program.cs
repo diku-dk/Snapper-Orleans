@@ -20,10 +20,10 @@ namespace ExperimentProcess
     {
         static Boolean LocalCluster;
         static IClusterClient[] clients;
-        static String sinkAddress = ">tcp://localhost:5558";
-        static String controllerAddress = ">tcp://localhost:5575";
-        //static String sinkAddress = ">tcp://18.189.3.36:5558";         // controller public IP
-        //static String controllerAddress = ">tcp://18.189.3.36:5575";   // controller public IP
+        //static String sinkAddress = ">tcp://localhost:5558";
+        //static String controllerAddress = ">tcp://localhost:5575";
+        static String sinkAddress = ">tcp://3.21.164.131:5558";         // controller public IP
+        static String controllerAddress = ">tcp://3.21.164.131:5575";   // controller public IP
         static PushSocket sink = new PushSocket(sinkAddress);
         static WorkloadResults[] results;        
         static IBenchmark[] benchmarks;
