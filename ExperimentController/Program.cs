@@ -22,7 +22,7 @@ namespace ExperimentController
         //static String workerAddress = "@tcp://localhost:5575";
         //static String sinkAddress = "@tcp://localhost:5558";
         static String workerAddress = "@tcp://*:5575";
-        static String sinkAddress = "@tcp://172.31.42.128:5558";    // controller private IP
+        static String sinkAddress = "@tcp://172.31.41.95:5558";    // controller private IP
         static int numWorkerNodes;
         static int numWarmupEpoch;
         static IClusterClient client;

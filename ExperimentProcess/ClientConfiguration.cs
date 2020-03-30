@@ -17,7 +17,6 @@ namespace ExperimentProcess
     {
         private IClusterClient client;
         private static readonly int maxAttempts = 10;
-        private ISiloHost host;
 
         public async Task<IClusterClient> StartClientWithRetriesToCluster(int initializeAttemptsBeforeFailing = 5)
         {

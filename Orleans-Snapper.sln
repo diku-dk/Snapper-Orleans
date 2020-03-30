@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27703.2035
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29324.140
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Concurrency.Interface", "Concurrency.Interface\Concurrency.Interface.csproj", "{07953DC2-B94E-4AD5-8455-4556B56993FB}"
 EndProject
@@ -52,6 +52,15 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmallBank.Interfaces", "SmallBank.Interfaces\SmallBank.Interfaces.csproj", "{2B92FF54-0FD5-405F-BA9B-127D6242FF3A}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmallBank.Grains", "SmallBank.Grains\SmallBank.Grains.csproj", "{A5B30F91-BFF5-4191-9030-EB44AA85F540}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyClient", "MyClient\MyClient.csproj", "{A047056F-26C1-41BC-A849-F74AF6E0A4F6}"
+	ProjectSection(ProjectDependencies) = postProject
+		{2B92FF54-0FD5-405F-BA9B-127D6242FF3A} = {2B92FF54-0FD5-405F-BA9B-127D6242FF3A}
+		{A5B30F91-BFF5-4191-9030-EB44AA85F540} = {A5B30F91-BFF5-4191-9030-EB44AA85F540}
+		{07953DC2-B94E-4AD5-8455-4556B56993FB} = {07953DC2-B94E-4AD5-8455-4556B56993FB}
+		{5E31DAD0-3493-4D6A-81B1-A0A03483305C} = {5E31DAD0-3493-4D6A-81B1-A0A03483305C}
+		{CDF720FD-C893-4799-A03D-A4EE2CFB81A4} = {CDF720FD-C893-4799-A03D-A4EE2CFB81A4}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -115,6 +124,10 @@ Global
 		{A5B30F91-BFF5-4191-9030-EB44AA85F540}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A5B30F91-BFF5-4191-9030-EB44AA85F540}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A5B30F91-BFF5-4191-9030-EB44AA85F540}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A047056F-26C1-41BC-A849-F74AF6E0A4F6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A047056F-26C1-41BC-A849-F74AF6E0A4F6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A047056F-26C1-41BC-A849-F74AF6E0A4F6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A047056F-26C1-41BC-A849-F74AF6E0A4F6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

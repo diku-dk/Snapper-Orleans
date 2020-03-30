@@ -11,8 +11,8 @@ using Utilities;
 
 namespace ExperimentProcess
 {
-    enum TxnType {Balance, DepositChecking, Transfer, TransactSaving, WriteCheck, MultiTransfer}
-    class SmallBankBenchmark : IBenchmark
+    public enum TxnType {Balance, DepositChecking, Transfer, TransactSaving, WriteCheck, MultiTransfer}
+    public class SmallBankBenchmark : IBenchmark
     {
         IDiscreteDistribution transactionTypeDistribution;
         WorkloadConfiguration config;
@@ -41,7 +41,7 @@ namespace ExperimentProcess
 
         }
 
-        //getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer
+        //getBalance, depositChecking, transfer, transacSaving, writeCheck, multiTransfer
         public TxnType nextTransactionType()
         {
             int type = transactionTypeDistribution.Sample();

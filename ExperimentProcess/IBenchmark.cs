@@ -7,7 +7,7 @@ using Utilities;
 
 namespace ExperimentProcess
 {
-    interface IBenchmark
+    public interface IBenchmark
     {
         void generateBenchmark(WorkloadConfiguration workloadConfig);
         Task<FunctionResult> newTransaction(IClusterClient client);
