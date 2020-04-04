@@ -239,6 +239,7 @@ namespace Concurrency.Implementation
         async Task EmitTransaction(Object obj)
         {
             numTransactionIdsReserved = 0;
+            await EmitDeterministicTransactions();
             EmitNonDeterministicTransactions();
             tidToAllocate = token.lastTransactionID + 1;
             token.lastTransactionID += numTransactionIdsPreAllocated;
@@ -294,15 +295,16 @@ namespace Concurrency.Implementation
         /**
          *This functions is called to emit batch of deterministic transactions
          */
-        async Task EmitDeterministicTransactions(BatchToken token)
+
+        // async Task EmitDeterministicTransactions(BatchToken token)
+        async Task EmitDeterministicTransactions()
         {
             int myEmitSequence = this.detEmitSeq;
             List<TransactionContext> transactionList;
             Boolean shouldEmit = deterministicTransactionRequests.TryGetValue(myEmitSequence, out transactionList);
 
             //Return if there is no deterministic transactions waiting for emit
-            if (shouldEmit == false)
-                return;
+            if (shouldEmit == false) return;
             this.detEmitSeq++;
             int curBatchID = token.lastTransactionID + 1;
 
@@ -338,8 +340,7 @@ namespace Concurrency.Implementation
                 DeterministicBatchSchedule schedule = item.Value;
                 if (token.lastBatchPerGrain.ContainsKey(grain))
                     schedule.lastBatchID = token.lastBatchPerGrain[grain];
-                else
-                    schedule.lastBatchID = -1;
+                else schedule.lastBatchID = -1;
                 schedule.globalCoordinator = this.myPrimaryKey;
                 Debug.Assert(schedule.batchID > schedule.lastBatchID);
                 token.lastBatchPerGrain[grain] = schedule.batchID;
@@ -353,11 +354,9 @@ namespace Concurrency.Implementation
                 foreach (var item in token.lastBatchPerGrain)
                 {
                     // only when last batch is already committed, the next emmitted batch can have its lastBid = -1 again
-                    if (item.Value <= this.highestCommittedBatchID)
-                        expiredGrains.Add(item.Key);
+                    if (item.Value <= this.highestCommittedBatchID) expiredGrains.Add(item.Key);
                 }
-                foreach (var item in expiredGrains)
-                    token.lastBatchPerGrain.Remove(item);
+                foreach (var item in expiredGrains) token.lastBatchPerGrain.Remove(item);
                 token.highestCommittedBatchID = this.highestCommittedBatchID;
             }
 
@@ -402,9 +401,9 @@ namespace Concurrency.Implementation
                     //commit
                     this.highestCommittedBatchID = bid;
                     CleanUp(bid);
-                    if (log != null)
-                        await log.HandleOnCommitInDeterministicProtocol(bid);
-                    await BroadcastCommit();
+                    if (log != null) await log.HandleOnCommitInDeterministicProtocol(bid);
+                    // disable token
+                    //await BroadcastCommit();
                 }
                 else
                 {
