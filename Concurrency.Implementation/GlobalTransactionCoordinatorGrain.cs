@@ -66,9 +66,11 @@ namespace Concurrency.Implementation
 
         //disable token
         BatchToken token;
+        int global_tid;
 
         public override Task OnActivateAsync()
         {
+            global_tid = 0;
             token = new BatchToken(-1, -1);
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
@@ -122,10 +124,18 @@ namespace Concurrency.Implementation
             return context;
         }
 
+        public async Task<TransactionContext> NewTransaction()
+        {
+            var context = new TransactionContext(global_tid);
+            global_tid++;
+            return context;
+        }
+
 
         /**
          *Client calls this function to submit non-deterministic transaction
          */
+        /*
         public async Task<TransactionContext> NewTransaction()
         {
             //Console.WriteLine($"Coordinator {myId}: received non-det transaction");
@@ -173,7 +183,7 @@ namespace Concurrency.Implementation
             }
             context.highestBatchIdCommitted = this.highestCommittedBatchID;
             return context;
-        }
+        }*/
 
 
         public async Task CheckBackoff(BatchToken token)
@@ -505,7 +515,7 @@ namespace Concurrency.Implementation
             }            
             this.myId = myId;
             this.neighbourId = neighbourId;
-            disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
+            //disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
             Console.WriteLine($"\n Coordinator {myId}: is initialized, my next neighbour is coordinator {neighbourId}");
         }
     }

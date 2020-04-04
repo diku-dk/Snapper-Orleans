@@ -76,6 +76,8 @@ namespace Concurrency.Implementation
             try
             {
                 context = await myCoordinator.NewTransaction();
+                //if (context.transactionID == 200)
+                    //Console.WriteLine($"start txn 200");
                 //myScheduler.ackBatchCommit(context.highestBatchIdCommitted);
                 functionCallInput.context = context;
                 context.coordinatorKey = this.myPrimaryKey;
@@ -90,13 +92,20 @@ namespace Concurrency.Implementation
                 //canCommit = canCommit & serializable;
                 if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)
                 {
-                    Boolean serializable = this.CheckSerializability(t1.Result).Result;
-                    canCommit = serializable;
+                    canCommit = this.CheckSerializability(t1.Result).Result;
                     if (canCommit) canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
                 } 
                 else Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
 
-                if (canCommit) await Commit_2PC(context.transactionID, t1.Result);
+                if (canCommit)
+                {
+                    if (t1.Result.grainsInNestedFunctions.Count == 1)
+                    {
+                        Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey));
+                        await Commit(context.transactionID);
+                    }
+                    else await Commit_2PC(context.transactionID, t1.Result);
+                } 
                 else
                 {
                     await Abort_2PC(context.transactionID, t1.Result);
@@ -117,6 +126,8 @@ namespace Concurrency.Implementation
                 }
                 else await this.GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);    
             }
+            //if (context.transactionID == 20000)
+                //Console.WriteLine($"txn 20000 finished");
             return result;
         }
 
