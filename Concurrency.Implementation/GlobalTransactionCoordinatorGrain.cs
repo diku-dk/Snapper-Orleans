@@ -64,8 +64,12 @@ namespace Concurrency.Implementation
         private uint myId, neighbourId;
         private Boolean spawned = false;
 
+        //disable token
+        BatchToken token;
+
         public override Task OnActivateAsync()
-        {            
+        {
+            token = new BatchToken(-1, -1);
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             lastBatchIDMap = new Dictionary<int, int>();
@@ -234,6 +238,11 @@ namespace Concurrency.Implementation
          */
         async Task EmitTransaction(Object obj)
         {
+            numTransactionIdsReserved = 0;
+            EmitNonDeterministicTransactions();
+            tidToAllocate = token.lastTransactionID + 1;
+            token.lastTransactionID += numTransactionIdsPreAllocated;
+            /*
             BatchToken token;
             //The timer expires
             if (obj == null)
@@ -254,10 +263,11 @@ namespace Concurrency.Implementation
             token = (BatchToken)obj;
             await EmitDeterministicTransactions(token);
             EmitNonDeterministicTransactions(token);
-            this.isEmitTimerOn = false;
+            this.isEmitTimerOn = false;*/
         }
 
-        private void EmitNonDeterministicTransactions(BatchToken token)
+        // private void EmitNonDeterministicTransactions(BatchToken token)
+        private void EmitNonDeterministicTransactions()
         {
             int myEmitSequence = this.nonDetEmitSeq;
             if (nonDeterministicEmitSize.ContainsKey(myEmitSequence))
@@ -274,7 +284,8 @@ namespace Concurrency.Implementation
                 this.nonDetEmitSeq++;
                 nonDetEmitPromiseMap[myEmitSequence].SetResult(true);
                 nonDetEmitPromiseMap.Remove(myEmitSequence);
-            } else
+            } 
+            else
             {
                 numTransactionIdsPreAllocated = 0;
                 numTransactionIdsReserved = 0;
