@@ -230,7 +230,8 @@ namespace ExperimentController
 
         private static async void LoadGrains()
         {
-            var tasks = new List<Task<FunctionResult>>(); 
+            var tasks = new List<Task>();
+            //var tasks = new List<Task<FunctionResult>>(); 
             var batchSize = -1; //If you want to load the grains in sequence instead of all concurrent
             for(uint i=0; i<workload.numAccounts/workload.numAccountsPerGroup; i++)
             {
@@ -248,6 +249,7 @@ namespace ExperimentController
                         break;
                     case ImplementationType.SNAPPER:
                         var sntxnGrain = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
+                        tasks.Add(sntxnGrain.InitGlobalTid(i));   // for disable coordinator
                         tasks.Add(sntxnGrain.StartTransaction("InitBankAccounts", input));
                         break;
                     default:

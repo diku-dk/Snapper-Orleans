@@ -124,18 +124,19 @@ namespace Concurrency.Implementation
             return context;
         }
 
+        /*
         public async Task<TransactionContext> NewTransaction()
         {
             var context = new TransactionContext(global_tid);
             global_tid++;
             return context;
-        }
+        }*/
 
 
         /**
          *Client calls this function to submit non-deterministic transaction
          */
-        /*
+        
         public async Task<TransactionContext> NewTransaction()
         {
             //Console.WriteLine($"Coordinator {myId}: received non-det transaction");
@@ -160,10 +161,7 @@ namespace Concurrency.Implementation
                 emitting = nonDetEmitPromiseMap[myEmitSeq];
                 nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] + 1;
 
-                if (emitting.Task.IsCompleted != true)
-                {                    
-                    await emitting.Task;
-                }
+                if (emitting.Task.IsCompleted != true) await emitting.Task;
                 int tid = nonDetEmitID[myEmitSeq]++;
                 context = new TransactionContext(tid);
 
@@ -183,7 +181,7 @@ namespace Concurrency.Implementation
             }
             context.highestBatchIdCommitted = this.highestCommittedBatchID;
             return context;
-        }*/
+        }
 
 
         public async Task CheckBackoff(BatchToken token)
@@ -203,7 +201,9 @@ namespace Concurrency.Implementation
                     token.markedIdleByCoordinator = myPrimaryKey;
                     var curTime = DateTime.Now;
                     token.backOffProbeStartTime = curTime.Hour * 3600 + curTime.Minute * 60 + curTime.Second;
-                } else if(token.markedIdleByCoordinator == myPrimaryKey)                {
+                } 
+                else if(token.markedIdleByCoordinator == myPrimaryKey)                
+                {
                     var curTime = DateTime.Now;
                     var curTimeInSecs = curTime.Hour * 3600 + curTime.Minute * 60 + curTime.Second;                    
                     if(curTimeInSecs - token.backOffProbeStartTime > this.idleIntervalTillBackOffSecs)
@@ -217,13 +217,8 @@ namespace Concurrency.Implementation
             {
                 //Console.WriteLine($"Coordinator {myId}: stops backing off.");
                 //The coordinator has  transaction requests
-                if (token.backoff)
-                {
-                    token.backoff = false;
-                } else if(token.idleToken)
-                {
-                    token.idleToken = false;
-                }
+                if (token.backoff) token.backoff = false;
+                else if(token.idleToken) token.idleToken = false;
             }
         }
 
@@ -248,11 +243,11 @@ namespace Concurrency.Implementation
          */
         async Task EmitTransaction(Object obj)
         {
-            numTransactionIdsReserved = 0;
-            await EmitDeterministicTransactions();
-            EmitNonDeterministicTransactions();
-            tidToAllocate = token.lastTransactionID + 1;
-            token.lastTransactionID += numTransactionIdsPreAllocated;
+            //numTransactionIdsReserved = 0;
+            //await EmitDeterministicTransactions();
+            EmitNonDeterministicTransactions((BatchToken)obj);
+            //tidToAllocate = token.lastTransactionID + 1;
+            //token.lastTransactionID += numTransactionIdsPreAllocated;
             /*
             BatchToken token;
             //The timer expires
@@ -277,8 +272,7 @@ namespace Concurrency.Implementation
             this.isEmitTimerOn = false;*/
         }
 
-        // private void EmitNonDeterministicTransactions(BatchToken token)
-        private void EmitNonDeterministicTransactions()
+        private void EmitNonDeterministicTransactions(BatchToken token)
         {
             int myEmitSequence = this.nonDetEmitSeq;
             if (nonDeterministicEmitSize.ContainsKey(myEmitSequence))
@@ -306,8 +300,7 @@ namespace Concurrency.Implementation
          *This functions is called to emit batch of deterministic transactions
          */
 
-        // async Task EmitDeterministicTransactions(BatchToken token)
-        async Task EmitDeterministicTransactions()
+        async Task EmitDeterministicTransactions(BatchToken token)
         {
             int myEmitSequence = this.detEmitSeq;
             List<TransactionContext> transactionList;

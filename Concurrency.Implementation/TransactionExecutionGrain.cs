@@ -25,13 +25,16 @@ namespace Concurrency.Implementation
         private IGlobalTransactionCoordinatorGrain myCoordinator;
         private TransactionScheduler myScheduler;
 
+        // disable coordinator
+        int global_tid;
+
         public TransactionExecutionGrain(String myUserClassName){
             
             this.myUserClassName = myUserClassName;
         }
 
         public async override Task OnActivateAsync()
-        {            
+        {
             myPrimaryKey = this.GetPrimaryKey();
             var configTuple = await this.GrainFactory.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0)).GetConfiguration(myUserClassName, myPrimaryKey);
             // configTuple: Tuple<ExecutionGrainConfiguration, uint>
@@ -46,6 +49,11 @@ namespace Concurrency.Implementation
             batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();
             myScheduler = new TransactionScheduler(batchScheduleMap, configTuple.Item1.maxNonDetWaitingLatencyInMs, this.GrainFactory);
             coordinatorMap = new Dictionary<int, Guid>();
+        }
+
+        public async Task InitGlobalTid(uint id)
+        {
+            global_tid = 1000 * (int)id;   // assume among 100 grains, each will have at most 1000 txn
         }
 
 
@@ -66,7 +74,7 @@ namespace Concurrency.Implementation
                 Console.WriteLine($"Det txn {context.transactionID} has exception!!!!!!");
             return t1.Result;
         }
-
+        
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
             FunctionResult result = null;
@@ -75,9 +83,11 @@ namespace Concurrency.Implementation
             Boolean canCommit = false;
             try
             {
-                context = await myCoordinator.NewTransaction();
+                //context = await myCoordinator.NewTransaction();   disable coordinator
+                context = new TransactionContext(global_tid);
+                global_tid++;
                 //if (context.transactionID == 200)
-                    //Console.WriteLine($"start txn 200");
+                  //  Console.WriteLine($"start txn 200");
                 //myScheduler.ackBatchCommit(context.highestBatchIdCommitted);
                 functionCallInput.context = context;
                 context.coordinatorKey = this.myPrimaryKey;
@@ -127,7 +137,7 @@ namespace Concurrency.Implementation
                 else await this.GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);    
             }
             //if (context.transactionID == 20000)
-                //Console.WriteLine($"txn 20000 finished");
+              //  Console.WriteLine($"txn 20000 finished");
             return result;
         }
 

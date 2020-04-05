@@ -59,10 +59,9 @@ namespace Concurrency.Implementation
                 }
                 await Task.WhenAll(tasks);
                 //Inject token to coordinator 0
-                /* disable token
                 var coord0 = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(0));
                 BatchToken token = new BatchToken(-1, -1);
-                await coord0.PassToken(token);*/
+                await coord0.PassToken(token);
             } else
             {
                 //Only support one coordinator configuration injection for now
