@@ -17,8 +17,8 @@ namespace MyClient
         static int numTxn = 5000;
         static int numClient = 1;
         static int numThread = 1;
-        static int numEpoch = 6;
-        static Boolean LocalCluster = false;
+        static int numEpoch = 4;
+        static Boolean LocalCluster = true;
         static IClusterClient[] clients;
         static Thread[] threads;
         static IBenchmark[] benchmarks;
@@ -36,16 +36,16 @@ namespace MyClient
             config.benchmark = BenchmarkType.SMALLBANK;
             config.deterministicTxnPercent = 100;
             config.distribution = Distribution.UNIFORM;
-            config.grainImplementationType = ImplementationType.SNAPPER;
+            config.grainImplementationType = ImplementationType.ORLEANSEVENTUAL;
             config.mixture = new int[5];
-            config.mixture[0] = 100;
+            config.mixture[0] = 0;
             config.mixture[1] = 0;
-            config.mixture[2] = 0;
+            config.mixture[2] = 100;
             config.mixture[3] = 0;
             config.mixture[4] = 0;
-            config.numAccounts = 1000000;
+            config.numAccounts = 200;
             config.numAccountsMultiTransfer = 0;
-            config.numAccountsPerGroup = 100;
+            config.numAccountsPerGroup = 1;
             config.numGrainsMultiTransfer = 0;
             config.zipfianConstant = 0;
 
@@ -58,7 +58,6 @@ namespace MyClient
             }
 
             // initialize clients
-            
             clients = new IClusterClient[numClient];
             ClientConfiguration clientConfig = new ClientConfiguration();
             for (int i = 0; i < numClient; i++)
@@ -66,8 +65,10 @@ namespace MyClient
                 if (LocalCluster) clients[i] = await clientConfig.StartClientWithRetries();
                 else clients[i] = await clientConfig.StartClientWithRetriesToCluster();
             }
+
             /*
             // initialize configuration grain
+            Console.WriteLine($"Initializing configuration grain...");
             var nonDetCCType = ConcurrencyType.S2PL;
             var maxNonDetWaitingLatencyInMSecs = 1000;
             var batchIntervalMSecs = 100;
@@ -78,53 +79,24 @@ namespace MyClient
             var coordConfig = new CoordinatorGrainConfiguration(batchIntervalMSecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
             var configGrain = clients[0].GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
             await configGrain.UpdateNewConfiguration(exeConfig);
-            await configGrain.UpdateNewConfiguration(coordConfig);
-            Console.WriteLine($"Finish initializing configuration grain.");
+            await configGrain.UpdateNewConfiguration(coordConfig);*/
 
             // load grains
+            Console.WriteLine($"Loading grains...");
             var tasks = new List<Task<FunctionResult>>();
-            var batchSize = -1; //If you want to load the grains in sequence instead of all concurrent
             for (uint i = 0; i < config.numAccounts / config.numAccountsPerGroup; i++)
             {
                 var args = new Tuple<uint, uint>(config.numAccountsPerGroup, i);
                 var input = new FunctionInput(args);
                 var groupGUID = Helper.convertUInt32ToGuid(i);
-                var sntxnGrain = clients[0].GetGrain<ICustomerAccountGroupGrain>(groupGUID);
-                tasks.Add(sntxnGrain.StartTransaction("InitBankAccounts", input));
-                if (batchSize > 0 && (i + 1) % batchSize == 0)
-                {
-                    await Task.WhenAll(tasks);
-                    tasks.Clear();
-                }
-            }
-            if (tasks.Count > 0)
-            {
-                await Task.WhenAll(tasks);
-            }
-            Console.WriteLine($"Finish loading grains. ");*/
-
-            // initialize threads
-            /*
-            threads = new Thread[numThread];
-            for (int i = 0; i < numThread; i++)
-            {
-                Thread thread = new Thread(ThreadWorkAsync);
-                threads[i] = thread;
-            }
-
-            for (int i = 0; i < numThread; i++)
-            {
-                threads[i].Start(i);
-                threads[i].Join();
-            } */
-            var tasks = new List<Task>();
-            for (int i = 0; i < numThread; i++)
-            {
-                tasks.Add(ThreadWorkAsync(i));
+                //var grain = clients[0].GetGrain<ICustomerAccountGroupGrain>(groupGUID);
+                var grain = clients[0].GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(groupGUID);
+                tasks.Add(grain.StartTransaction("InitBankAccounts", input));
             }
             await Task.WhenAll(tasks);
-            //await ThreadWorkAsync(0);
 
+            Console.WriteLine($"Start thread work...");
+            await ThreadWorkAsync(0);
             return 0;
         }
 
@@ -138,18 +110,13 @@ namespace MyClient
             {
                 Console.WriteLine($"Thread {threadIndex} starts epoch {eIndex}. ");
                 var tasks = new List<Task<FunctionResult>>();
-                //globalWatch.Restart();
-                for (int i = 0; i < numTxn; i++) tasks.Add(benchmark.newTransaction(client));
                 globalWatch.Restart();
+                for (int i = 0; i < numTxn; i++) tasks.Add(benchmark.newTransaction(client));
                 await Task.WhenAll(tasks);
 
                 var time = globalWatch.Elapsed;
                 int numAbort = 0;
-                for (int i = 0; i < numTxn; i++)
-                {
-                    if (tasks[i].Result.hasException()) numAbort++;
-                }
-
+                for (int i = 0; i < numTxn; i++) if (tasks[i].Result.hasException()) numAbort++;
                 Console.WriteLine($"Throughput = {1000 * numTxn / time.TotalMilliseconds} per Second, abort rate = {100 * numAbort / numTxn}%");
             }
         }
