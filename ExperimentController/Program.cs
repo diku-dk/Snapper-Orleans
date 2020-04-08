@@ -233,10 +233,15 @@ namespace ExperimentController
             var tasks = new List<Task>();
             //var tasks = new List<Task<FunctionResult>>(); 
             var batchSize = -1; //If you want to load the grains in sequence instead of all concurrent
+            var global_tid = 0;   // added by Yijian
             for(uint i=0; i<workload.numAccounts/workload.numAccountsPerGroup; i++)
             {
                 var args = new Tuple<uint, uint>(workload.numAccountsPerGroup, i);
                 var input = new FunctionInput(args);
+                // added by Yijian
+                input.context = new TransactionContext(global_tid);
+                global_tid++;
+
                 var groupGUID = Helper.convertUInt32ToGuid(i);
                 switch (workload.grainImplementationType) {
                     case ImplementationType.ORLEANSEVENTUAL: 
@@ -249,7 +254,7 @@ namespace ExperimentController
                         break;
                     case ImplementationType.SNAPPER:
                         var sntxnGrain = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
-                        tasks.Add(sntxnGrain.InitGlobalTid(i));   // for disable coordinator
+                        //tasks.Add(sntxnGrain.InitGlobalTid(i));   // for disable coordinator
                         tasks.Add(sntxnGrain.StartTransaction("InitBankAccounts", input));
                         break;
                     default:

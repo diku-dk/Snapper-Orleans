@@ -14,6 +14,7 @@ namespace MyClient
 {
     class Program
     {
+        static int global_tid = 300;
         static int numTxn = 20000;
         static int numClient = 1;
         static int numThread = 1;
@@ -114,7 +115,7 @@ namespace MyClient
                 Console.WriteLine($"Thread {threadIndex} starts epoch {eIndex}. ");
                 var tasks = new List<Task<FunctionResult>>();
                 globalWatch.Restart();
-                for (int i = 0; i < numTxn; i++) tasks.Add(benchmark.newTransaction(client));
+                for (int i = 0; i < numTxn; i++) tasks.Add(benchmark.newTransaction(client, global_tid ++));
                 await Task.WhenAll(tasks);
 
                 var time = globalWatch.Elapsed;

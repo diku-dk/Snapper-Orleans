@@ -76,9 +76,10 @@ namespace Concurrency.Implementation
             {
                 //context = await myCoordinator.NewTransaction();   disable coordinator
                 //if (context.transactionID == 200)
-                  //  Console.WriteLine($"start txn 200");
+                //  Console.WriteLine($"start txn 200");
                 //myScheduler.ackBatchCommit(context.highestBatchIdCommitted);
-                functionCallInput.context = context;
+                //functionCallInput.context = context;
+                context = functionCallInput.context;    // changed by Yijian (because tid is assigned by client)
                 context.coordinatorKey = this.myPrimaryKey;
                 //Console.WriteLine($"Transaction {context.transactionID}: is started.\n");
                 FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);

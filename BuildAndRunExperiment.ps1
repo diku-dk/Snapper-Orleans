@@ -17,7 +17,7 @@ if ($LastExitCode -ne 0) { return; }
 
 # Run the 2 console apps in different windows
 
-Start-Process "dotnet" -ArgumentList "run --project ExperimentController --no-build"
-Start-Sleep 5
+#Start-Process "dotnet" -ArgumentList "run --project ExperimentController --no-build"
+#Start-Sleep 5
 Start-Process "dotnet" -ArgumentList "run --project ExperimentProcess --no-build"
 #Start-Sleep 5
