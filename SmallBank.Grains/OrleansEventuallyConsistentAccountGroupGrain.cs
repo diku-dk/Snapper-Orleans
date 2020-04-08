@@ -157,7 +157,6 @@ namespace SmallBank.Grains
                     FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
                     task = destination.StartTransaction("DepositChecking", funcInput);
                 }
-
                 await task;
                 if (task.Result.hasException() == true)
                 {

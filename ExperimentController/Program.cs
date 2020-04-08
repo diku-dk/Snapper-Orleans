@@ -280,7 +280,7 @@ namespace ExperimentController
         {
             //Generate workload configurations interactively            
             GetWorkloadSettings();
-
+            
             //Initialize the client to silo cluster, create configurator grain
             InitiateClientAndSpawnConfigurationCoordinator();
             while (!asyncInitializationDone)

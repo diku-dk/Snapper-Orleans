@@ -110,7 +110,7 @@ namespace ExperimentProcess
             return grainId * config.numAccountsPerGroup + (uint)accountIdDistribution.Sample();
         }
 
-        public Task<FunctionResult> newTransaction(IClusterClient client)
+        public Task<FunctionResult> newTransaction(IClusterClient client, int global_tid)   // changed by Yijian
         {
             TxnType type = nextTransactionType();
             Task<FunctionResult> task = null;
@@ -194,6 +194,7 @@ namespace ExperimentProcess
                 var args = new Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32>>>(item1, item2, item3);
                 input = new FunctionInput(args);
             }
+            input.context = new TransactionContext(global_tid);   // added by Yijian
             task = Execute(client, groupId, type.ToString(), input, grainAccessInfo);
             return task;
         }

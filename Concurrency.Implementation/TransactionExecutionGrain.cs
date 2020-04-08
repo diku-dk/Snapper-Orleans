@@ -25,9 +25,6 @@ namespace Concurrency.Implementation
         private IGlobalTransactionCoordinatorGrain myCoordinator;
         private TransactionScheduler myScheduler;
 
-        // disable coordinator
-        int global_tid;
-
         public TransactionExecutionGrain(String myUserClassName){
             
             this.myUserClassName = myUserClassName;
@@ -50,12 +47,6 @@ namespace Concurrency.Implementation
             myScheduler = new TransactionScheduler(batchScheduleMap, configTuple.Item1.maxNonDetWaitingLatencyInMs, this.GrainFactory);
             coordinatorMap = new Dictionary<int, Guid>();
         }
-
-        public async Task InitGlobalTid(uint id)
-        {
-            global_tid = 1000 * (int)id;   // assume among 100 grains, each will have at most 1000 txn
-        }
-
 
         /**
          * Submit a determinictic transaction to the coordinator. 
@@ -84,8 +75,6 @@ namespace Concurrency.Implementation
             try
             {
                 //context = await myCoordinator.NewTransaction();   disable coordinator
-                context = new TransactionContext(global_tid);
-                global_tid++;
                 //if (context.transactionID == 200)
                   //  Console.WriteLine($"start txn 200");
                 //myScheduler.ackBatchCommit(context.highestBatchIdCommitted);

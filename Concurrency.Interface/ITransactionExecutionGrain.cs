@@ -9,9 +9,6 @@ namespace Concurrency.Interface
 {
     public interface ITransactionExecutionGrain : Orleans.IGrainWithIntegerKey, Orleans.IGrainWithGuidKey
     {
-        [AlwaysInterleave]
-        Task InitGlobalTid(uint id);
-
         /*
          * Client calls this function to submit a determinictic transaction to the transaction coordinator.
          */

@@ -14,11 +14,11 @@ namespace MyClient
 {
     class Program
     {
-        static int numTxn = 5000;
+        static int numTxn = 20000;
         static int numClient = 1;
         static int numThread = 1;
         static int numEpoch = 4;
-        static Boolean LocalCluster = true;
+        static Boolean LocalCluster = false;
         static IClusterClient[] clients;
         static Thread[] threads;
         static IBenchmark[] benchmarks;
@@ -40,13 +40,13 @@ namespace MyClient
             config.mixture = new int[5];
             config.mixture[0] = 0;
             config.mixture[1] = 0;
-            config.mixture[2] = 100;
+            config.mixture[2] = 0;
             config.mixture[3] = 0;
             config.mixture[4] = 0;
             config.numAccounts = 200;
-            config.numAccountsMultiTransfer = 0;
+            config.numAccountsMultiTransfer = 32;
             config.numAccountsPerGroup = 1;
-            config.numGrainsMultiTransfer = 0;
+            config.numGrainsMultiTransfer = 4;
             config.zipfianConstant = 0;
 
             // initialize workload
@@ -97,6 +97,9 @@ namespace MyClient
 
             Console.WriteLine($"Start thread work...");
             await ThreadWorkAsync(0);
+
+            Console.WriteLine("Finished running experiment. Press Enter to exit");
+            Console.ReadLine();
             return 0;
         }
 

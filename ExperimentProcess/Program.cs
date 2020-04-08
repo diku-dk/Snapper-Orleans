@@ -33,9 +33,10 @@ namespace ExperimentProcess
         static bool initializationDone = false;
         static Thread[] threads;
 
+        static int global_tid = 0;
+
         private static async void ThreadWorkAsync(Object obj)
         {
-
             int threadIndex = (int)obj;
             var globalWatch = new Stopwatch();
             var benchmark = benchmarks[threadIndex];
@@ -58,7 +59,8 @@ namespace ExperimentProcess
                     {
                         //Pipeline remaining tasks
                         var asyncReqStartTime = globalWatch.Elapsed;
-                        var newTask = benchmark.newTransaction(client);
+                        var newTask = benchmark.newTransaction(client, global_tid);
+                        global_tid++;
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);                      
                     } 
