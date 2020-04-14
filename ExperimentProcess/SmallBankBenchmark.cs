@@ -1,11 +1,8 @@
-﻿using AccountTransfer.Interfaces;
-using MathNet.Numerics.Distributions;
+﻿using MathNet.Numerics.Distributions;
 using Orleans;
 using SmallBank.Interfaces;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
 using System.Threading.Tasks;
 using Utilities;
 
@@ -66,16 +63,12 @@ namespace ExperimentProcess
 
         public Boolean isDet()
         {
-            if (config.deterministicTxnPercent == 0)
-                return false;
-            else if (config.deterministicTxnPercent == 100)
-                return true;
+            if (config.deterministicTxnPercent == 0) return false;
+            else if (config.deterministicTxnPercent == 100) return true;
 
             var sample = detDistribution.Sample();
-            if (sample < config.deterministicTxnPercent)
-                return true;
-            else
-                return false;
+            if (sample < config.deterministicTxnPercent) return true;
+            else return false;
         }
 
         public Task<FunctionResult> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
@@ -85,14 +78,8 @@ namespace ExperimentProcess
             {
                 case ImplementationType.SNAPPER:
                     var grain = client.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(grainId));
-                    if (isDet())
-                    {
-                        return grain.StartTransaction(grainAccessInfo, functionName, input);
-                    }
-                    else
-                    {
-                        return grain.StartTransaction(functionName, input);
-                    }
+                    if (isDet()) return grain.StartTransaction(grainAccessInfo, functionName, input);
+                    else return grain.StartTransaction(functionName, input);
                 case ImplementationType.ORLEANSEVENTUAL:
                     var eventuallyConsistentGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(Helper.convertUInt32ToGuid(grainId));
                     return eventuallyConsistentGrain.StartTransaction(functionName, input);
@@ -110,10 +97,9 @@ namespace ExperimentProcess
             return grainId * config.numAccountsPerGroup + (uint)accountIdDistribution.Sample();
         }
 
-        public Task<FunctionResult> newTransaction(IClusterClient client, int global_tid)   // changed by Yijian
+        public Task<FunctionResult> newTransaction(IClusterClient client, int global_tid)   // Yijian add gloal_tid
         {
             TxnType type = nextTransactionType();
-            Task<FunctionResult> task = null;
             FunctionInput input = null ;
             uint groupId = 0;
             Dictionary<Guid, Tuple<String, int>> grainAccessInfo = null;
@@ -121,7 +107,6 @@ namespace ExperimentProcess
             {
                 groupId = (uint)grainDistribution.Sample();
                 var accountId = getAccountForGrain(groupId);
-               
                 switch (type)
                 {
                     case TxnType.Balance:
@@ -150,11 +135,9 @@ namespace ExperimentProcess
                 groupId = (uint)grainDistribution.Sample();
                 var sourceAccountId = getAccountForGrain(groupId);
                 var item1 = new Tuple<string, uint>(sourceAccountId.ToString(), sourceAccountId);
-                uint destinationId = groupId;
-                do
-                {
-                    destinationId = (uint)grainDistribution.Sample();
-                } while (groupId == destinationId);
+                uint destinationId;
+                do destinationId = (uint)grainDistribution.Sample();
+                while (groupId == destinationId);    // find a group which is not source group
                 var destinationAccountId = getAccountForGrain(destinationId);                
                 Tuple<String, UInt32> item2 = new Tuple<string, uint>(destinationAccountId.ToString(), destinationAccountId);
                 float item3 = (uint) transferAmountDistribution.Sample();
@@ -167,10 +150,8 @@ namespace ExperimentProcess
             else
             {                
                 var accountGrains = new HashSet<uint>();  
-                do
-                {
-                    accountGrains.Add((uint)grainDistribution.Sample());
-                } while (accountGrains.Count != config.numGrainsMultiTransfer);
+                do accountGrains.Add((uint)grainDistribution.Sample());
+                while (accountGrains.Count != config.numGrainsMultiTransfer);
                 grainAccessInfo = new Dictionary<Guid, Tuple<string, int>>();
                 Tuple<String, UInt32> item1 = null;
                 float item2 = transferAmountDistribution.Sample();
@@ -195,7 +176,7 @@ namespace ExperimentProcess
                 input = new FunctionInput(args);
             }
             input.context = new TransactionContext(global_tid);   // added by Yijian
-            task = Execute(client, groupId, type.ToString(), input, grainAccessInfo);
+            var task = Execute(client, groupId, type.ToString(), input, grainAccessInfo);
             return task;
         }
     }

@@ -230,20 +230,21 @@ namespace ExperimentController
 
         private static async void LoadGrains()
         {
-            var tasks = new List<Task>();
-            //var tasks = new List<Task<FunctionResult>>(); 
+            var tasks = new List<Task<FunctionResult>>(); 
             var batchSize = -1; //If you want to load the grains in sequence instead of all concurrent
             var global_tid = 0;   // added by Yijian
-            for(uint i=0; i<workload.numAccounts/workload.numAccountsPerGroup; i++)
+            for(uint i = 0; i < workload.numAccounts / workload.numAccountsPerGroup; i++)
             {
                 var args = new Tuple<uint, uint>(workload.numAccountsPerGroup, i);
                 var input = new FunctionInput(args);
+
                 // added by Yijian
                 input.context = new TransactionContext(global_tid);
-                global_tid++;
+                global_tid ++;
 
                 var groupGUID = Helper.convertUInt32ToGuid(i);
-                switch (workload.grainImplementationType) {
+                switch (workload.grainImplementationType) 
+                {
                     case ImplementationType.ORLEANSEVENTUAL: 
                         var etxnGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(groupGUID);
                         tasks.Add(etxnGrain.StartTransaction("InitBankAccounts", input));
@@ -254,29 +255,23 @@ namespace ExperimentController
                         break;
                     case ImplementationType.SNAPPER:
                         var sntxnGrain = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
-                        //tasks.Add(sntxnGrain.InitGlobalTid(i));   // for disable coordinator
                         tasks.Add(sntxnGrain.StartTransaction("InitBankAccounts", input));
                         break;
                     default:
                         throw new Exception("Unknown grain implementation type");
                 }
-                if(batchSize > 0 && (i+1)%batchSize == 0) {
+                if(batchSize > 0 && (i+1)%batchSize == 0) 
+                {
                     await Task.WhenAll(tasks);
                     tasks.Clear();
                 }
             }
-            if(tasks.Count > 0) {
-                await Task.WhenAll(tasks);
-            }
+            if(tasks.Count > 0) await Task.WhenAll(tasks);
             loadingDone = true;
         }
 
-        private static void GetWorkloadSettings() {
-            //Console.WriteLine("Enter number of worker nodes");
-            //var numNodes = Console.Read();
-            //numWorkerNodes = Convert.ToInt32(numNodes);
-            // changed by Yijian
-            // fixed a bug, should generate workload first, then we can get the corrct value for numWorkerNodes
+        private static void GetWorkloadSettings() 
+        {
             workload = new WorkloadConfiguration();
             GenerateWorkLoadFromSettingsFile();
             ackedWorkers = new CountdownEvent(numWorkerNodes); 

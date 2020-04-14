@@ -16,7 +16,7 @@ namespace OrleansSiloHost
     public class Program
     {
         static readonly bool localCluster = false;
-        static readonly bool enableOrleansTxn = false;
+        static readonly bool enableOrleansTxn = true;
         public static int Main(string[] args)
         {
             return RunMainAsync().Result;

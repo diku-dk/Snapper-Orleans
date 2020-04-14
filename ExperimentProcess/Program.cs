@@ -60,7 +60,7 @@ namespace ExperimentProcess
                         //Pipeline remaining tasks
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, global_tid);
-                        global_tid++;
+                        global_tid ++;
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);                      
                     } 
@@ -85,14 +85,12 @@ namespace ExperimentProcess
                     }
                     tasks.Remove(task);
                     reqs.Remove(task);
-                } while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs);                
+                } 
+                while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs);                
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
                 //Wait for the tasks exceeding epoch time but do not count them
-                if (tasks.Count != 0)
-                {                    
-                    await Task.WhenAll(tasks);
-                }
+                if (tasks.Count != 0) await Task.WhenAll(tasks);
                 WorkloadResults res = new WorkloadResults(numTransaction, numCommit, startTime, endTime, latencies);
                 results[threadIndex] = res;
                 //Signal the completion of epoch
@@ -121,12 +119,10 @@ namespace ExperimentProcess
         private static async Task InitializeClients() {
             clients = new IClusterClient[config.numConnToClusterPerWorkerNode];
             ClientConfiguration clientConfig = new ClientConfiguration();
-
-            for(int i=0;i<config.numConnToClusterPerWorkerNode;i++) {
-                if (LocalCluster)
-                    clients[i] = await clientConfig.StartClientWithRetries();
-            else
-                clients[i] = await clientConfig.StartClientWithRetriesToCluster();
+            for(int i=0;i<config.numConnToClusterPerWorkerNode;i++) 
+            {
+                if (LocalCluster) clients[i] = await clientConfig.StartClientWithRetries();
+                else clients[i] = await clientConfig.StartClientWithRetriesToCluster();
             }
         }
         private static async void Initialize() {
