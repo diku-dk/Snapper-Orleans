@@ -101,15 +101,10 @@ namespace SmallBank.Grains
                 var tuple = (AmalgamateInput)fin.inputObject;
                 var id = tuple.Item1;
                 float balance = 0;
-                
+
                 if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
-                {
                     ret.setException();
-                }
-                else
-                {                    
-                    balance = myState.savingAccount[id] + myState.checkingAccount[id];                    
-                }
+                else balance = myState.savingAccount[id] + myState.checkingAccount[id];
 
                 //By invoking with 0 amount and no state mutation, we make the execution deterministic
                 var destGrain = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(MapCustomerIdToGroup(tuple.Item2));
@@ -300,8 +295,9 @@ namespace SmallBank.Grains
                     FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
                     task = destination.Execute(funcCall);
                 }
+                /*
                 await task;
-                ret.mergeWithFunctionResult(task.Result);
+                ret.mergeWithFunctionResult(task.Result);*/
                 if (!ret.hasException()) myState.checkingAccount[id] -= inputTuple.Item3;
             }
             catch (Exception e)

@@ -243,11 +243,11 @@ namespace Concurrency.Implementation
          */
         async Task EmitTransaction(Object obj)
         {
-            //numTransactionIdsReserved = 0;
-            //await EmitDeterministicTransactions();
-            EmitNonDeterministicTransactions((BatchToken)obj);
-            //tidToAllocate = token.lastTransactionID + 1;
-            //token.lastTransactionID += numTransactionIdsPreAllocated;
+            numTransactionIdsReserved = 0;
+            await EmitDeterministicTransactions();
+            EmitNonDeterministicTransactions();
+            tidToAllocate = token.lastTransactionID + 1;
+            token.lastTransactionID += numTransactionIdsPreAllocated;
             /*
             BatchToken token;
             //The timer expires
@@ -272,7 +272,8 @@ namespace Concurrency.Implementation
             this.isEmitTimerOn = false;*/
         }
 
-        private void EmitNonDeterministicTransactions(BatchToken token)
+        // private void EmitNonDeterministicTransactions(BatchToken token)
+        private void EmitNonDeterministicTransactions()
         {
             int myEmitSequence = this.nonDetEmitSeq;
             if (nonDeterministicEmitSize.ContainsKey(myEmitSequence))
@@ -299,8 +300,8 @@ namespace Concurrency.Implementation
         /**
          *This functions is called to emit batch of deterministic transactions
          */
-
-        async Task EmitDeterministicTransactions(BatchToken token)
+        // async Task EmitDeterministicTransactions(BatchToken token)
+        async Task EmitDeterministicTransactions()
         {
             int myEmitSequence = this.detEmitSeq;
             List<TransactionContext> transactionList;
@@ -508,7 +509,7 @@ namespace Concurrency.Implementation
             }            
             this.myId = myId;
             this.neighbourId = neighbourId;
-            //disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
+            disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
             Console.WriteLine($"\n Coordinator {myId}: is initialized, my next neighbour is coordinator {neighbourId}");
         }
     }
