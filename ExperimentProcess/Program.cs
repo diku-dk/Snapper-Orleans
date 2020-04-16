@@ -7,17 +7,15 @@ using NetMQ.Sockets;
 using NetMQ;
 using Utilities;
 using Orleans;
-using OrleansClient;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Concurrency.Interface;
-using AccountTransfer.Interfaces;
-using AccountTransfer.Grains;
 
 namespace ExperimentProcess
 {
     class Program
     {
+        static int workerID = 1;
+        static int numWorker;
         static Boolean LocalCluster;
         static IClusterClient[] clients;
         static String sinkAddress = ">tcp://localhost:5558";
@@ -33,7 +31,7 @@ namespace ExperimentProcess
         static bool initializationDone = false;
         static Thread[] threads;
 
-        static int global_tid = 0;
+        static int global_tid = 200 + workerID;
 
         private static async void ThreadWorkAsync(Object obj)
         {
@@ -60,7 +58,7 @@ namespace ExperimentProcess
                         //Pipeline remaining tasks
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, global_tid);
-                        global_tid ++;
+                        global_tid += numWorker;
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);                      
                     } 
@@ -90,7 +88,18 @@ namespace ExperimentProcess
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
                 //Wait for the tasks exceeding epoch time but do not count them
-                if (tasks.Count != 0) await Task.WhenAll(tasks);
+                if (tasks.Count != 0)
+                {
+                    try
+                    {
+                        await Task.WhenAll(tasks);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"Exception: {e.Message}. ");
+                    }
+                }
+                Console.WriteLine($"Finish epoch {eIndex}, numtxn = {numTransaction}, numCommit = {numCommit}. ");
                 WorkloadResults res = new WorkloadResults(numTransaction, numCommit, startTime, endTime, latencies);
                 results[threadIndex] = res;
                 //Signal the completion of epoch
@@ -168,6 +177,7 @@ namespace ExperimentProcess
                 controller.Unsubscribe("WORKLOAD_INIT");
                 controller.Subscribe("RUN_EPOCH");
                 config = Helper.deserializeFromByteArray<WorkloadConfiguration>(msg.contents);
+                numWorker = config.numWorkerNodes;
                 Console.WriteLine("Received workload message from controller");
 
                 //Initialize threads and other data-structures for epoch runs

@@ -5,17 +5,13 @@ using Orleans;
 using Orleans.Hosting;
 using Orleans.Configuration;
 using System.Net;
-using AccountTransfer.Grains;
 using Utilities;
-using SmallBank.Grains;
-using SmallBank.Interfaces;
-using AccountTransfer.Interfaces;
 
 namespace OrleansSiloHost
 {
     public class Program
     {
-        static readonly bool localCluster = false;
+        static readonly bool localCluster = true;
         static readonly bool enableOrleansTxn = true;
         public static int Main(string[] args)
         {
