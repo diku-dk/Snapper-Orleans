@@ -109,7 +109,7 @@ namespace Concurrency.Implementation
                 else
                 {
                     await Abort_2PC(context.transactionID, t1.Result);
-                    result.setException();
+                    result.setException(MyExceptionType.TwoPhaseCommit);
                 }
             }
             catch (Exception e)

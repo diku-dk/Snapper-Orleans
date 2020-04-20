@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 
 namespace Utilities
 {
+    public enum MyExceptionType {RWConflict, TwoPhaseCommit, AppLogic, UnExpect};
+
     [Serializable]
     public class FunctionInput
     {
@@ -40,6 +42,7 @@ namespace Utilities
         public Boolean isBeforeAfterConsecutive = false;
         public Boolean readOnly = false;
         public Tuple<Guid, String> grainWithHighestBeforeBid;
+        public MyExceptionType exp;
 
         public FunctionResult(Object resultObject=null)
         {
@@ -97,9 +100,15 @@ namespace Utilities
             resultObject = result;
         }
 
-        public void setException()
+        public void setException(MyExceptionType e)
         {
             exception = true;
+            exp = e;
+        }
+
+        public MyExceptionType getExceptionType()
+        {
+            return exp;
         }
 
         public Boolean hasException()

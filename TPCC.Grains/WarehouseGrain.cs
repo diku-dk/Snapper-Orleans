@@ -76,7 +76,7 @@ namespace TPCC.Grains
                         }
                         catch (Exception)
                         {
-                            myResult.setException();
+                            myResult.setException(MyExceptionType.RWConflict);
                         }
                     }
                     stockUpdates.Remove(stockUpdateResultTask);
@@ -88,7 +88,7 @@ namespace TPCC.Grains
             }
             catch (Exception)
             {
-                myResult.setException();
+                myResult.setException(MyExceptionType.RWConflict);
             }
             return myResult;
         }
@@ -161,7 +161,7 @@ namespace TPCC.Grains
             }
             catch (Exception)
             {
-                myResult.setException();
+                myResult.setException(MyExceptionType.RWConflict);
             }
             return myResult;
         }
@@ -198,7 +198,7 @@ namespace TPCC.Grains
             }
             catch (Exception)
             {
-                myResult.setException();
+                myResult.setException(MyExceptionType.RWConflict);
             }
             return myResult;
         }
@@ -238,7 +238,7 @@ namespace TPCC.Grains
             }
             catch (Exception)
             {
-                myResult.setException();
+                myResult.setException(MyExceptionType.RWConflict);
             }
             return myResult;
         }
@@ -256,7 +256,7 @@ namespace TPCC.Grains
             }
             catch (Exception)
             {
-                myResult.setException();
+                myResult.setException(MyExceptionType.RWConflict);
             }
             return myResult;
         }

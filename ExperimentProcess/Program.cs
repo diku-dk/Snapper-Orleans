@@ -48,9 +48,11 @@ namespace ExperimentProcess
                 //Wait for all threads to arrive at barrier point
                 barriers[eIndex].SignalAndWait();
                 globalWatch.Restart();
-                var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                var abortType = new int[4];
+                for (int i = 0; i < 4; i++) abortType[i] = 0;
                 var tasks = new List<Task<FunctionResult>>();
                 var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
+                var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 do
                 {
                     while(tasks.Count < config.asyncMsgLengthPerThread)
@@ -71,15 +73,38 @@ namespace ExperimentProcess
                         //Needed to catch exception of individual task (not caught by Snapper's exception) which would not be thrown by WhenAny
                         await task;
                     } 
-                    catch (Exception)
+                    catch (Exception)    // this exception is unrelated to Snapper
                     {
                         noException = false;
                     }
-                    if (noException && task.Result.hasException() != true)
+                    if (noException)
                     {
-                        numCommit++;
-                        var latency = asyncReqEndTime - reqs[task];
-                        latencies.Add(latency.TotalMilliseconds);
+                        if (!task.Result.hasException())
+                        {
+                            numCommit++;
+                            var latency = asyncReqEndTime - reqs[task];
+                            latencies.Add(latency.TotalMilliseconds);
+                        }
+                        else
+                        {
+                            switch (task.Result.getExceptionType())
+                            {
+                                case MyExceptionType.RWConflict:
+                                    abortType[0]++;
+                                    break;
+                                case MyExceptionType.TwoPhaseCommit:
+                                    abortType[1]++;
+                                    break;
+                                case MyExceptionType.AppLogic:
+                                    abortType[2]++;
+                                    break;
+                                case MyExceptionType.UnExpect:
+                                    abortType[3]++;
+                                    break;
+                                default:
+                                    throw new Exception("Exception: Unexpected abort type.");
+                            }
+                        }
                     }
                     tasks.Remove(task);
                     reqs.Remove(task);
@@ -87,6 +112,7 @@ namespace ExperimentProcess
                 while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs);                
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
+                Console.WriteLine($"Finish epoch {eIndex}, numtxn = {numTransaction}, numCommit = {numCommit}. ");
                 //Wait for the tasks exceeding epoch time but do not count them
                 if (tasks.Count != 0)
                 {
@@ -99,8 +125,7 @@ namespace ExperimentProcess
                         Console.WriteLine($"Exception: {e.Message}. ");
                     }
                 }
-                Console.WriteLine($"Finish epoch {eIndex}, numtxn = {numTransaction}, numCommit = {numCommit}. ");
-                WorkloadResults res = new WorkloadResults(numTransaction, numCommit, startTime, endTime, latencies);
+                WorkloadResults res = new WorkloadResults(numTransaction, numCommit, startTime, endTime, latencies, abortType);
                 results[threadIndex] = res;
                 //Signal the completion of epoch
                 threadAcks[eIndex].Signal();
@@ -214,23 +239,27 @@ namespace ExperimentProcess
             }
         }
 
-        private static WorkloadResults AggregateAcrossThreadsForEpoch() {
+        private static WorkloadResults AggregateAcrossThreadsForEpoch() 
+        {
             Trace.Assert(results.Length >= 1);
             int aggNumCommitted = results[0].numCommitted;
             int aggNumTransactions = results[0].numTransactions;
             long aggStartTime = results[0].startTime;
             long aggEndTime = results[0].endTime;
             var aggLatencies = new List<double>();
+            var aggAbortType = new int[4];
+            for (int j = 0; j < 4; j++) aggAbortType[j] = results[0].abortType[j];
             aggLatencies.AddRange(results[0].latencies);
-            for(int i=1;i<results.Length;i++)
+            for(int i = 1;i < results.Length; i++)    // reach thread has a result
             {
                 aggNumCommitted += results[i].numCommitted;
                 aggNumTransactions += results[i].numTransactions;
                 aggStartTime = (results[i].startTime < aggStartTime) ? results[i].startTime : aggStartTime;
                 aggEndTime = (results[i].endTime < aggEndTime) ? results[i].endTime : aggEndTime;
                 aggLatencies.AddRange(results[i].latencies);
+                for (int j = 0; j < 4; j++) aggAbortType[j] += results[i].abortType[j];
             }
-            return new WorkloadResults(aggNumTransactions, aggNumCommitted, aggStartTime, aggEndTime, aggLatencies);
+            return new WorkloadResults(aggNumTransactions, aggNumCommitted, aggStartTime, aggEndTime, aggLatencies, aggAbortType);
         }
 
         private static void InitializeValuesFromConfigFile()

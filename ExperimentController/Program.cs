@@ -84,12 +84,15 @@ namespace ExperimentController
             Console.WriteLine("Generated workload configuration");
 
         }
-        private static void AggregateResultsAndPrint() {
+        private static void AggregateResultsAndPrint() 
+        {
             Trace.Assert(workload.numEpochs >= 1);
             Trace.Assert(numWorkerNodes >= 1);
             var aggLatencies = new List<double>();
             var throughPutAccumulator = new List<float>();
             var abortRateAccumulator = new List<float>();
+            var AbortType = new int[4];
+            for (int i = 0; i < 4; i++) AbortType[i] = 0;
             //Skip the epochs upto warm up epochs
             for (int epochNumber = numWarmupEpoch; epochNumber < workload.numEpochs; epochNumber++)
             {                
@@ -98,6 +101,7 @@ namespace ExperimentController
                 long aggStartTime = results[epochNumber,0].startTime;
                 long aggEndTime = results[epochNumber,0].endTime;
                 aggLatencies.AddRange(results[epochNumber, 0].latencies);
+                for (int i = 0; i < 4; i++) AbortType[i] += results[epochNumber, 0].abortType[i];
                 for (int workerNode = 1; workerNode < numWorkerNodes; workerNode++)
                 {
                     aggNumCommitted += results[epochNumber,workerNode].numCommitted;
@@ -105,6 +109,7 @@ namespace ExperimentController
                     aggStartTime = (results[epochNumber,workerNode].startTime < aggStartTime) ? results[epochNumber,workerNode].startTime : aggStartTime;
                     aggEndTime = (results[epochNumber,workerNode].endTime < aggEndTime) ? results[epochNumber,workerNode].endTime : aggEndTime;
                     aggLatencies.AddRange(results[epochNumber,workerNode].latencies);
+                    for (int i = 0; i < 4; i++) AbortType[i] += results[epochNumber, workerNode].abortType[i];
                 }
                 float committedTxnThroughput = (float)aggNumCommitted * 1000 / (float) (aggEndTime - aggStartTime);
                 float abortRate = (float)(aggNumTransactions - aggNumCommitted) * 100 / (float) aggNumTransactions;
@@ -114,9 +119,11 @@ namespace ExperimentController
             //Compute statistics on the accumulators, maybe a better way is to maintain a sorted list
             var throughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(throughPutAccumulator.ToArray());
             var abortRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(abortRateAccumulator.ToArray());
+            for (int i = 0; i < 4; i++) AbortType[i] /= (workload.numEpochs - numWarmupEpoch) * numWorkerNodes;
             Console.WriteLine($"Results across {workload.numEpochs} with first {numWarmupEpoch} epochs being for warmup follows");
             Console.WriteLine($"Mean Throughput per second = { throughputMeanAndSd.Item1}, standard deviation = { throughputMeanAndSd.Item2}");
             Console.WriteLine($"Mean Abort rate (%) = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
+            Console.WriteLine($"Abort Type: RWConflict = {AbortType[0]}, TwpPhaseCommit = {AbortType[1]}, Applogic = {AbortType[2]}, UnExpect = {AbortType[3]}");
             //Compute quantiles
             //var aggLatenciesArray = Array.ConvertAll(aggLatencies.ToArray(), e => Convert.ToDouble(e));
             //var aggLatenciesArray = aggLatencies.ToArray();
@@ -174,7 +181,7 @@ namespace ExperimentController
                 // Collects results from workers via that socket
                 Console.WriteLine("====== PULL FROM WORKERS ======");
 
-                results = new WorkloadResults[workload.numEpochs,numWorkerNodes];
+                results = new WorkloadResults[workload.numEpochs, numWorkerNodes];
                 //socket to receive results on
                 using (var sink = new PullSocket(sinkAddress))
                 {

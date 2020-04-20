@@ -36,19 +36,21 @@ namespace Utilities
     [Serializable]
     public class WorkloadResults
     {
+        public int[] abortType;
         public int numCommitted;
         public int numTransactions;
         public long startTime;
         public long endTime;
         public List<double> latencies;
 
-        public WorkloadResults(int numTransactions, int numCommitted, long startTime, long endTime, List<double> latencies)
+        public WorkloadResults(int numTransactions, int numCommitted, long startTime, long endTime, List<double> latencies, int[] abortType)
         {
             this.numTransactions = numTransactions;
             this.numCommitted = numCommitted;
             this.startTime = startTime;
             this.endTime = endTime;
             this.latencies = latencies;
+            this.abortType = abortType;
         }
 
 

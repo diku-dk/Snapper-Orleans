@@ -243,6 +243,7 @@ namespace Concurrency.Implementation
          */
         async Task EmitTransaction(Object obj)
         {
+            
             numTransactionIdsReserved = 0;
             await EmitDeterministicTransactions();
             EmitNonDeterministicTransactions();
@@ -272,7 +273,7 @@ namespace Concurrency.Implementation
             this.isEmitTimerOn = false;*/
         }
 
-        // private void EmitNonDeterministicTransactions(BatchToken token)
+        //private void EmitNonDeterministicTransactions(BatchToken token)
         private void EmitNonDeterministicTransactions()
         {
             int myEmitSequence = this.nonDetEmitSeq;
@@ -300,7 +301,7 @@ namespace Concurrency.Implementation
         /**
          *This functions is called to emit batch of deterministic transactions
          */
-        // async Task EmitDeterministicTransactions(BatchToken token)
+        //async Task EmitDeterministicTransactions(BatchToken token)
         async Task EmitDeterministicTransactions()
         {
             int myEmitSequence = this.detEmitSeq;
@@ -311,7 +312,7 @@ namespace Concurrency.Implementation
             if (shouldEmit == false) return;
             this.detEmitSeq++;
             int curBatchID = token.lastTransactionID + 1;
-
+            Console.WriteLine($"\n emit batch {curBatchID}, with {transactionList.Count} txn. \n");
             foreach (TransactionContext context in transactionList)
             {
                 context.batchID = curBatchID;
@@ -367,7 +368,6 @@ namespace Concurrency.Implementation
             if (!batchStatusMap.ContainsKey(curBatchID))
                 batchStatusMap.Add(curBatchID, new TaskCompletionSource<Boolean>());
 
-            //var v = typeof(IDeterministicTransactionCoordinator);
             if (log != null)
             {
                 HashSet<Guid> participants = new HashSet<Guid>();
@@ -399,6 +399,7 @@ namespace Concurrency.Implementation
             expectedAcksPerBatch[bid]--;
             if (expectedAcksPerBatch[bid] == 0)
             {
+                //Console.WriteLine($"\n batch {bid} is completed. \n");
                 Debug.Assert(lastBatchIDMap.ContainsKey(bid));
                 if (lastBatchIDMap[bid] == highestCommittedBatchID)
                 {

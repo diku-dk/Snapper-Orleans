@@ -50,6 +50,7 @@ namespace Concurrency.Implementation
             if (coordinatorGrainGlobalConfig == null)
             {
                 coordinatorGrainGlobalConfig = config;
+                
                 //Only support one coordinator configuration injection for now
                 var tasks = new List<Task>();
                 for(uint i=0;i<config.numCoordinators;i++)

@@ -17,7 +17,6 @@ namespace Concurrency.Implementation.Nondeterministic
         private bool writeLockTaken;        
         private int writeLockTakenByTid;
         // SemaphoreSlim can limit the number of threads that can concurrently get access to this state (Yijian)
-        // TODO: why not use ReaderWriterLock??? (Yijian) 这种lock可以wait，但不能自己die
         private SemaphoreSlim writeSemaphore;
         private SemaphoreSlim readSemaphore;
         private SortedSet<int> readers;
