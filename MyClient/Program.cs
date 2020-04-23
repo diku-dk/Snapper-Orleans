@@ -16,11 +16,13 @@ namespace MyClient
     {
         static int global_tid = 0;
         static int numTxn = 10000;
-        static int numThread = 2;
-        static int numEpoch = 1;
+        static int numClient = 1;
+        static int numThread = 1;
+        static int numCoord = 1;
+        static int numEpoch = 6;
         static Boolean LocalCluster = true;
-        static IClusterClient client;
-        static IBenchmark benchmark;
+        static IClusterClient[] clients;
+        static IBenchmark[] benchmarks;
         static WorkloadConfiguration config;
 
         static int Main(string[] args)
@@ -49,13 +51,21 @@ namespace MyClient
             config.zipfianConstant = 0;
 
             // initialize workload
-            benchmark = new SmallBankBenchmark();
-            benchmark.generateBenchmark(config);
+            benchmarks = new IBenchmark[numThread];
+            for (int i = 0; i < numThread; i++)
+            {
+                benchmarks[i] = new SmallBankBenchmark();
+                benchmarks[i].generateBenchmark(config);
+            }
             
             // initialize clients
             ClientConfiguration clientConfig = new ClientConfiguration();
-            if (LocalCluster) client = await clientConfig.StartClientWithRetries();
-            else client = await clientConfig.StartClientWithRetriesToCluster();
+            clients = new IClusterClient[numClient];
+            for (int i = 0; i < numClient; i++)
+            {
+                if (LocalCluster) clients[i] = await clientConfig.StartClientWithRetries();
+                else clients[i] = await clientConfig.StartClientWithRetriesToCluster();
+            }
 
             // initialize configuration grain
             Console.WriteLine($"Initializing configuration grain...");
@@ -64,10 +74,10 @@ namespace MyClient
             var batchIntervalMSecs = 100;
             var backoffIntervalMsecs = 10000;
             var idleIntervalTillBackOffSecs = 120;
-            var numCoordinators = (uint)2;
+            var numCoordinators = (uint)numCoord;
             var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMSecs);
             var coordConfig = new CoordinatorGrainConfiguration(batchIntervalMSecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
-            var configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
+            var configGrain = clients[0].GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
             await configGrain.UpdateNewConfiguration(exeConfig);
             await configGrain.UpdateNewConfiguration(coordConfig);
 
@@ -79,7 +89,7 @@ namespace MyClient
                 var args = new Tuple<uint, uint>(config.numAccountsPerGroup, i);
                 var input = new FunctionInput(args);
                 var groupGUID = Helper.convertUInt32ToGuid(i);
-                var grain = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
+                var grain = clients[i % numClient].GetGrain<ICustomerAccountGroupGrain>(groupGUID);
                 //var grain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(groupGUID);
                 tasks.Add(grain.StartTransaction("InitBankAccounts", input));
             }
@@ -100,6 +110,8 @@ namespace MyClient
         {
             int threadIndex = (int)obj;
             var globalWatch = new Stopwatch();
+            var client = clients[threadIndex % numClient];
+            var benchmark = benchmarks[threadIndex];
             for (int eIndex = 0; eIndex < numEpoch; eIndex++)
             {
                 Console.WriteLine($"Thread {threadIndex} starts epoch {eIndex}. ");

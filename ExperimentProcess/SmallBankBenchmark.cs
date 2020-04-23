@@ -93,7 +93,7 @@ namespace ExperimentProcess
                 default:
                     return null;
             }*/
-            var coord = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(index % 2));
+            var coord = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(index % 1));
             index++;
             return coord.NewTransaction(grainAccessInfo);
         }
