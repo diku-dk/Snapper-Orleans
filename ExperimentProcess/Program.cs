@@ -61,8 +61,8 @@ namespace ExperimentProcess
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, global_tid);
                         global_tid += numWorker;
-                        reqs.Add(newTask, asyncReqStartTime);
-                        tasks.Add(newTask);                      
+                        //reqs.Add(newTask, asyncReqStartTime);
+                        //tasks.Add(newTask);                      
                     } 
                     var task = await Task.WhenAny(tasks);
                     numTransaction++; //Count transactions now
@@ -255,7 +255,7 @@ namespace ExperimentProcess
                 aggNumCommitted += results[i].numCommitted;
                 aggNumTransactions += results[i].numTransactions;
                 aggStartTime = (results[i].startTime < aggStartTime) ? results[i].startTime : aggStartTime;
-                aggEndTime = (results[i].endTime < aggEndTime) ? results[i].endTime : aggEndTime;
+                aggEndTime = (results[i].endTime < aggEndTime) ? results[i].endTime : aggEndTime;     // ????
                 aggLatencies.AddRange(results[i].latencies);
                 for (int j = 0; j < 4; j++) aggAbortType[j] += results[i].abortType[j];
             }

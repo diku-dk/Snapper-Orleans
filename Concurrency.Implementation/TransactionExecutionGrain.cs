@@ -56,14 +56,14 @@ namespace Concurrency.Implementation
         public async Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation, String startFunction, FunctionInput inputs)
         {
             TransactionContext context = await myCoordinator.NewTransaction(grainAccessInformation);
+            /*
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
             Task<FunctionResult> t1 = this.Execute(c1);
             Task t2 = myCoordinator.checkBatchCompletion(context.batchID);
             await Task.WhenAll(t1, t2);
-            if (t1.Result.hasException())
-                Console.WriteLine($"Det txn {context.transactionID} has exception!!!!!!");
-            return t1.Result;
+            return t1.Result;*/
+            return new FunctionResult();
         }
         
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
@@ -217,11 +217,12 @@ namespace Concurrency.Implementation
          */
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
+            /*
             //Console.WriteLine($"\n {this.myPrimaryKey}: receive bid {schedule.batchID}, last bid = {schedule.lastBatchID}, highest commit bid = {schedule.highestCommittedBatchId}");        
             // Add by Yijian (can handle the situation when receive a schedule whose lastBatchID is also -1)
             myScheduler.ackBatchCommit(schedule.highestCommittedBatchId);
             batchScheduleMap.Add(schedule.batchID, schedule);
-            myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
+            myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);*/
             return Task.CompletedTask;
         }
 
@@ -256,7 +257,7 @@ namespace Concurrency.Implementation
                 var myTurnIndex = await myScheduler.waitForTurn(bid, tid);
 
                 //Execute the function call;
-                var ret = await InvokeFunction(call);
+                var ret = await InvokeFunction(call);  
                 if (myScheduler.ackComplete(bid, tid, myTurnIndex))
                 {
                     //The scheduler has switched batches, need to commit now

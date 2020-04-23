@@ -115,6 +115,7 @@ namespace Concurrency.Implementation
                 detEmitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
             }
             emitting = detEmitPromiseMap[myEmitSeq];
+            return new TransactionContext(0);
             if (emitting.Task.IsCompleted != true)
             {
                 await emitting.Task;
@@ -304,15 +305,17 @@ namespace Concurrency.Implementation
         //async Task EmitDeterministicTransactions(BatchToken token)
         async Task EmitDeterministicTransactions()
         {
+            
             int myEmitSequence = this.detEmitSeq;
             List<TransactionContext> transactionList;
             Boolean shouldEmit = deterministicTransactionRequests.TryGetValue(myEmitSequence, out transactionList);
-
+            
             //Return if there is no deterministic transactions waiting for emit
             if (shouldEmit == false) return;
             this.detEmitSeq++;
             int curBatchID = token.lastTransactionID + 1;
-            Console.WriteLine($"\n emit batch {curBatchID}, with {transactionList.Count} txn. \n");
+            Console.WriteLine($"\n Coord {myPrimaryKey} emit batch {curBatchID}, with {transactionList.Count} txn. \n");
+            /*
             foreach (TransactionContext context in transactionList)
             {
                 context.batchID = curBatchID;
@@ -383,7 +386,7 @@ namespace Concurrency.Implementation
                 schedule.highestCommittedBatchId = this.highestCommittedBatchID;
                 Task emit = dest.ReceiveBatchSchedule(schedule);
             }
-            batchGrainClassName.Remove(curBatchID);
+            batchGrainClassName.Remove(curBatchID);*/
             this.detEmitPromiseMap[myEmitSequence].SetResult(true);
             this.deterministicTransactionRequests.Remove(myEmitSequence);
             this.detEmitPromiseMap.Remove(myEmitSequence);
