@@ -20,6 +20,7 @@ namespace ExperimentProcess
         IDiscreteDistribution transferAmountDistribution;
 
         public uint index = 0;
+        public uint numCoord = 2;
 
         public void generateBenchmark(WorkloadConfiguration workloadConfig)
         {
@@ -93,7 +94,7 @@ namespace ExperimentProcess
                 default:
                     return null;
             }*/
-            var coord = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(index % 1));
+            var coord = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(index % numCoord));
             index++;
             return coord.NewTransaction(grainAccessInfo);
         }

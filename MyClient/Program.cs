@@ -14,13 +14,14 @@ namespace MyClient
 {
     class Program
     {
+        static Boolean flag = true;
         static int global_tid = 0;
         static int numTxn = 10000;
         static int numClient = 1;
         static int numThread = 1;
-        static int numCoord = 1;
+        static int numCoord = 2;
         static int numEpoch = 6;
-        static Boolean LocalCluster = true;
+        static Boolean LocalCluster = false;
         static IClusterClient[] clients;
         static IBenchmark[] benchmarks;
         static WorkloadConfiguration config;
@@ -57,7 +58,7 @@ namespace MyClient
                 benchmarks[i] = new SmallBankBenchmark();
                 benchmarks[i].generateBenchmark(config);
             }
-            
+
             // initialize clients
             ClientConfiguration clientConfig = new ClientConfiguration();
             clients = new IClusterClient[numClient];
@@ -95,13 +96,18 @@ namespace MyClient
             }
             await Task.WhenAll(tasks);
 
+            var threads = new List<Thread>();
             for (int i = 0; i < numThread; i++)
             {
-                var thread = new Thread(ThreadWorkAsync);
+                //var thread = new Thread(ThreadWorkAsync);
+                var thread = new Thread(ContinuousSubmitTxn);
+                threads.Add(thread);
                 thread.Start(i);
             }
-            
-            Console.WriteLine("Finished running experiment. Press Enter to exit");
+
+            await WatchStatus();
+
+            //Console.WriteLine("Finished running experiment. Press Enter to exit");
             Console.ReadLine();
             return 0;
         }
@@ -131,6 +137,63 @@ namespace MyClient
                 */
                 Console.WriteLine($"Thread {threadIndex}, start {startTime.ToString()}, end {endTime.ToString()}, numTxn = {numTxn}, time = {time} ms, throughput = {1000 * numTxn / time} per Second. ");
             }
+        }
+
+        private static async void ContinuousSubmitTxn(Object obj)
+        {
+            int threadIndex = (int)obj;
+            var client = clients[threadIndex % numClient];
+            var benchmark = benchmarks[threadIndex];
+
+            var t = new List<Task<TransactionContext>>();
+            while (flag)
+            {
+                t.Add(benchmark.newTransaction(client, global_tid++));
+                await Task.Delay(TimeSpan.FromMilliseconds(0.01));
+            } 
+        }
+
+        private static async Task WatchStatus()
+        {
+            Console.WriteLine("Wait requests fullfill silo..");
+            //await Task.Delay(3000);
+
+            // get the start state
+            var t1 = new List<Task<Tuple<long, int>>>();
+            for (int i = 0; i < numCoord; i++)
+            {
+                var coord = clients[i % numClient].GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid((uint)i));
+                t1.Add(coord.GetStatus());
+            }
+            await Task.WhenAll(t1);
+
+            // wait for a while
+            await Task.Delay(3000);
+
+            // get the end state
+            var t2 = new List<Task<Tuple<long, int>>>();
+            for (int i = 0; i < numCoord; i++)
+            {
+                var coord = clients[i % numClient].GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid((uint)i));
+                t2.Add(coord.GetStatus());
+            }
+            await Task.WhenAll(t2);
+            flag = false;
+
+            // aggregate results
+            var start_time = t1[0].Result.Item1;
+            var end_time = t2[0].Result.Item1;
+            var num = t2[0].Result.Item2 - t1[0].Result.Item2;
+            Console.WriteLine($"Coord {0}: start time {t1[0].Result.Item1}, end time {t2[0].Result.Item1}, elapsed {t2[0].Result.Item1 - t1[0].Result.Item1}, finished txn {t2[0].Result.Item2 - t1[0].Result.Item2}");
+            for (int i = 1; i < numCoord; i++)
+            {
+                start_time = start_time > t1[i].Result.Item1 ? t1[i].Result.Item1 : start_time;
+                end_time = end_time < t2[i].Result.Item1 ? t2[i].Result.Item1 : end_time;
+                num += t2[i].Result.Item2 - t1[i].Result.Item2;
+                Console.WriteLine($"Coord {i}: start time {t1[i].Result.Item1}, end time {t2[i].Result.Item1}, elapsed {t2[i].Result.Item1 - t1[i].Result.Item1}, finished txn {t2[i].Result.Item2 - t1[i].Result.Item2}");
+            }
+
+            Console.WriteLine($"time {end_time - start_time} ms, num_txn = {num}, throughput = {1000 * num / (end_time - start_time)} per second. ");
         }
     }
 }

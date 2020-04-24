@@ -66,11 +66,12 @@ namespace Concurrency.Implementation
 
         //disable token
         BatchToken token;
-        int global_tid;
+
+        private int numTxn;
 
         public override Task OnActivateAsync()
         {
-            global_tid = 0;
+            numTxn = 0;
             token = new BatchToken(-1, -1);
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
@@ -97,6 +98,12 @@ namespace Concurrency.Implementation
             return base.OnActivateAsync();
         }
 
+        public async Task<Tuple<long, int>> GetStatus()
+        {
+            var time = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+            return new Tuple<long, int>(time, numTxn);
+        }
+
         /**
          *Client calls this function to submit deterministic transaction
          */
@@ -115,13 +122,14 @@ namespace Concurrency.Implementation
                 detEmitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
             }
             emitting = detEmitPromiseMap[myEmitSeq];
-            return new TransactionContext(0);
+            //return new TransactionContext(0);
             if (emitting.Task.IsCompleted != true)
             {
                 await emitting.Task;
             }
             //Console.WriteLine($"Coordinator {myId}: emitted deterministic transaction {context.transactionID}");
             context.highestBatchIdCommitted = this.highestCommittedBatchID;
+            numTxn++;
             return context;
         }
 
@@ -315,7 +323,7 @@ namespace Concurrency.Implementation
             this.detEmitSeq++;
             int curBatchID = token.lastTransactionID + 1;
             Console.WriteLine($"\n Coord {myPrimaryKey} emit batch {curBatchID}, with {transactionList.Count} txn. \n");
-            /*
+            
             foreach (TransactionContext context in transactionList)
             {
                 context.batchID = curBatchID;
@@ -386,7 +394,7 @@ namespace Concurrency.Implementation
                 schedule.highestCommittedBatchId = this.highestCommittedBatchID;
                 Task emit = dest.ReceiveBatchSchedule(schedule);
             }
-            batchGrainClassName.Remove(curBatchID);*/
+            batchGrainClassName.Remove(curBatchID);
             this.detEmitPromiseMap[myEmitSequence].SetResult(true);
             this.deterministicTransactionRequests.Remove(myEmitSequence);
             this.detEmitPromiseMap.Remove(myEmitSequence);
