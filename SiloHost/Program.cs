@@ -11,7 +11,7 @@ namespace OrleansSiloHost
 {
     public class Program
     {
-        static readonly bool localCluster = false;
+        static readonly bool localCluster = true;
         static readonly bool enableOrleansTxn = false;
         public static int Main(string[] args)
         {

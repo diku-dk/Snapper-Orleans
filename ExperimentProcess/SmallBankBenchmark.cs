@@ -20,7 +20,7 @@ namespace ExperimentProcess
         IDiscreteDistribution transferAmountDistribution;
 
         public uint index = 0;
-        public uint numCoord = 2;
+        public uint numCoord = 1;
 
         public void generateBenchmark(WorkloadConfiguration workloadConfig)
         {

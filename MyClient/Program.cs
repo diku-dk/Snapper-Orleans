@@ -19,9 +19,9 @@ namespace MyClient
         static int numTxn = 10000;
         static int numClient = 1;
         static int numThread = 1;
-        static int numCoord = 2;
+        static int numCoord = 1;
         static int numEpoch = 6;
-        static Boolean LocalCluster = false;
+        static Boolean LocalCluster = true;
         static IClusterClient[] clients;
         static IBenchmark[] benchmarks;
         static WorkloadConfiguration config;
@@ -81,7 +81,7 @@ namespace MyClient
             var configGrain = clients[0].GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
             await configGrain.UpdateNewConfiguration(exeConfig);
             await configGrain.UpdateNewConfiguration(coordConfig);
-
+            /*
             // load grains
             Console.WriteLine($"Loading grains...");
             var tasks = new List<Task<FunctionResult>>();
@@ -94,7 +94,7 @@ namespace MyClient
                 //var grain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(groupGUID);
                 tasks.Add(grain.StartTransaction("InitBankAccounts", input));
             }
-            await Task.WhenAll(tasks);
+            await Task.WhenAll(tasks);*/
 
             var threads = new List<Thread>();
             for (int i = 0; i < numThread; i++)
@@ -148,15 +148,16 @@ namespace MyClient
             var t = new List<Task<TransactionContext>>();
             while (flag)
             {
-                t.Add(benchmark.newTransaction(client, global_tid++));
-                await Task.Delay(TimeSpan.FromMilliseconds(0.01));
-            } 
+                for (int i = 0; i < 1500; i++) t.Add(benchmark.newTransaction(client, global_tid++));
+                await Task.Delay(TimeSpan.FromMilliseconds(100));
+            }
+            await Task.WhenAll(t);
         }
 
         private static async Task WatchStatus()
         {
             Console.WriteLine("Wait requests fullfill silo..");
-            //await Task.Delay(3000);
+            await Task.Delay(1000);
 
             // get the start state
             var t1 = new List<Task<Tuple<long, int>>>();
@@ -184,13 +185,13 @@ namespace MyClient
             var start_time = t1[0].Result.Item1;
             var end_time = t2[0].Result.Item1;
             var num = t2[0].Result.Item2 - t1[0].Result.Item2;
-            Console.WriteLine($"Coord {0}: start time {t1[0].Result.Item1}, end time {t2[0].Result.Item1}, elapsed {t2[0].Result.Item1 - t1[0].Result.Item1}, finished txn {t2[0].Result.Item2 - t1[0].Result.Item2}");
+            Console.WriteLine($"Coord {0}: start time {t1[0].Result.Item1}, end time {t2[0].Result.Item1}, elapsed {t2[0].Result.Item1 - t1[0].Result.Item1} ms, finished txn {t2[0].Result.Item2 - t1[0].Result.Item2}");
             for (int i = 1; i < numCoord; i++)
             {
                 start_time = start_time > t1[i].Result.Item1 ? t1[i].Result.Item1 : start_time;
                 end_time = end_time < t2[i].Result.Item1 ? t2[i].Result.Item1 : end_time;
                 num += t2[i].Result.Item2 - t1[i].Result.Item2;
-                Console.WriteLine($"Coord {i}: start time {t1[i].Result.Item1}, end time {t2[i].Result.Item1}, elapsed {t2[i].Result.Item1 - t1[i].Result.Item1}, finished txn {t2[i].Result.Item2 - t1[i].Result.Item2}");
+                Console.WriteLine($"Coord {i}: start time {t1[i].Result.Item1}, end time {t2[i].Result.Item1}, elapsed {t2[i].Result.Item1 - t1[i].Result.Item1} ms, finished txn {t2[i].Result.Item2 - t1[i].Result.Item2}");
             }
 
             Console.WriteLine($"time {end_time - start_time} ms, num_txn = {num}, throughput = {1000 * num / (end_time - start_time)} per second. ");

@@ -94,12 +94,13 @@ namespace Concurrency.Implementation
             nonDeterministicEmitSize = new Dictionary<int, int>();
             nonDetEmitID = new Dictionary<int, int>();
             deterministicTransactionRequests = new Dictionary<int, List<TransactionContext>>();
-
+            Console.WriteLine($"Thread ID for coord {myPrimaryKey} is {Thread.CurrentThread.ManagedThreadId}");
             return base.OnActivateAsync();
         }
 
         public async Task<Tuple<long, int>> GetStatus()
         {
+            Console.WriteLine($"Thread ID for coord {myPrimaryKey} is {Thread.CurrentThread.ManagedThreadId}");
             var time = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
             return new Tuple<long, int>(time, numTxn);
         }
@@ -392,7 +393,7 @@ namespace Concurrency.Implementation
                 DeterministicBatchSchedule schedule = item.Value;
                 schedule.globalCoordinator = this.myPrimaryKey;
                 schedule.highestCommittedBatchId = this.highestCommittedBatchID;
-                Task emit = dest.ReceiveBatchSchedule(schedule);
+                //Task emit = dest.ReceiveBatchSchedule(schedule);
             }
             batchGrainClassName.Remove(curBatchID);
             this.detEmitPromiseMap[myEmitSequence].SetResult(true);
