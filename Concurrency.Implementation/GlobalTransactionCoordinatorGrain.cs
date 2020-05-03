@@ -256,7 +256,7 @@ namespace Concurrency.Implementation
             
             numTransactionIdsReserved = 0;
             await EmitDeterministicTransactions();
-            EmitNonDeterministicTransactions();
+            //EmitNonDeterministicTransactions();
             tidToAllocate = token.lastTransactionID + 1;
             token.lastTransactionID += numTransactionIdsPreAllocated;
             /*
@@ -323,7 +323,6 @@ namespace Concurrency.Implementation
             if (shouldEmit == false) return;
             this.detEmitSeq++;
             int curBatchID = token.lastTransactionID + 1;
-            Console.WriteLine($"\n Coord {myPrimaryKey} emit batch {curBatchID}, with {transactionList.Count} txn. \n");
             
             foreach (TransactionContext context in transactionList)
             {
@@ -399,6 +398,9 @@ namespace Concurrency.Implementation
             this.detEmitPromiseMap[myEmitSequence].SetResult(true);
             this.deterministicTransactionRequests.Remove(myEmitSequence);
             this.detEmitPromiseMap.Remove(myEmitSequence);
+
+            //CleanUp(curBatchID);
+            Console.WriteLine($"\n Time {DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond}, thread ID = {Thread.CurrentThread.ManagedThreadId}, Coord {myPrimaryKey} emit batch {curBatchID}, with {transactionList.Count} txn. \n");
         }
 
         /*

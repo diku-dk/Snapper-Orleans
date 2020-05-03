@@ -9,22 +9,22 @@ using SmallBank.Interfaces;
 using Concurrency.Interface;
 using Concurrency.Interface.Nondeterministic;
 using System.Threading;
+using NetMQ.Sockets;
+using NetMQ;
 
-namespace MyClient
+namespace MyController
 {
     class Program
     {
-        static Boolean flag = true;
-        static int global_tid = 0;
-        static int numTxn = 10000;
-        static int numClient = 1;
-        static int numThread = 1;
-        static int numCoord = 1;
-        static int numEpoch = 6;
+        static int numWorker = 1;
+        static int numCoord = 200;
         static Boolean LocalCluster = true;
-        static IClusterClient[] clients;
-        static IBenchmark[] benchmarks;
+        static IClusterClient client;
         static WorkloadConfiguration config;
+
+        static String workerAddress = "@tcp://localhost:5575";
+        static String sinkAddress = "@tcp://localhost:5558";
+        static CountdownEvent ackedWorkers = new CountdownEvent(numWorker);
 
         static int Main(string[] args)
         {
@@ -35,38 +35,31 @@ namespace MyClient
         {
             // initialize configuration
             config = new WorkloadConfiguration();
+            config.numWorkerNodes = numWorker;
+            config.numConnToClusterPerWorkerNode = 1;
+            config.numThreadsPerWorkerNode = 4;
+            config.numEpochs = 1;
+            config.epochDurationMSecs = 30000;
             config.benchmark = BenchmarkType.SMALLBANK;
             config.deterministicTxnPercent = 100;
             config.distribution = Distribution.UNIFORM;
-            config.grainImplementationType = ImplementationType.SNAPPER;
+            config.zipfianConstant = 0;
             config.mixture = new int[5];
-            config.mixture[0] = 100;
+            config.mixture[0] = 0;
             config.mixture[1] = 0;
-            config.mixture[2] = 0;
+            config.mixture[2] = 100;
             config.mixture[3] = 0;
             config.mixture[4] = 0;
             config.numAccounts = 200;
             config.numAccountsMultiTransfer = 32;
             config.numAccountsPerGroup = 1;
             config.numGrainsMultiTransfer = 4;
-            config.zipfianConstant = 0;
-
-            // initialize workload
-            benchmarks = new IBenchmark[numThread];
-            for (int i = 0; i < numThread; i++)
-            {
-                benchmarks[i] = new SmallBankBenchmark();
-                benchmarks[i].generateBenchmark(config);
-            }
+            config.grainImplementationType = ImplementationType.SNAPPER;
 
             // initialize clients
             ClientConfiguration clientConfig = new ClientConfiguration();
-            clients = new IClusterClient[numClient];
-            for (int i = 0; i < numClient; i++)
-            {
-                if (LocalCluster) clients[i] = await clientConfig.StartClientWithRetries();
-                else clients[i] = await clientConfig.StartClientWithRetriesToCluster();
-            }
+            if (LocalCluster) client = await clientConfig.StartClientWithRetries();
+            else client = await clientConfig.StartClientWithRetriesToCluster();
 
             // initialize configuration grain
             Console.WriteLine($"Initializing configuration grain...");
@@ -78,9 +71,10 @@ namespace MyClient
             var numCoordinators = (uint)numCoord;
             var exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMSecs);
             var coordConfig = new CoordinatorGrainConfiguration(batchIntervalMSecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
-            var configGrain = clients[0].GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
+            var configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
             await configGrain.UpdateNewConfiguration(exeConfig);
             await configGrain.UpdateNewConfiguration(coordConfig);
+
             /*
             // load grains
             Console.WriteLine($"Loading grains...");
@@ -96,105 +90,89 @@ namespace MyClient
             }
             await Task.WhenAll(tasks);*/
 
-            var threads = new List<Thread>();
-            for (int i = 0; i < numThread; i++)
-            {
-                //var thread = new Thread(ThreadWorkAsync);
-                var thread = new Thread(ContinuousSubmitTxn);
-                threads.Add(thread);
-                thread.Start(i);
-            }
+            //Start the controller thread
+            Thread conducterThread = new Thread(PushToWorkers);
+            conducterThread.Start();
 
-            await WatchStatus();
+            //Start the sink thread
+            Thread sinkThread = new Thread(PullFromWorkers);
+            sinkThread.Start();
 
-            //Console.WriteLine("Finished running experiment. Press Enter to exit");
+            //Wait for the threads to exit
+            sinkThread.Join();
+            conducterThread.Join();
+
+            Console.WriteLine("Finished running experiment. Press Enter to exit");
             Console.ReadLine();
             return 0;
         }
 
-        private static async void ThreadWorkAsync(Object obj)
+        private static void WaitForWorkerAcksAndReset()
         {
-            int threadIndex = (int)obj;
-            var globalWatch = new Stopwatch();
-            var client = clients[threadIndex % numClient];
-            var benchmark = benchmarks[threadIndex];
-            for (int eIndex = 0; eIndex < numEpoch; eIndex++)
+            ackedWorkers.Wait();
+            ackedWorkers.Reset(numWorker); //Reset for next ack, not thread-safe but provides visibility, ok for us to use due to lock-stepped (distributed producer/consumer) usage pattern i.e., Reset will never called concurrently with other functions (Signal/Wait)            
+        }
+
+        static void PushToWorkers()
+        {
+            using (var workers = new PublisherSocket(workerAddress))
             {
-                Console.WriteLine($"Thread {threadIndex} starts epoch {eIndex}. ");
-                //var t = new List<Task<FunctionResult>>();
-                var t = new List<Task<TransactionContext>>();
-                globalWatch.Restart();
-                var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-                for (int i = 0; i < numTxn; i++) t.Add(benchmark.newTransaction(client, global_tid++));
-                await Task.WhenAll(t);
-                long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-                globalWatch.Stop();
-                var time = endTime - startTime;
-                /*
-                int numAbort = 0;
-                for (int i = 0; i < numTxn; i++) if (t[i].Result.hasException()) numAbort++;
-                Console.WriteLine($"numTxn = {numTxn}, throughput = {1000 * numTxn / time.TotalMilliseconds} per Second, abort rate = {100 * numAbort / numTxn}%");
-                */
-                Console.WriteLine($"Thread {threadIndex}, start {startTime.ToString()}, end {endTime.ToString()}, numTxn = {numTxn}, time = {time} ms, throughput = {1000 * numTxn / time} per Second. ");
+                WaitForWorkerAcksAndReset();
+                Console.WriteLine($"{numWorker} worker nodes have connected to Controller");
+                Console.WriteLine($"Sent workload configuration to {numWorker} worker nodes");
+                var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_INIT);
+                msg.contents = Helper.serializeToByteArray<WorkloadConfiguration>(config);
+                workers.SendMoreFrame("WORKLOAD_INIT").SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
+                Console.WriteLine($"Coordinator waits for WORKLOAD_INIT_ACK");
+                //Wait for acks for the workload configuration
+                WaitForWorkerAcksAndReset();
+                Console.WriteLine($"Receive workload configuration ack from {numWorker} worker nodes");
+
+                for (int i = 0; i < config.numEpochs; i++)
+                {
+                    //Send the command to run an epoch
+                    Console.WriteLine($"Running Epoch {i} on {numWorker} worker nodes");
+                    msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH);
+                    workers.SendMoreFrame("RUN_EPOCH").SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
+                    WaitForWorkerAcksAndReset();
+                    Console.WriteLine($"Finished running epoch {i} on {numWorker} worker nodes");
+                }
             }
         }
 
-        private static async void ContinuousSubmitTxn(Object obj)
+        static void PullFromWorkers()
         {
-            int threadIndex = (int)obj;
-            var client = clients[threadIndex % numClient];
-            var benchmark = benchmarks[threadIndex];
-
-            var t = new List<Task<TransactionContext>>();
-            while (flag)
             {
-                for (int i = 0; i < 1500; i++) t.Add(benchmark.newTransaction(client, global_tid++));
-                await Task.Delay(TimeSpan.FromMilliseconds(100));
+                using (var sink = new PullSocket(sinkAddress))
+                {
+                    for (int i = 0; i < numWorker; i++)
+                    {
+                        var msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
+                        Trace.Assert(msg.msgType == Utilities.MsgType.WORKER_CONNECT);
+                        Console.WriteLine($"Receive WORKER_CONNECT from worker {i}");
+                        ackedWorkers.Signal();
+                    }
+
+                    for (int i = 0; i < numWorker; i++)
+                    {
+                        var msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
+                        Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT_ACK);
+                        Console.WriteLine($"Receive WORKLOAD_INIT_ACT from worker {i}");
+                        ackedWorkers.Signal();
+                    }
+
+                    //Wait for epoch acks
+                    for (int i = 0; i < config.numEpochs; i++)
+                    {
+                        for (int j = 0; j < numWorker; j++)
+                        {
+                            var msg = Helper.deserializeFromByteArray<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
+                            Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH_ACK);
+                            ackedWorkers.Signal();
+                        }
+                    }
+                }
             }
-            await Task.WhenAll(t);
-        }
-
-        private static async Task WatchStatus()
-        {
-            Console.WriteLine("Wait requests fullfill silo..");
-            await Task.Delay(1000);
-
-            // get the start state
-            var t1 = new List<Task<Tuple<long, int>>>();
-            for (int i = 0; i < numCoord; i++)
-            {
-                var coord = clients[i % numClient].GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid((uint)i));
-                t1.Add(coord.GetStatus());
-            }
-            await Task.WhenAll(t1);
-
-            // wait for a while
-            await Task.Delay(3000);
-
-            // get the end state
-            var t2 = new List<Task<Tuple<long, int>>>();
-            for (int i = 0; i < numCoord; i++)
-            {
-                var coord = clients[i % numClient].GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid((uint)i));
-                t2.Add(coord.GetStatus());
-            }
-            await Task.WhenAll(t2);
-            flag = false;
-
-            // aggregate results
-            var start_time = t1[0].Result.Item1;
-            var end_time = t2[0].Result.Item1;
-            var num = t2[0].Result.Item2 - t1[0].Result.Item2;
-            Console.WriteLine($"Coord {0}: start time {t1[0].Result.Item1}, end time {t2[0].Result.Item1}, elapsed {t2[0].Result.Item1 - t1[0].Result.Item1} ms, finished txn {t2[0].Result.Item2 - t1[0].Result.Item2}");
-            for (int i = 1; i < numCoord; i++)
-            {
-                start_time = start_time > t1[i].Result.Item1 ? t1[i].Result.Item1 : start_time;
-                end_time = end_time < t2[i].Result.Item1 ? t2[i].Result.Item1 : end_time;
-                num += t2[i].Result.Item2 - t1[i].Result.Item2;
-                Console.WriteLine($"Coord {i}: start time {t1[i].Result.Item1}, end time {t2[i].Result.Item1}, elapsed {t2[i].Result.Item1 - t1[i].Result.Item1} ms, finished txn {t2[i].Result.Item2 - t1[i].Result.Item2}");
-            }
-
-            Console.WriteLine($"time {end_time - start_time} ms, num_txn = {num}, throughput = {1000 * num / (end_time - start_time)} per second. ");
         }
     }
 }

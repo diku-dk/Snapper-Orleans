@@ -19,11 +19,13 @@ namespace ExperimentProcess
         IDiscreteDistribution grainDistribution;
         IDiscreteDistribution transferAmountDistribution;
 
-        public uint index = 0;
-        public uint numCoord = 1;
+        int numCoord = 200;
+        int index = 0;
+        //uint coordID;
 
-        public void generateBenchmark(WorkloadConfiguration workloadConfig)
+        public void generateBenchmark(WorkloadConfiguration workloadConfig, int i)
         {
+            //coordID = (uint)i;
             config = workloadConfig;
             if (config.distribution == Utilities.Distribution.ZIPFIAN)
             {
@@ -39,7 +41,6 @@ namespace ExperimentProcess
             transactionTypeDistribution = new DiscreteUniform(0, 99, new Random());
             detDistribution = new DiscreteUniform(0, 99, new Random());
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
-
         }
 
         //getBalance, depositChecking, transfer, transacSaving, writeCheck, multiTransfer
@@ -94,9 +95,10 @@ namespace ExperimentProcess
                 default:
                     return null;
             }*/
-            var coord = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(index % numCoord));
+            var grain = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid((uint)(index % numCoord)));
             index++;
-            return coord.NewTransaction(grainAccessInfo);
+            //var grain = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(coordID));
+            return grain.NewTransaction(grainAccessInfo);
         }
 
         private uint getAccountForGrain(uint grainId)

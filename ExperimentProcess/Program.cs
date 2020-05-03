@@ -50,8 +50,10 @@ namespace ExperimentProcess
                 globalWatch.Restart();
                 var abortType = new int[4];
                 for (int i = 0; i < 4; i++) abortType[i] = 0;
-                var tasks = new List<Task<FunctionResult>>();
-                var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
+                //var tasks = new List<Task<FunctionResult>>();
+                //var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
+                var tasks = new List<Task<TransactionContext>>();
+                var reqs = new Dictionary<Task<TransactionContext>, TimeSpan>();
                 var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 do
                 {
@@ -61,8 +63,8 @@ namespace ExperimentProcess
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, global_tid);
                         global_tid += numWorker;
-                        //reqs.Add(newTask, asyncReqStartTime);
-                        //tasks.Add(newTask);                      
+                        reqs.Add(newTask, asyncReqStartTime);
+                        tasks.Add(newTask);                      
                     } 
                     var task = await Task.WhenAny(tasks);
                     numTransaction++; //Count transactions now
@@ -79,6 +81,10 @@ namespace ExperimentProcess
                     }
                     if (noException)
                     {
+                        numCommit++;
+                        var latency = asyncReqEndTime - reqs[task];
+                        latencies.Add(latency.TotalMilliseconds);
+                        /*
                         if (!task.Result.hasException())
                         {
                             numCommit++;
@@ -104,7 +110,7 @@ namespace ExperimentProcess
                                 default:
                                     throw new Exception("Exception: Unexpected abort type.");
                             }
-                        }
+                        }*/
                     }
                     tasks.Remove(task);
                     reqs.Remove(task);
@@ -112,7 +118,7 @@ namespace ExperimentProcess
                 while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs);                
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
-                Console.WriteLine($"Finish epoch {eIndex}, numtxn = {numTransaction}, numCommit = {numCommit}. ");
+                Console.WriteLine($"Finish epoch {eIndex}, numtxn = {numTransaction}, time = {endTime - startTime}, tp = {1000 * numTransaction / (endTime - startTime)}. ");
                 //Wait for the tasks exceeding epoch time but do not count them
                 if (tasks.Count != 0)
                 {
@@ -167,7 +173,7 @@ namespace ExperimentProcess
                 switch(config.benchmark) {
                     case BenchmarkType.SMALLBANK:
                         benchmarks[i] = new SmallBankBenchmark();
-                        benchmarks[i].generateBenchmark(config);
+                        benchmarks[i].generateBenchmark(config, i);
                         break;
                     default:
                         throw new Exception("Unknown benchmark type");

@@ -292,11 +292,11 @@ namespace ExperimentController
             InitiateClientAndSpawnConfigurationCoordinator();
             while (!asyncInitializationDone)
                 Thread.Sleep(100);
-
+            /*
             //Create the workload grains, load with data
             LoadGrains();
             while(!loadingDone)
-                Thread.Sleep(100);
+                Thread.Sleep(100);*/
 
             //Start the controller thread
             Thread conducterThread = new Thread(PushToWorkers);
