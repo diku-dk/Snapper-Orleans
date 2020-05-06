@@ -10,7 +10,7 @@ namespace ExperimentProcess
     public interface IBenchmark
     {
         void generateBenchmark(WorkloadConfiguration workloadConfig, int i);
-        //Task<FunctionResult> newTransaction(IClusterClient client, int global_tid);    // changed by Yijian
-        Task<TransactionContext> newTransaction(IClusterClient client, int global_tid);
+        Task<FunctionResult> newTransaction(IClusterClient client, int global_tid);    // changed by Yijian
+        //Task<TransactionContext> newTransaction(IClusterClient client, int global_tid);
     }
 }

@@ -65,14 +65,14 @@ namespace Concurrency.Implementation
         private Boolean spawned = false;
 
         //disable token
-        BatchToken token;
+        //BatchToken token;
 
         private int numTxn;
 
         public override Task OnActivateAsync()
         {
             numTxn = 0;
-            token = new BatchToken(-1, -1);
+            //token = new BatchToken(-1, -1);
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             lastBatchIDMap = new Dictionary<int, int>();
@@ -110,6 +110,7 @@ namespace Concurrency.Implementation
          */
         public async Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<string, int>> grainAccessInformation)
         {
+            //var start = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
             int myEmitSeq = this.detEmitSeq;
             if (deterministicTransactionRequests.ContainsKey(myEmitSeq) == false)
                 deterministicTransactionRequests.Add(myEmitSeq, new List<TransactionContext>());
@@ -130,6 +131,8 @@ namespace Concurrency.Implementation
             }
             //Console.WriteLine($"Coordinator {myId}: emitted deterministic transaction {context.transactionID}");
             context.highestBatchIdCommitted = this.highestCommittedBatchID;
+            //var end = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+            //Console.WriteLine($"Coord {myPrimaryKey}, txn {numTxn}, time =  {end - start} ms. ");
             numTxn++;
             return context;
         }
@@ -253,13 +256,13 @@ namespace Concurrency.Implementation
          */
         async Task EmitTransaction(Object obj)
         {
-            
+            /*
             numTransactionIdsReserved = 0;
             await EmitDeterministicTransactions();
             //EmitNonDeterministicTransactions();
             tidToAllocate = token.lastTransactionID + 1;
-            token.lastTransactionID += numTransactionIdsPreAllocated;
-            /*
+            token.lastTransactionID += numTransactionIdsPreAllocated;*/
+            
             BatchToken token;
             //The timer expires
             if (obj == null)
@@ -280,11 +283,11 @@ namespace Concurrency.Implementation
             token = (BatchToken)obj;
             await EmitDeterministicTransactions(token);
             EmitNonDeterministicTransactions(token);
-            this.isEmitTimerOn = false;*/
+            this.isEmitTimerOn = false;
         }
 
-        //private void EmitNonDeterministicTransactions(BatchToken token)
-        private void EmitNonDeterministicTransactions()
+        private void EmitNonDeterministicTransactions(BatchToken token)
+        //private void EmitNonDeterministicTransactions()
         {
             int myEmitSequence = this.nonDetEmitSeq;
             if (nonDeterministicEmitSize.ContainsKey(myEmitSequence))
@@ -311,19 +314,16 @@ namespace Concurrency.Implementation
         /**
          *This functions is called to emit batch of deterministic transactions
          */
-        //async Task EmitDeterministicTransactions(BatchToken token)
-        async Task EmitDeterministicTransactions()
+        async Task EmitDeterministicTransactions(BatchToken token)
+        //async Task EmitDeterministicTransactions()
         {
-            
             int myEmitSequence = this.detEmitSeq;
             List<TransactionContext> transactionList;
             Boolean shouldEmit = deterministicTransactionRequests.TryGetValue(myEmitSequence, out transactionList);
-            
             //Return if there is no deterministic transactions waiting for emit
             if (shouldEmit == false) return;
             this.detEmitSeq++;
             int curBatchID = token.lastTransactionID + 1;
-            
             foreach (TransactionContext context in transactionList)
             {
                 context.batchID = curBatchID;
@@ -392,15 +392,14 @@ namespace Concurrency.Implementation
                 DeterministicBatchSchedule schedule = item.Value;
                 schedule.globalCoordinator = this.myPrimaryKey;
                 schedule.highestCommittedBatchId = this.highestCommittedBatchID;
-                //Task emit = dest.ReceiveBatchSchedule(schedule);
+                Task emit = dest.ReceiveBatchSchedule(schedule);
             }
             batchGrainClassName.Remove(curBatchID);
             this.detEmitPromiseMap[myEmitSequence].SetResult(true);
             this.deterministicTransactionRequests.Remove(myEmitSequence);
             this.detEmitPromiseMap.Remove(myEmitSequence);
 
-            //CleanUp(curBatchID);
-            Console.WriteLine($"\n Time {DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond}, thread ID = {Thread.CurrentThread.ManagedThreadId}, Coord {myPrimaryKey} emit batch {curBatchID}, with {transactionList.Count} txn. \n");
+            //Console.WriteLine($"\n Time {DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond}, thread ID = {Thread.CurrentThread.ManagedThreadId}, Coord {myPrimaryKey} emit batch {curBatchID}, with {transactionList.Count} txn. \n");
         }
 
         /*
@@ -413,7 +412,7 @@ namespace Concurrency.Implementation
             expectedAcksPerBatch[bid]--;
             if (expectedAcksPerBatch[bid] == 0)
             {
-                //Console.WriteLine($"\n batch {bid} is completed. \n");
+                //Console.WriteLine($"\n commit batch {bid}. \n");
                 Debug.Assert(lastBatchIDMap.ContainsKey(bid));
                 if (lastBatchIDMap[bid] == highestCommittedBatchID)
                 {
@@ -422,7 +421,7 @@ namespace Concurrency.Implementation
                     CleanUp(bid);
                     if (log != null) await log.HandleOnCommitInDeterministicProtocol(bid);
                     // disable token
-                    //await BroadcastCommit();
+                    await BroadcastCommit();
                 }
                 else
                 {

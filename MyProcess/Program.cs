@@ -157,13 +157,14 @@ namespace MyProcess
             for (int eIndex = 0; eIndex < config.numEpochs; eIndex++)
             {
                 barriers[eIndex].SignalAndWait();
-                var t = new List<Task<TransactionContext>>();
+                //var t = new List<Task<TransactionContext>>();
+                var t = new List<Task<FunctionResult>>();
                 globalWatch.Restart();
                 var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 do
                 {
-                    for (int i = 0; i < 1000; i++) t.Add(benchmark.newTransaction(client, global_tid++));
-                    await Task.Delay(TimeSpan.FromMilliseconds(100));
+                    for (int i = 0; i < 100; i++) t.Add(benchmark.newTransaction(client, global_tid++));
+                    await Task.Delay(5);
                 }
                 while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs);
                 Console.WriteLine($"Txn emit rate: {t.Count * 1000 / globalWatch.ElapsedMilliseconds} txn per second. ");
@@ -173,10 +174,22 @@ namespace MyProcess
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine($"Exception: {e.Message}");
+                    Console.WriteLine($"Exception 1: {e.Message}");
                 }
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-                Console.WriteLine($"numTxn = {t.Count}, time = {endTime - startTime}, tp = {1000 * t.Count / (endTime - startTime)}");
+                var commit = 0;
+                try
+                {
+                    for (int i = 0; i < t.Count; i++)
+                    {
+                        if (t[i].Result.exception == false) commit++;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"Exception 2: {e.Message}");
+                }
+                Console.WriteLine($"numTxn = {t.Count}, time = {endTime - startTime}, commit = {commit}, tp = {1000 * commit / (endTime - startTime)}");
                 Console.ReadLine();
                 globalWatch.Stop();
                 //Signal the completion of epoch

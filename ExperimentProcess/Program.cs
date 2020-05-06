@@ -50,10 +50,10 @@ namespace ExperimentProcess
                 globalWatch.Restart();
                 var abortType = new int[4];
                 for (int i = 0; i < 4; i++) abortType[i] = 0;
-                //var tasks = new List<Task<FunctionResult>>();
-                //var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
-                var tasks = new List<Task<TransactionContext>>();
-                var reqs = new Dictionary<Task<TransactionContext>, TimeSpan>();
+                var tasks = new List<Task<FunctionResult>>();
+                var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
+                //var tasks = new List<Task<TransactionContext>>();
+                //var reqs = new Dictionary<Task<TransactionContext>, TimeSpan>();
                 var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 do
                 {
@@ -81,10 +81,6 @@ namespace ExperimentProcess
                     }
                     if (noException)
                     {
-                        numCommit++;
-                        var latency = asyncReqEndTime - reqs[task];
-                        latencies.Add(latency.TotalMilliseconds);
-                        /*
                         if (!task.Result.hasException())
                         {
                             numCommit++;
@@ -110,7 +106,7 @@ namespace ExperimentProcess
                                 default:
                                     throw new Exception("Exception: Unexpected abort type.");
                             }
-                        }*/
+                        }
                     }
                     tasks.Remove(task);
                     reqs.Remove(task);

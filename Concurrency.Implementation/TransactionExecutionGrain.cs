@@ -56,14 +56,14 @@ namespace Concurrency.Implementation
         public async Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation, String startFunction, FunctionInput inputs)
         {
             TransactionContext context = await myCoordinator.NewTransaction(grainAccessInformation);
-            /*
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
+            //Console.WriteLine($"{myPrimaryKey} receives tid for txn {context.transactionID}. ");
             Task<FunctionResult> t1 = this.Execute(c1);
             Task t2 = myCoordinator.checkBatchCompletion(context.batchID);
             await Task.WhenAll(t1, t2);
-            return t1.Result;*/
-            return new FunctionResult();
+            return t1.Result;
+            //return new FunctionResult();
         }
         
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
@@ -217,12 +217,12 @@ namespace Concurrency.Implementation
          */
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
-            /*
             //Console.WriteLine($"\n {this.myPrimaryKey}: receive bid {schedule.batchID}, last bid = {schedule.lastBatchID}, highest commit bid = {schedule.highestCommittedBatchId}");        
             // Add by Yijian (can handle the situation when receive a schedule whose lastBatchID is also -1)
             myScheduler.ackBatchCommit(schedule.highestCommittedBatchId);
             batchScheduleMap.Add(schedule.batchID, schedule);
-            myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);*/
+            myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
+            //Console.WriteLine($"\n {this.myPrimaryKey} has registered bid {schedule.batchID}. ");
             return Task.CompletedTask;
         }
 

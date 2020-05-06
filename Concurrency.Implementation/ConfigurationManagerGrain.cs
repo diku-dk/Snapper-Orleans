@@ -59,11 +59,11 @@ namespace Concurrency.Implementation
                     tasks.Add(grain.SpawnCoordinator(i, config.numCoordinators, config.batchIntervalMSecs, config.backoffIntervalMSecs, config.idleIntervalTillBackOffSecs));
                 }
                 await Task.WhenAll(tasks);
-                /* disable token
+                // disable token
                 //Inject token to coordinator 0
                 var coord0 = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(0));
                 BatchToken token = new BatchToken(-1, -1);
-                await coord0.PassToken(token);*/
+                await coord0.PassToken(token);
             } 
             else
             {

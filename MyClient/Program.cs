@@ -17,7 +17,7 @@ namespace MyController
     class Program
     {
         static int numWorker = 1;
-        static int numCoord = 200;
+        static int numCoord = 1;
         static Boolean LocalCluster = true;
         static IClusterClient client;
         static WorkloadConfiguration config;
@@ -37,7 +37,7 @@ namespace MyController
             config = new WorkloadConfiguration();
             config.numWorkerNodes = numWorker;
             config.numConnToClusterPerWorkerNode = 1;
-            config.numThreadsPerWorkerNode = 4;
+            config.numThreadsPerWorkerNode = 1;
             config.numEpochs = 1;
             config.epochDurationMSecs = 30000;
             config.benchmark = BenchmarkType.SMALLBANK;
@@ -75,7 +75,6 @@ namespace MyController
             await configGrain.UpdateNewConfiguration(exeConfig);
             await configGrain.UpdateNewConfiguration(coordConfig);
 
-            /*
             // load grains
             Console.WriteLine($"Loading grains...");
             var tasks = new List<Task<FunctionResult>>();
@@ -84,11 +83,12 @@ namespace MyController
                 var args = new Tuple<uint, uint>(config.numAccountsPerGroup, i);
                 var input = new FunctionInput(args);
                 var groupGUID = Helper.convertUInt32ToGuid(i);
-                var grain = clients[i % numClient].GetGrain<ICustomerAccountGroupGrain>(groupGUID);
+                var grain = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
                 //var grain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(groupGUID);
                 tasks.Add(grain.StartTransaction("InitBankAccounts", input));
             }
-            await Task.WhenAll(tasks);*/
+            await Task.WhenAll(tasks);
+            Console.WriteLine($"Finish loading grains...");
 
             //Start the controller thread
             Thread conducterThread = new Thread(PushToWorkers);
