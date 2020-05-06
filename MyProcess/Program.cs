@@ -16,7 +16,7 @@ namespace MyProcess
         static int workerID = 1;
         static int global_tid = 200 + workerID;
 
-        static Boolean LocalCluster = true;
+        static Boolean LocalCluster = false;
         static String sinkAddress = ">tcp://localhost:5558";
         static String controllerAddress = ">tcp://localhost:5575";
         static PushSocket sink = new PushSocket(sinkAddress);
@@ -157,8 +157,8 @@ namespace MyProcess
             for (int eIndex = 0; eIndex < config.numEpochs; eIndex++)
             {
                 barriers[eIndex].SignalAndWait();
-                //var t = new List<Task<TransactionContext>>();
-                var t = new List<Task<FunctionResult>>();
+                var t = new List<Task<TransactionContext>>();
+                //var t = new List<Task<FunctionResult>>();
                 globalWatch.Restart();
                 var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 do
@@ -182,7 +182,8 @@ namespace MyProcess
                 {
                     for (int i = 0; i < t.Count; i++)
                     {
-                        if (t[i].Result.exception == false) commit++;
+                        //if (t[i].Result.exception == false) commit++;
+                        if (t[i].Result.transactionID == -1) commit++;
                     }
                 }
                 catch (Exception e)

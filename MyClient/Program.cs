@@ -18,7 +18,7 @@ namespace MyController
     {
         static int numWorker = 1;
         static int numCoord = 1;
-        static Boolean LocalCluster = true;
+        static Boolean LocalCluster = false;
         static IClusterClient client;
         static WorkloadConfiguration config;
 
@@ -74,7 +74,7 @@ namespace MyController
             var configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
             await configGrain.UpdateNewConfiguration(exeConfig);
             await configGrain.UpdateNewConfiguration(coordConfig);
-
+            /*
             // load grains
             Console.WriteLine($"Loading grains...");
             var tasks = new List<Task<FunctionResult>>();
@@ -88,7 +88,7 @@ namespace MyController
                 tasks.Add(grain.StartTransaction("InitBankAccounts", input));
             }
             await Task.WhenAll(tasks);
-            Console.WriteLine($"Finish loading grains...");
+            Console.WriteLine($"Finish loading grains...");*/
 
             //Start the controller thread
             Thread conducterThread = new Thread(PushToWorkers);
@@ -115,6 +115,7 @@ namespace MyController
 
         static void PushToWorkers()
         {
+            Console.WriteLine("=== Push to worker ===");
             using (var workers = new PublisherSocket(workerAddress))
             {
                 WaitForWorkerAcksAndReset();

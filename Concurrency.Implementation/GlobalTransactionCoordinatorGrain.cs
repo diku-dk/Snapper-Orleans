@@ -65,14 +65,14 @@ namespace Concurrency.Implementation
         private Boolean spawned = false;
 
         //disable token
-        //BatchToken token;
+        BatchToken token;
 
         private int numTxn;
 
         public override Task OnActivateAsync()
         {
             numTxn = 0;
-            //token = new BatchToken(-1, -1);
+            token = new BatchToken(-1, -1);
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             lastBatchIDMap = new Dictionary<int, int>();
@@ -134,6 +134,7 @@ namespace Concurrency.Implementation
             //var end = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
             //Console.WriteLine($"Coord {myPrimaryKey}, txn {numTxn}, time =  {end - start} ms. ");
             numTxn++;
+            context.transactionID = -1;
             return context;
         }
 
@@ -256,13 +257,13 @@ namespace Concurrency.Implementation
          */
         async Task EmitTransaction(Object obj)
         {
-            /*
+            
             numTransactionIdsReserved = 0;
             await EmitDeterministicTransactions();
             //EmitNonDeterministicTransactions();
             tidToAllocate = token.lastTransactionID + 1;
-            token.lastTransactionID += numTransactionIdsPreAllocated;*/
-            
+            token.lastTransactionID += numTransactionIdsPreAllocated;
+            /*
             BatchToken token;
             //The timer expires
             if (obj == null)
@@ -283,11 +284,11 @@ namespace Concurrency.Implementation
             token = (BatchToken)obj;
             await EmitDeterministicTransactions(token);
             EmitNonDeterministicTransactions(token);
-            this.isEmitTimerOn = false;
+            this.isEmitTimerOn = false;*/
         }
 
-        private void EmitNonDeterministicTransactions(BatchToken token)
-        //private void EmitNonDeterministicTransactions()
+        //private void EmitNonDeterministicTransactions(BatchToken token)
+        private void EmitNonDeterministicTransactions()
         {
             int myEmitSequence = this.nonDetEmitSeq;
             if (nonDeterministicEmitSize.ContainsKey(myEmitSequence))
@@ -314,8 +315,8 @@ namespace Concurrency.Implementation
         /**
          *This functions is called to emit batch of deterministic transactions
          */
-        async Task EmitDeterministicTransactions(BatchToken token)
-        //async Task EmitDeterministicTransactions()
+        //async Task EmitDeterministicTransactions(BatchToken token)
+        async Task EmitDeterministicTransactions()
         {
             int myEmitSequence = this.detEmitSeq;
             List<TransactionContext> transactionList;

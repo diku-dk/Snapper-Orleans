@@ -76,9 +76,10 @@ namespace ExperimentProcess
             else return false;
         }
 
-        //public Task<TransactionContext> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
-        public Task<FunctionResult> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
+        public Task<TransactionContext> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
+        //public Task<FunctionResult> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
         {
+            /*
             //return Task.FromResult<FunctionResult>(new FunctionResult());
             switch(config.grainImplementationType)
             {
@@ -94,12 +95,12 @@ namespace ExperimentProcess
                     return txnGrain.StartTransaction(functionName, input);
                 default:
                     return null;
-            }
-            /*
+            }*/
+            
             var grain = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid((uint)(index % numCoord)));
             index++;
             //var grain = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(coordID));
-            return grain.NewTransaction(grainAccessInfo);*/
+            return grain.NewTransaction(grainAccessInfo);
         }
 
         private uint getAccountForGrain(uint grainId)
@@ -107,7 +108,7 @@ namespace ExperimentProcess
             return grainId * config.numAccountsPerGroup + (uint)accountIdDistribution.Sample();
         }
 
-        public Task<FunctionResult> newTransaction(IClusterClient client, int global_tid)   // Yijian add gloal_tid
+        public Task<TransactionContext> newTransaction(IClusterClient client, int global_tid)   // Yijian add gloal_tid
         {
             TxnType type = nextTransactionType();
             FunctionInput input = null ;
