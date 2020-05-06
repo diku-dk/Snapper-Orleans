@@ -2,19 +2,19 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.Core" Version="3.3.106.1" />
-    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.3.105.24" />
-    <PackageReference Include="MathNet.Numerics" Version="4.9.0" />
+    <PackageReference Include="AWSSDK.Core" Version="3.3.106.18" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.3.105.40" />
+    <PackageReference Include="MathNet.Numerics" Version="4.9.1" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="3.1.3" />
-    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.1.4" />
-    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.1.4" />
-    <PackageReference Include="Microsoft.Orleans.Core" Version="3.1.4" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.1.6" />
+    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.1.6" />
+    <PackageReference Include="Microsoft.Orleans.Core" Version="3.1.6" />
     <PackageReference Include="Microsoft.Orleans.OrleansAWSUtils" Version="2.4.5" />
-    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="3.1.4">
+    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="3.1.6">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -27,7 +27,6 @@
     <ProjectReference Include="..\AccountTransfer.Interfaces\AccountTransfer.Interfaces.csproj" />
     <ProjectReference Include="..\Concurrency.Implementation\Concurrency.Implementation.csproj" />
     <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
-    <ProjectReference Include="..\OrleansClient\OrleansClient.csproj" />
     <ProjectReference Include="..\SmallBank.Grains\SmallBank.Grains.csproj" />
     <ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj" />
     <ProjectReference Include="..\TPCC.Grains\TPCC.Grains.csproj" />

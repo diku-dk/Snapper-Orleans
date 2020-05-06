@@ -59,6 +59,7 @@ namespace OrleansSiloHost
                     //options.ClassSpecificCollectionAge[typeof(MyGrainImplementation).FullName] = TimeSpan.FromMinutes(5);
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
+                //.Configure<SchedulingOptions>(o => o.MaxActiveThreads = 1)
                 .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
             if(enableOrleansTxn)
@@ -96,6 +97,7 @@ namespace OrleansSiloHost
                     //options.ClassSpecificCollectionAge[typeof(MyGrainImplementation).FullName] = TimeSpan.FromMinutes(5);
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
+                //.Configure<SchedulingOptions>(o => o.MaxActiveThreads = 32)
                 .UseDynamoDBClustering(dynamoDBOptions)
                 .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 

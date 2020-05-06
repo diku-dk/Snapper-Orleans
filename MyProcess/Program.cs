@@ -163,7 +163,7 @@ namespace MyProcess
                 var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 do
                 {
-                    for (int i = 0; i < 100; i++) t.Add(benchmark.newTransaction(client, global_tid++));
+                    for (int i = 0; i < 500; i++) t.Add(benchmark.newTransaction(client, global_tid++));
                     await Task.Delay(5);
                 }
                 while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs);

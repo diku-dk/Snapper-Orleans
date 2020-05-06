@@ -112,19 +112,24 @@
       <HintPath>..\packages\Newtonsoft.Json.12.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="Orleans.CodeGenerator, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Microsoft.Orleans.CodeGenerator.3.1.4\lib\netstandard2.0\Orleans.CodeGenerator.dll</HintPath>
+      <HintPath>..\packages\Microsoft.Orleans.CodeGenerator.3.1.6\lib\netstandard2.0\Orleans.CodeGenerator.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="Orleans.Core, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Microsoft.Orleans.Core.3.1.4\lib\netstandard2.0\Orleans.Core.dll</HintPath>
+      <HintPath>..\packages\Microsoft.Orleans.Core.3.1.6\lib\netstandard2.0\Orleans.Core.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="Orleans.Core.Abstractions, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Microsoft.Orleans.Core.Abstractions.3.1.4\lib\netstandard2.0\Orleans.Core.Abstractions.dll</HintPath>
+      <HintPath>..\packages\Microsoft.Orleans.Core.Abstractions.3.1.6\lib\netstandard2.0\Orleans.Core.Abstractions.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="Orleans.Runtime, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Microsoft.Orleans.OrleansRuntime.3.1.4\lib\netstandard2.0\Orleans.Runtime.dll</HintPath>
+      <HintPath>..\packages\Microsoft.Orleans.OrleansRuntime.3.1.6\lib\netstandard2.0\Orleans.Runtime.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="Orleans.Runtime.Abstractions, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Microsoft.Orleans.Runtime.Abstractions.3.1.4\lib\netstandard2.0\Orleans.Runtime.Abstractions.dll</HintPath>
+      <HintPath>..\packages\Microsoft.Orleans.Runtime.Abstractions.3.1.6\lib\netstandard2.0\Orleans.Runtime.Abstractions.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.AppContext, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">

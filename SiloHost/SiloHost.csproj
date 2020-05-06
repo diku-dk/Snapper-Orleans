@@ -4,7 +4,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
     <RuntimeIdentifiers>win</RuntimeIdentifiers>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -12,16 +12,16 @@
   <!--- Configure garbage collection "just right" for orleans: http://dotnet.github.io/orleans/Documentation/Deployment-and-Operations/Configuration-Guide/Configuring-.NET-Garbage-Collection.html -->
   <PropertyGroup>
     <ServerGarbageCollection>true</ServerGarbageCollection>
-    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="AWSSDK.Core" Version="3.3.106.1" />
-    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.3.105.24" />
+    <PackageReference Include="AWSSDK.Core" Version="3.3.106.18" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.3.105.40" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="3.1.3" />
-    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.1.4" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.1.6" />
     <PackageReference Include="Microsoft.Orleans.OrleansAWSUtils" Version="2.4.5" />
-    <PackageReference Include="Microsoft.Orleans.OrleansProviders" Version="3.1.4" />
-    <PackageReference Include="Microsoft.Orleans.OrleansRuntime" Version="3.1.4" />
+    <PackageReference Include="Microsoft.Orleans.OrleansProviders" Version="3.1.6" />
+    <PackageReference Include="Microsoft.Orleans.OrleansRuntime" Version="3.1.6" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\AccountTransfer.Grains\AccountTransfer.Grains.csproj" />

@@ -393,7 +393,7 @@ namespace Concurrency.Implementation
                 DeterministicBatchSchedule schedule = item.Value;
                 schedule.globalCoordinator = this.myPrimaryKey;
                 schedule.highestCommittedBatchId = this.highestCommittedBatchID;
-                Task emit = dest.ReceiveBatchSchedule(schedule);
+                //Task emit = dest.ReceiveBatchSchedule(schedule);
             }
             batchGrainClassName.Remove(curBatchID);
             this.detEmitPromiseMap[myEmitSequence].SetResult(true);

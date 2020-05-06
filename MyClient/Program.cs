@@ -54,13 +54,13 @@ namespace MyController
             config.numAccountsMultiTransfer = 32;
             config.numAccountsPerGroup = 1;
             config.numGrainsMultiTransfer = 4;
-            config.grainImplementationType = ImplementationType.SNAPPER;
+            config.grainImplementationType = ImplementationType.ORLEANSEVENTUAL;
 
             // initialize clients
             ClientConfiguration clientConfig = new ClientConfiguration();
             if (LocalCluster) client = await clientConfig.StartClientWithRetries();
             else client = await clientConfig.StartClientWithRetriesToCluster();
-
+            
             // initialize configuration grain
             Console.WriteLine($"Initializing configuration grain...");
             var nonDetCCType = ConcurrencyType.S2PL;
@@ -83,8 +83,8 @@ namespace MyController
                 var args = new Tuple<uint, uint>(config.numAccountsPerGroup, i);
                 var input = new FunctionInput(args);
                 var groupGUID = Helper.convertUInt32ToGuid(i);
-                var grain = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
-                //var grain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(groupGUID);
+                //var grain = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
+                var grain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(groupGUID);
                 tasks.Add(grain.StartTransaction("InitBankAccounts", input));
             }
             await Task.WhenAll(tasks);
