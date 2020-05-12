@@ -12,9 +12,6 @@ namespace Concurrency.Interface
     }
     public interface IGlobalTransactionCoordinatorGrain : IGrainWithGuidKey
     {
-        [AlwaysInterleave]
-        Task<Tuple<long, int>> GetStatus();
-
         /// <summary>
         /// Client calls this function to submit a new deterministic transaction
         /// </summary>

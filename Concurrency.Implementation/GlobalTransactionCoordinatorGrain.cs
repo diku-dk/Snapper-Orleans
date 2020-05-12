@@ -67,11 +67,8 @@ namespace Concurrency.Implementation
         //disable token
         BatchToken token;
 
-        private int numTxn;
-
         public override Task OnActivateAsync()
         {
-            numTxn = 0;
             token = new BatchToken(-1, -1);
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
@@ -98,19 +95,11 @@ namespace Concurrency.Implementation
             return base.OnActivateAsync();
         }
 
-        public async Task<Tuple<long, int>> GetStatus()
-        {
-            Console.WriteLine($"Thread ID for coord {myPrimaryKey} is {Thread.CurrentThread.ManagedThreadId}");
-            var time = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-            return new Tuple<long, int>(time, numTxn);
-        }
-
         /**
          *Client calls this function to submit deterministic transaction
          */
         public async Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<string, int>> grainAccessInformation)
         {
-            //var start = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
             int myEmitSeq = this.detEmitSeq;
             if (deterministicTransactionRequests.ContainsKey(myEmitSeq) == false)
                 deterministicTransactionRequests.Add(myEmitSeq, new List<TransactionContext>());
@@ -124,17 +113,12 @@ namespace Concurrency.Implementation
                 detEmitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
             }
             emitting = detEmitPromiseMap[myEmitSeq];
-            //return new TransactionContext(0);
             if (emitting.Task.IsCompleted != true)
             {
                 await emitting.Task;
             }
-            //Console.WriteLine($"Coordinator {myId}: emitted deterministic transaction {context.transactionID}");
             context.highestBatchIdCommitted = this.highestCommittedBatchID;
-            //var end = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-            //Console.WriteLine($"Coord {myPrimaryKey}, txn {numTxn}, time =  {end - start} ms. ");
-            numTxn++;
-            context.transactionID = -1;
+            context.transactionID = -1;    // changed by Yijian
             return context;
         }
 
