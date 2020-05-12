@@ -144,8 +144,6 @@ namespace ExperimentController
             // Binds PUSH socket to tcp://localhost:5557
             // Sends batch of tasks to workers via that socket
             Console.WriteLine("====== PUSH TO WORKERS ======");
-            // changed by Yijian
-            // using (var workers = new PushSocket(workerAddress))
             using (var workers = new PublisherSocket(workerAddress))
             {                
                 //Wait for the workers to connect to controller
@@ -155,7 +153,6 @@ namespace ExperimentController
                 Console.WriteLine($"Sent workload configuration to {numWorkerNodes} worker nodes");
                 var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_INIT);
                 msg.contents = Helper.serializeToByteArray<WorkloadConfiguration>(workload);
-                // changed by Yijian
                 workers.SendMoreFrame("WORKLOAD_INIT").SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));
                 Console.WriteLine($"Coordinator waits for WORKLOAD_INIT_ACK");
                 //Wait for acks for the workload configuration
@@ -239,15 +236,10 @@ namespace ExperimentController
         {
             var tasks = new List<Task<FunctionResult>>(); 
             var batchSize = -1; //If you want to load the grains in sequence instead of all concurrent
-            var global_tid = 0;   // added by Yijian
             for(uint i = 0; i < workload.numAccounts / workload.numAccountsPerGroup; i++)
             {
                 var args = new Tuple<uint, uint>(workload.numAccountsPerGroup, i);
                 var input = new FunctionInput(args);
-
-                // added by Yijian
-                input.context = new TransactionContext(global_tid);
-                global_tid ++;
 
                 var groupGUID = Helper.convertUInt32ToGuid(i);
                 switch (workload.grainImplementationType) 

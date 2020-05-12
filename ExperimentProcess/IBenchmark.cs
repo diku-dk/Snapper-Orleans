@@ -9,7 +9,7 @@ namespace ExperimentProcess
 {
     public interface IBenchmark
     {
-        void generateBenchmark(WorkloadConfiguration workloadConfig, int i);
+        void generateBenchmark(WorkloadConfiguration workloadConfig);
         //Task<FunctionResult> newTransaction(IClusterClient client, int global_tid);    // changed by Yijian
         Task<TransactionContext> newTransaction(IClusterClient client, int global_tid);
     }

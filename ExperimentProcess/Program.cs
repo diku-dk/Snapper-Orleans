@@ -14,7 +14,6 @@ namespace ExperimentProcess
 {
     class Program
     {
-        static int workerID = 1;
         static int numWorker;
         static Boolean LocalCluster;
         static IClusterClient[] clients;
@@ -31,7 +30,7 @@ namespace ExperimentProcess
         static bool initializationDone = false;
         static Thread[] threads;
 
-        static int global_tid = 200 + workerID;
+        static int global_tid = 0;
 
         private static async void ThreadWorkAsync(Object obj)
         {
@@ -170,7 +169,7 @@ namespace ExperimentProcess
                 switch(config.benchmark) {
                     case BenchmarkType.SMALLBANK:
                         benchmarks[i] = new SmallBankBenchmark();
-                        benchmarks[i].generateBenchmark(config, i);
+                        benchmarks[i].generateBenchmark(config);
                         break;
                     default:
                         throw new Exception("Unknown benchmark type");

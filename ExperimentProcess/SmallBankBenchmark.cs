@@ -23,9 +23,8 @@ namespace ExperimentProcess
         int index = 0;
         //uint coordID;
 
-        public void generateBenchmark(WorkloadConfiguration workloadConfig, int i)
+        public void generateBenchmark(WorkloadConfiguration workloadConfig)
         {
-            //coordID = (uint)i;
             config = workloadConfig;
             if (config.distribution == Utilities.Distribution.ZIPFIAN)
             {

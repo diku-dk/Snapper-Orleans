@@ -13,8 +13,7 @@ namespace MyProcess
 {
     class Program
     {
-        static int workerID = 1;
-        static int global_tid = 200 + workerID;
+        static int global_tid = 0;
 
         static Boolean LocalCluster = false;
         static String sinkAddress = ">tcp://localhost:5558";
@@ -103,7 +102,7 @@ namespace MyProcess
                 {
                     case BenchmarkType.SMALLBANK:
                         benchmarks[i] = new SmallBankBenchmark();
-                        benchmarks[i].generateBenchmark(config, i);
+                        benchmarks[i].generateBenchmark(config);
                         break;
                     default:
                         throw new Exception("Unknown benchmark type");

@@ -39,7 +39,7 @@ namespace MyController
             config.numConnToClusterPerWorkerNode = 1;
             config.numThreadsPerWorkerNode = 1;
             config.numEpochs = 1;
-            config.epochDurationMSecs = 30000;
+            config.epochDurationMSecs = 20000;
             config.benchmark = BenchmarkType.SMALLBANK;
             config.deterministicTxnPercent = 100;
             config.distribution = Distribution.UNIFORM;
