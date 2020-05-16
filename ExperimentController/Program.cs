@@ -98,21 +98,23 @@ namespace ExperimentController
             {                
                 int aggNumCommitted = results[epochNumber,0].numCommitted;
                 int aggNumTransactions = results[epochNumber, 0].numTransactions;
+                int aggNumNonDetTxn = results[epochNumber, 0].numNonDetTxn;
                 long aggStartTime = results[epochNumber,0].startTime;
                 long aggEndTime = results[epochNumber,0].endTime;
                 aggLatencies.AddRange(results[epochNumber, 0].latencies);
                 for (int i = 0; i < 4; i++) AbortType[i] += results[epochNumber, 0].abortType[i];
                 for (int workerNode = 1; workerNode < numWorkerNodes; workerNode++)
                 {
-                    aggNumCommitted += results[epochNumber,workerNode].numCommitted;
-                    aggNumTransactions += results[epochNumber,workerNode].numTransactions;
+                    aggNumCommitted += results[epochNumber, workerNode].numCommitted;
+                    aggNumTransactions += results[epochNumber, workerNode].numTransactions;
+                    aggNumNonDetTxn += results[epochNumber, workerNode].numNonDetTxn;
                     aggStartTime = (results[epochNumber,workerNode].startTime < aggStartTime) ? results[epochNumber,workerNode].startTime : aggStartTime;
                     aggEndTime = (results[epochNumber,workerNode].endTime < aggEndTime) ? results[epochNumber,workerNode].endTime : aggEndTime;
                     aggLatencies.AddRange(results[epochNumber,workerNode].latencies);
                     for (int i = 0; i < 4; i++) AbortType[i] += results[epochNumber, workerNode].abortType[i];
                 }
-                float committedTxnThroughput = (float)aggNumCommitted * 1000 / (float) (aggEndTime - aggStartTime);
-                float abortRate = (float)(aggNumTransactions - aggNumCommitted) * 100 / (float) aggNumTransactions;
+                float committedTxnThroughput = (float)aggNumCommitted * 1000 / (float) (aggEndTime - aggStartTime);  // the throughput only include committed transactions
+                float abortRate = (float)(aggNumTransactions - aggNumCommitted) * 100 / (float) aggNumNonDetTxn;    // the abort rate is based on all non-det txns
                 throughPutAccumulator.Add(committedTxnThroughput);
                 abortRateAccumulator.Add(abortRate);
             }
@@ -216,11 +218,8 @@ namespace ExperimentController
             if(client == null)
             {
                 ClientConfiguration config = new ClientConfiguration();
-                
-                if (LocalCluster)
-                    client = await config.StartClientWithRetries();
-                else
-                    client = await config.StartClientWithRetriesToCluster();
+                if (LocalCluster) client = await config.StartClientWithRetries();
+                else client = await config.StartClientWithRetriesToCluster();
             }
 
             if(workload.grainImplementationType == ImplementationType.SNAPPER) {
@@ -234,6 +233,7 @@ namespace ExperimentController
 
         private static async void LoadGrains()
         {
+            Console.WriteLine($"Load grains, numAccounts = {workload.numAccounts}, numAccountPerGroup = {workload.numAccountsPerGroup}. ");
             var tasks = new List<Task<FunctionResult>>(); 
             var batchSize = -1; //If you want to load the grains in sequence instead of all concurrent
             for(uint i = 0; i < workload.numAccounts / workload.numAccountsPerGroup; i++)
@@ -266,6 +266,7 @@ namespace ExperimentController
                 }
             }
             if(tasks.Count > 0) await Task.WhenAll(tasks);
+            Console.WriteLine("Finish loading grains.");
             loadingDone = true;
         }
 

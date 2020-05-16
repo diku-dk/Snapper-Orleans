@@ -13,10 +13,10 @@ using Orleans;
 namespace Concurrency.Implementation
 {
     public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain where TState : ICloneable, new()
-    {   
-        private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;        
+    {
+        private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
         private Dictionary<int, Guid> coordinatorMap;
-        
+
         protected Guid myPrimaryKey;
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
@@ -25,8 +25,9 @@ namespace Concurrency.Implementation
         private IGlobalTransactionCoordinatorGrain myCoordinator;
         private TransactionScheduler myScheduler;
 
-        public TransactionExecutionGrain(String myUserClassName){
-            
+        public TransactionExecutionGrain(String myUserClassName)
+        {
+
             this.myUserClassName = myUserClassName;
         }
 
@@ -39,7 +40,7 @@ namespace Concurrency.Implementation
             myCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(configTuple.Item2));
             // new HybridState<TState>(ConcurrencyType type)
             this.state = new HybridState<TState>(configTuple.Item1.nonDetCCConfiguration.nonDetConcurrencyManager);
-            if(configTuple.Item1.logConfiguration.isLoggingEnabled)
+            if (configTuple.Item1.logConfiguration.isLoggingEnabled)
             {
                 log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey, configTuple.Item1.logConfiguration.loggingStorageWrapper);
             }
@@ -53,7 +54,7 @@ namespace Concurrency.Implementation
          * On receiving the returned transaction context, start the execution of a transaction.
          * 
          */
-        public async Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation, String startFunction, FunctionInput inputs)
+        public async Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String, int>> grainAccessInformation, String startFunction, FunctionInput inputs)
         {
             TransactionContext context = await myCoordinator.NewTransaction(grainAccessInformation);
             inputs.context = context;
@@ -62,10 +63,11 @@ namespace Concurrency.Implementation
             Task<FunctionResult> t1 = this.Execute(c1);
             Task t2 = myCoordinator.checkBatchCompletion(context.batchID);
             await Task.WhenAll(t1, t2);
+            t1.Result.isDet = true;
             return t1.Result;
             //return new FunctionResult();
         }
-        
+
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
             FunctionResult result = null;
@@ -85,16 +87,16 @@ namespace Concurrency.Implementation
                 FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
                 t1 = this.Execute(c1);
                 await t1;
-                //Console.WriteLine($"Transaction {context.transactionID}: completed executing.\n");
+                //Console.WriteLine($"grain {myPrimaryKey}, Transaction {context.transactionID}: completed executing.\n");
                 result = new FunctionResult(t1.Result.resultObject);
                 canCommit = !t1.Result.hasException();
-                
+
                 //canCommit = canCommit & serializable;
                 if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)
                 {
                     canCommit = this.CheckSerializability(t1.Result).Result;
                     if (canCommit) canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
-                } 
+                }
                 else Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
 
                 if (canCommit)
@@ -105,7 +107,7 @@ namespace Concurrency.Implementation
                         await Commit(context.transactionID);
                     }
                     else await Commit_2PC(context.transactionID, t1.Result);
-                } 
+                }
                 else
                 {
                     await Abort_2PC(context.transactionID, t1.Result);
@@ -117,17 +119,18 @@ namespace Concurrency.Implementation
                 Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: transaction {startFunction} {context.transactionID} exception {e.Message}");
             }
 
-            if(t1.Result.beforeSet.Count != 0)
+            if (t1.Result.beforeSet.Count != 0)
             {
                 //Console.WriteLine($"Non-det txn {context.transactionID} is waiting for batch {t1.Result.maxBeforeBid} to commit.");
                 if (t1.Result.grainWithHighestBeforeBid.Item1 == myPrimaryKey && t1.Result.grainWithHighestBeforeBid.Item2.Equals(this.myUserClassName))
                 {
                     await this.WaitForBatchCommit(t1.Result.maxBeforeBid);
                 }
-                else await this.GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);    
+                else await this.GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);
             }
             //if (context.transactionID == 20000)
-              //  Console.WriteLine($"txn 20000 finished");
+            //  Console.WriteLine($"txn 20000 finished");
+            result.isDet = false;
             return result;
         }
 
@@ -240,10 +243,10 @@ namespace Concurrency.Implementation
                     await myScheduler.waitForTurn(call.funcInput.context.transactionID);
                     invokeRet = await InvokeFunction(call);
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     Console.WriteLine($"\n Exception::InvokeFunction: {e.Message.ToString()}");
-                }                
+                }
 
                 //Update before set and after set
                 int tid = call.funcInput.context.transactionID;
@@ -257,7 +260,7 @@ namespace Concurrency.Implementation
                 var myTurnIndex = await myScheduler.waitForTurn(bid, tid);
 
                 //Execute the function call;
-                var ret = await InvokeFunction(call);  
+                var ret = await InvokeFunction(call);
                 if (myScheduler.ackComplete(bid, tid, myTurnIndex))
                 {
                     //The scheduler has switched batches, need to commit now
@@ -283,7 +286,7 @@ namespace Concurrency.Implementation
 
             if (!invokeRet.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey))
                 invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
-                
+
             var beforeSet = myScheduler.getBeforeSet(tid, out maxBeforeBid);
             var afterSet = myScheduler.getAfterSet(tid, maxBeforeBid, out minAfterBid);
             invokeRet.beforeSet.UnionWith(beforeSet);
@@ -298,9 +301,9 @@ namespace Concurrency.Implementation
         public async Task<FunctionResult> InvokeFunction(FunctionCall call)
         {
             var context = call.funcInput.context;
-            var key = (context.isDeterministic) ? context.batchID : context.transactionID;            
-            if(!coordinatorMap.ContainsKey(key)) coordinatorMap.Add(key, context.coordinatorKey);
-            FunctionInput functionCallInput = call.funcInput;                        
+            var key = (context.isDeterministic) ? context.batchID : context.transactionID;
+            if (!coordinatorMap.ContainsKey(key)) coordinatorMap.Add(key, context.coordinatorKey);
+            FunctionInput functionCallInput = call.funcInput;
             MethodInfo mi = call.type.GetMethod(call.func);
             Task<FunctionResult> t = (Task<FunctionResult>)mi.Invoke(this, new object[] { functionCallInput });
             await t;
@@ -347,7 +350,7 @@ namespace Concurrency.Implementation
             if (state == null) return true;
             var prepareResult = await this.state.Prepare(tid);
             if (prepareResult && log != null)
-            if (log != null) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
+                if (log != null) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
             return prepareResult;
         }
     }

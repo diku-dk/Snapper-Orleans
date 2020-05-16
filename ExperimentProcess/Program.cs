@@ -14,7 +14,6 @@ namespace ExperimentProcess
 {
     class Program
     {
-        static int numWorker;
         static Boolean LocalCluster;
         static IClusterClient[] clients;
         static String sinkAddress = ">tcp://localhost:5558";
@@ -43,16 +42,17 @@ namespace ExperimentProcess
             {
                 int numCommit = 0;
                 int numTransaction = 0;
+                int numNonDetTxn = 0;
                 var latencies = new List<double>();
+                var abortType = new int[4];
+                for (int i = 0; i < 4; i++) abortType[i] = 0;
+                var tasks = new List<Task<FunctionResult>>();
+                var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
+                //var tasks = new List<Task<TransactionContext>>();
+                //var reqs = new Dictionary<Task<TransactionContext>, TimeSpan>();
                 //Wait for all threads to arrive at barrier point
                 barriers[eIndex].SignalAndWait();
                 globalWatch.Restart();
-                var abortType = new int[4];
-                for (int i = 0; i < 4; i++) abortType[i] = 0;
-                //var tasks = new List<Task<FunctionResult>>();
-                //var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
-                var tasks = new List<Task<TransactionContext>>();
-                var reqs = new Dictionary<Task<TransactionContext>, TimeSpan>();
                 var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 do
                 {
@@ -61,7 +61,7 @@ namespace ExperimentProcess
                         //Pipeline remaining tasks
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, global_tid);
-                        global_tid += numWorker;
+                        //global_tid += numWorker;
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);                      
                     } 
@@ -74,11 +74,11 @@ namespace ExperimentProcess
                         //Needed to catch exception of individual task (not caught by Snapper's exception) which would not be thrown by WhenAny
                         await task;
                     } 
-                    catch (Exception)    // this exception is unrelated to Snapper
+                    catch (Exception)    // this exception is only related to OrleansTransaction
                     {
                         noException = false;
                     }
-                    /*
+                    if (!task.Result.isDet) numNonDetTxn++;
                     if (noException)
                     {
                         if (!task.Result.hasException())
@@ -107,7 +107,7 @@ namespace ExperimentProcess
                                     throw new Exception("Exception: Unexpected abort type.");
                             }
                         }
-                    }*/
+                    }
                     tasks.Remove(task);
                     reqs.Remove(task);
                 } 
@@ -127,7 +127,7 @@ namespace ExperimentProcess
                         Console.WriteLine($"Exception: {e.Message}. ");
                     }
                 }
-                WorkloadResults res = new WorkloadResults(numTransaction, numCommit, startTime, endTime, latencies, abortType);
+                WorkloadResults res = new WorkloadResults(numTransaction, numCommit, numNonDetTxn, startTime, endTime, latencies, abortType);
                 results[threadIndex] = res;
                 //Signal the completion of epoch
                 threadAcks[eIndex].Signal();
@@ -204,7 +204,6 @@ namespace ExperimentProcess
                 controller.Unsubscribe("WORKLOAD_INIT");
                 controller.Subscribe("RUN_EPOCH");
                 config = Helper.deserializeFromByteArray<WorkloadConfiguration>(msg.contents);
-                numWorker = config.numWorkerNodes;
                 Console.WriteLine("Received workload message from controller");
 
                 //Initialize threads and other data-structures for epoch runs
@@ -246,6 +245,7 @@ namespace ExperimentProcess
             Trace.Assert(results.Length >= 1);
             int aggNumCommitted = results[0].numCommitted;
             int aggNumTransactions = results[0].numTransactions;
+            int aggNumNonDetTxn = results[0].numNonDetTxn;
             long aggStartTime = results[0].startTime;
             long aggEndTime = results[0].endTime;
             var aggLatencies = new List<double>();
@@ -256,12 +256,13 @@ namespace ExperimentProcess
             {
                 aggNumCommitted += results[i].numCommitted;
                 aggNumTransactions += results[i].numTransactions;
+                aggNumNonDetTxn += results[i].numNonDetTxn;
                 aggStartTime = (results[i].startTime < aggStartTime) ? results[i].startTime : aggStartTime;
                 aggEndTime = (results[i].endTime < aggEndTime) ? results[i].endTime : aggEndTime;     // ????
                 aggLatencies.AddRange(results[i].latencies);
                 for (int j = 0; j < 4; j++) aggAbortType[j] += results[i].abortType[j];
             }
-            return new WorkloadResults(aggNumTransactions, aggNumCommitted, aggStartTime, aggEndTime, aggLatencies, aggAbortType);
+            return new WorkloadResults(aggNumTransactions, aggNumCommitted, aggNumNonDetTxn, aggStartTime, aggEndTime, aggLatencies, aggAbortType);
         }
 
         private static void InitializeValuesFromConfigFile()

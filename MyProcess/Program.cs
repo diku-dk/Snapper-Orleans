@@ -156,8 +156,8 @@ namespace MyProcess
             for (int eIndex = 0; eIndex < config.numEpochs; eIndex++)
             {
                 barriers[eIndex].SignalAndWait();
-                var t = new List<Task<TransactionContext>>();
-                //var t = new List<Task<FunctionResult>>();
+                //var t = new List<Task<TransactionContext>>();
+                var t = new List<Task<FunctionResult>>();
                 globalWatch.Restart();
                 var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 do
@@ -181,8 +181,8 @@ namespace MyProcess
                 {
                     for (int i = 0; i < t.Count; i++)
                     {
-                        //if (t[i].Result.exception == false) commit++;
-                        if (t[i].Result.transactionID == -1) commit++;
+                        if (t[i].Result.exception == false) commit++;
+                        //if (t[i].Result.transactionID == -1) commit++;
                     }
                 }
                 catch (Exception e)

@@ -16,8 +16,8 @@ namespace MyController
 {
     class Program
     {
-        static int numWorker = 1;
-        static int numCoord = 1;
+        static int numWorker = 4;
+        static int numCoord = 4;
         static Boolean LocalCluster = false;
         static IClusterClient client;
         static WorkloadConfiguration config;
@@ -54,7 +54,7 @@ namespace MyController
             config.numAccountsMultiTransfer = 32;
             config.numAccountsPerGroup = 1;
             config.numGrainsMultiTransfer = 4;
-            config.grainImplementationType = ImplementationType.ORLEANSEVENTUAL;
+            config.grainImplementationType = ImplementationType.SNAPPER;
 
             // initialize clients
             ClientConfiguration clientConfig = new ClientConfiguration();
@@ -74,7 +74,7 @@ namespace MyController
             var configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
             await configGrain.UpdateNewConfiguration(exeConfig);
             await configGrain.UpdateNewConfiguration(coordConfig);
-            /*
+            
             // load grains
             Console.WriteLine($"Loading grains...");
             var tasks = new List<Task<FunctionResult>>();
@@ -83,12 +83,12 @@ namespace MyController
                 var args = new Tuple<uint, uint>(config.numAccountsPerGroup, i);
                 var input = new FunctionInput(args);
                 var groupGUID = Helper.convertUInt32ToGuid(i);
-                //var grain = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
-                var grain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(groupGUID);
+                var grain = client.GetGrain<ICustomerAccountGroupGrain>(groupGUID);
+                //var grain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(groupGUID);
                 tasks.Add(grain.StartTransaction("InitBankAccounts", input));
             }
             await Task.WhenAll(tasks);
-            Console.WriteLine($"Finish loading grains...");*/
+            Console.WriteLine($"Finish loading grains...");
 
             //Start the controller thread
             Thread conducterThread = new Thread(PushToWorkers);

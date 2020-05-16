@@ -19,9 +19,8 @@ namespace ExperimentProcess
         IDiscreteDistribution grainDistribution;
         IDiscreteDistribution transferAmountDistribution;
 
-        int numCoord = 1;
+        int numCoord = 2;
         int index = 0;
-        //uint coordID;
 
         public void generateBenchmark(WorkloadConfiguration workloadConfig)
         {
@@ -75,11 +74,9 @@ namespace ExperimentProcess
             else return false;
         }
 
-        public Task<TransactionContext> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
-        //public Task<FunctionResult> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
+        //public Task<TransactionContext> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
+        public Task<FunctionResult> Execute(IClusterClient client, uint grainId, String functionName, FunctionInput input, Dictionary<Guid, Tuple<String, int>> grainAccessInfo)
         {
-            /*
-            //return Task.FromResult<FunctionResult>(new FunctionResult());
             switch(config.grainImplementationType)
             {
                 case ImplementationType.SNAPPER:
@@ -94,12 +91,12 @@ namespace ExperimentProcess
                     return txnGrain.StartTransaction(functionName, input);
                 default:
                     return null;
-            }*/
-            
+            }
+            /*
             var grain = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid((uint)(index % numCoord)));
             index++;
             //var grain = client.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(coordID));
-            return grain.NewTransaction(grainAccessInfo);
+            return grain.NewTransaction(grainAccessInfo);*/
         }
 
         private uint getAccountForGrain(uint grainId)
@@ -107,7 +104,7 @@ namespace ExperimentProcess
             return grainId * config.numAccountsPerGroup + (uint)accountIdDistribution.Sample();
         }
 
-        public Task<TransactionContext> newTransaction(IClusterClient client, int global_tid)   // Yijian add gloal_tid
+        public Task<FunctionResult> newTransaction(IClusterClient client, int global_tid)   // Yijian add gloal_tid
         {
             TxnType type = nextTransactionType();
             FunctionInput input = null ;
@@ -185,7 +182,7 @@ namespace ExperimentProcess
                 var args = new Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32>>>(item1, item2, item3);
                 input = new FunctionInput(args);
             }
-            input.context = new TransactionContext(global_tid);   // added by Yijian
+            //input.context = new TransactionContext(global_tid);   // added by Yijian
             var task = Execute(client, groupId, type.ToString(), input, grainAccessInfo);
             return task;
         }

@@ -106,7 +106,7 @@ namespace Concurrency.Implementation
 
             TransactionContext context = new TransactionContext(grainAccessInformation);
             deterministicTransactionRequests[myEmitSeq].Add(context);
-            
+
             TaskCompletionSource<bool> emitting;
             if (!detEmitPromiseMap.ContainsKey(myEmitSeq))
             {
@@ -118,23 +118,14 @@ namespace Concurrency.Implementation
                 await emitting.Task;
             }
             context.highestBatchIdCommitted = this.highestCommittedBatchID;
-            context.transactionID = -1;    // changed by Yijian
+            //context.transactionID = -1;    // changed by Yijian
             return context;
         }
-
-        /*
-        public async Task<TransactionContext> NewTransaction()
-        {
-            var context = new TransactionContext(global_tid);
-            global_tid++;
-            return context;
-        }*/
-
 
         /**
          *Client calls this function to submit non-deterministic transaction
          */
-        
+
         public async Task<TransactionContext> NewTransaction()
         {
             //Console.WriteLine($"Coordinator {myId}: received non-det transaction");
@@ -172,8 +163,9 @@ namespace Concurrency.Implementation
                     nonDetEmitID.Remove(myEmitSeq);
                 }
                 //Console.WriteLine($"Coordinator {myId}: emitted non-det transaction {tid}");
-                
-            } catch (Exception e)
+
+            }
+            catch (Exception e)
             {
                 //Console.WriteLine($"Exception :: Coordinator {myId}: receives new non deterministic transaction {e.Message}");
             }
@@ -184,14 +176,14 @@ namespace Concurrency.Implementation
 
         public async Task CheckBackoff(BatchToken token)
         {
-            if(detEmitPromiseMap.Count == 0 && nonDetEmitPromiseMap.Count == 0)
+            if (detEmitPromiseMap.Count == 0 && nonDetEmitPromiseMap.Count == 0)
             {
                 //Console.WriteLine($"Coordinator {myId}: backs off,  NO request.");
                 //The coordinator has no transaction request
                 if (token.backoff)
                 {
                     //Block
-                    await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / (coordinatorList.Count+1)));
+                    await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / (coordinatorList.Count + 1)));
                 }
                 else if (!token.idleToken)
                 {
@@ -199,24 +191,25 @@ namespace Concurrency.Implementation
                     token.markedIdleByCoordinator = myPrimaryKey;
                     var curTime = DateTime.Now;
                     token.backOffProbeStartTime = curTime.Hour * 3600 + curTime.Minute * 60 + curTime.Second;
-                } 
-                else if(token.markedIdleByCoordinator == myPrimaryKey)                
+                }
+                else if (token.markedIdleByCoordinator == myPrimaryKey)
                 {
                     var curTime = DateTime.Now;
-                    var curTimeInSecs = curTime.Hour * 3600 + curTime.Minute * 60 + curTime.Second;                    
-                    if(curTimeInSecs - token.backOffProbeStartTime > this.idleIntervalTillBackOffSecs)
+                    var curTimeInSecs = curTime.Hour * 3600 + curTime.Minute * 60 + curTime.Second;
+                    if (curTimeInSecs - token.backOffProbeStartTime > this.idleIntervalTillBackOffSecs)
                     {
                         //Token traverses full round being idle, enable backoff
                         token.backoff = true;
-                        await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / (coordinatorList.Count+1)));
-                    }                        
+                        await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / (coordinatorList.Count + 1)));
+                    }
                 }
-            } else
+            }
+            else
             {
                 //Console.WriteLine($"Coordinator {myId}: stops backing off.");
                 //The coordinator has  transaction requests
                 if (token.backoff) token.backoff = false;
-                else if(token.idleToken) token.idleToken = false;
+                else if (token.idleToken) token.idleToken = false;
             }
         }
 
@@ -241,13 +234,13 @@ namespace Concurrency.Implementation
          */
         async Task EmitTransaction(Object obj)
         {
-            
+            /*
             numTransactionIdsReserved = 0;
             await EmitDeterministicTransactions();
             //EmitNonDeterministicTransactions();
             tidToAllocate = token.lastTransactionID + 1;
-            token.lastTransactionID += numTransactionIdsPreAllocated;
-            /*
+            token.lastTransactionID += numTransactionIdsPreAllocated;*/
+
             BatchToken token;
             //The timer expires
             if (obj == null)
@@ -257,7 +250,7 @@ namespace Concurrency.Implementation
             }
 
             //The token arrives, but the timer is not expired yet
-            if(! this.isEmitTimerOn)
+            if (!this.isEmitTimerOn)
             {
                 //Emit non-det transactions and release token
                 token = (BatchToken)obj;
@@ -268,18 +261,18 @@ namespace Concurrency.Implementation
             token = (BatchToken)obj;
             await EmitDeterministicTransactions(token);
             EmitNonDeterministicTransactions(token);
-            this.isEmitTimerOn = false;*/
+            this.isEmitTimerOn = false;
         }
 
-        //private void EmitNonDeterministicTransactions(BatchToken token)
-        private void EmitNonDeterministicTransactions()
+        private void EmitNonDeterministicTransactions(BatchToken token)
+        //private void EmitNonDeterministicTransactions()
         {
             int myEmitSequence = this.nonDetEmitSeq;
             if (nonDeterministicEmitSize.ContainsKey(myEmitSequence))
             {
                 //curTransactionID = token.lastTransactionID + 1;
                 //Estimate a pre-allocation size based on moving average
-                var waitingTxns = nonDeterministicEmitSize[myEmitSequence];                
+                var waitingTxns = nonDeterministicEmitSize[myEmitSequence];
                 numTransactionIdsPreAllocated = (int)(smoothingPreAllocationFactor * (float)waitingTxns + (1 - smoothingPreAllocationFactor) * (float)numTransactionIdsPreAllocated);
                 numTransactionIdsReserved = numTransactionIdsPreAllocated;
                 //Console.WriteLine($"Coordinator id {myId} waitingtxns {waitingTxns}, preallocatedTransactions {numTransactionIdsPreAllocated}");
@@ -289,18 +282,19 @@ namespace Concurrency.Implementation
                 this.nonDetEmitSeq++;
                 nonDetEmitPromiseMap[myEmitSequence].SetResult(true);
                 nonDetEmitPromiseMap.Remove(myEmitSequence);
-            } 
+            }
             else
             {
                 numTransactionIdsPreAllocated = 0;
                 numTransactionIdsReserved = 0;
             }
         }
+
         /**
          *This functions is called to emit batch of deterministic transactions
          */
-        //async Task EmitDeterministicTransactions(BatchToken token)
-        async Task EmitDeterministicTransactions()
+        async Task EmitDeterministicTransactions(BatchToken token)
+        //async Task EmitDeterministicTransactions()
         {
             int myEmitSequence = this.detEmitSeq;
             List<TransactionContext> transactionList;
@@ -377,7 +371,7 @@ namespace Concurrency.Implementation
                 DeterministicBatchSchedule schedule = item.Value;
                 schedule.globalCoordinator = this.myPrimaryKey;
                 schedule.highestCommittedBatchId = this.highestCommittedBatchID;
-                //Task emit = dest.ReceiveBatchSchedule(schedule);
+                Task emit = dest.ReceiveBatchSchedule(schedule);
             }
             batchGrainClassName.Remove(curBatchID);
             this.detEmitPromiseMap[myEmitSequence].SetResult(true);
@@ -452,7 +446,7 @@ namespace Concurrency.Implementation
             if (bid > this.highestCommittedBatchID)
                 this.highestCommittedBatchID = bid;
             Boolean commitOccur = false;
-            
+
             while (this.batchesWaitingForCommit.Count != 0 && lastBatchIDMap[batchesWaitingForCommit.Min] == highestCommittedBatchID)
             {
                 //commit
@@ -462,7 +456,7 @@ namespace Concurrency.Implementation
                 batchesWaitingForCommit.Remove(commitBid);
                 commitOccur = true;
             }
-            
+
             if (commitOccur == true)
             {
                 if (log != null)
@@ -484,19 +478,20 @@ namespace Concurrency.Implementation
                 //No updated configuration for now so just ignore repeated spawn calls
                 Console.WriteLine($"Coordinator {myId} receives spawn request but has already been spawned");
                 return;
-            } else
+            }
+            else
                 this.spawned = true;
-            
-            waitingTime = TimeSpan.FromMilliseconds(1);            
+
+            waitingTime = TimeSpan.FromMilliseconds(1);
             this.batchIntervalMSecs = batchIntervalMSecs;
-            if(idleIntervalTillBackOffSecs > 3600 )
+            if (idleIntervalTillBackOffSecs > 3600)
             {
                 throw new Exception("Too high value for back off probing -> cannot exceed an 1 hour");
             }
             this.idleIntervalTillBackOffSecs = idleIntervalTillBackOffSecs;
-            batchInterval = TimeSpan.FromMilliseconds(batchIntervalMSecs);            
+            batchInterval = TimeSpan.FromMilliseconds(batchIntervalMSecs);
             this.backoffTimeIntervalMSecs = backoffIntervalMSecs;
-            
+
 
             uint neighbourId = (myId + 1) % numofCoordinators;
             neighbour = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(neighbourId));
@@ -505,7 +500,7 @@ namespace Concurrency.Implementation
             {
                 if (i != myId)
                     coordinatorList.Add(this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(i)));
-            }            
+            }
             this.myId = myId;
             this.neighbourId = neighbourId;
             disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);

@@ -43,6 +43,7 @@ namespace Utilities
         public Boolean readOnly = false;
         public Tuple<Guid, String> grainWithHighestBeforeBid;
         public MyExceptionType exp;
+        public Boolean isDet;
 
         public FunctionResult(Object resultObject=null)
         {
