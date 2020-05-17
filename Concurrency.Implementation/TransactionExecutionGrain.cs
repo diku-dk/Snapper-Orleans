@@ -96,6 +96,7 @@ namespace Concurrency.Implementation
                 {
                     canCommit = this.CheckSerializability(t1.Result).Result;
                     if (canCommit) canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
+                    else result.setException(MyExceptionType.NotSerializable);
                 }
                 else Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
 
@@ -108,11 +109,7 @@ namespace Concurrency.Implementation
                     }
                     else await Commit_2PC(context.transactionID, t1.Result);
                 }
-                else
-                {
-                    await Abort_2PC(context.transactionID, t1.Result);
-                    result.setException(MyExceptionType.TwoPhaseCommit);
-                }
+                else await Abort_2PC(context.transactionID, t1.Result);
             }
             catch (Exception e)
             {

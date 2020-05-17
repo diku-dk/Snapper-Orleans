@@ -78,7 +78,7 @@ namespace MyProcess
                     barriers[i].SignalAndWait();
                     //Wait for all threads to finish the epoch
                     threadAcks[i].Wait();
-                    var result = new WorkloadResults(1,1,1,1,new List<double>(), null);
+                    var result = new WorkloadResults(1,1,1,1,1,new List<double>(), null);
                     msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH_ACK);
                     msg.contents = Helper.serializeToByteArray<WorkloadResults>(result);
                     sink.SendFrame(Helper.serializeToByteArray<NetworkMessageWrapper>(msg));

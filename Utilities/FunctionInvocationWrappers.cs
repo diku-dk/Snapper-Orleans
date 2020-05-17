@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Utilities
 {
-    public enum MyExceptionType {RWConflict, TwoPhaseCommit, AppLogic, UnExpect};
+    public enum MyExceptionType {NoExp, RWConflict, NotSerializable, AppLogic, UnExpect};
 
     [Serializable]
     public class FunctionInput
@@ -43,7 +43,7 @@ namespace Utilities
         public Boolean readOnly = false;
         public Tuple<Guid, String> grainWithHighestBeforeBid;
         public MyExceptionType exp;
-        public Boolean isDet;
+        public Boolean isDet = true;
 
         public FunctionResult(Object resultObject=null)
         {
@@ -53,10 +53,12 @@ namespace Utilities
             this.afterSet = new HashSet<int>();
             this.maxBeforeBid = int.MinValue;
             this.minAfterBid = int.MaxValue;
+            this.exp = MyExceptionType.NoExp;
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
         {
+            if (this.exp == MyExceptionType.NoExp) this.exp = r.exp;
             this.exception |= r.exception;
             foreach (var entry in r.grainsInNestedFunctions)
                 if (this.grainsInNestedFunctions.ContainsKey(entry.Key) == false)
