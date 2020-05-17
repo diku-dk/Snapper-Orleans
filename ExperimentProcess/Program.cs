@@ -101,7 +101,7 @@ namespace ExperimentProcess
                 while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs);                
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
-                Console.WriteLine($"Finish epoch {eIndex}, total_num_txn = {numTransaction}, non-det = {numNonDetTxn}, commit = {numCommit}, total_time = {endTime - startTime}, tp = {1000 * numTransaction / (endTime - startTime)}. ");
+                Console.WriteLine($"Finish epoch {eIndex}, total_num_txn = {numTransaction}, non-det = {numNonDetTxn}, commit = {numCommit}, total_time = {endTime - startTime}, tp = {1000 * numCommit / (endTime - startTime)}. ");
                 //Wait for the tasks exceeding epoch time but do not count them
                 if (tasks.Count != 0)
                 {

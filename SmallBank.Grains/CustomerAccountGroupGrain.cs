@@ -186,7 +186,7 @@ namespace SmallBank.Grains
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Exception: Read Wrute Conflict, {e.Message}. ");
+                //Console.WriteLine($"Exception: Read Write Conflict, {e.Message}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -326,7 +326,7 @@ namespace SmallBank.Grains
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Exception: Read Write Conflict, {e.Message}. ");
+                //Console.WriteLine($"Exception: Read Write Conflict, {e.Message}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }

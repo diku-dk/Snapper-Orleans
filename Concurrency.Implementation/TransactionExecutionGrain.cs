@@ -90,10 +90,10 @@ namespace Concurrency.Implementation
                 //Console.WriteLine($"grain {myPrimaryKey}, Transaction {context.transactionID}: completed executing.\n");
                 result = new FunctionResult(t1.Result.resultObject);
 
-                result.Exp_AppLogic = t1.Result.Exp_AppLogic;
-                result.Exp_NotSerializable = t1.Result.Exp_NotSerializable;
-                result.Exp_RWConflict = t1.Result.Exp_RWConflict;
-                result.Exp_UnExpect = t1.Result.Exp_UnExpect;
+                result.Exp_AppLogic |= t1.Result.Exp_AppLogic;
+                result.Exp_NotSerializable |= t1.Result.Exp_NotSerializable;
+                result.Exp_RWConflict |= t1.Result.Exp_RWConflict;
+                result.Exp_UnExpect |= t1.Result.Exp_UnExpect;
 
                 canCommit = !t1.Result.hasException();
                 if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)   //canCommit = canCommit & serializable;
@@ -122,7 +122,7 @@ namespace Concurrency.Implementation
                 {
                     await Abort_2PC(context.transactionID, t1.Result);   // this will only happen if 2PC fails
                     result.setException();
-                    Console.WriteLine("2PC failed");
+                    //Console.WriteLine("2PC failed");
                 }
             }
             catch (Exception e)
