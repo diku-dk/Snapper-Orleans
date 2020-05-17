@@ -91,8 +91,10 @@ namespace ExperimentController
             var aggLatencies = new List<double>();
             var throughPutAccumulator = new List<float>();
             var abortRateAccumulator = new List<float>();
-            var AbortType = new int[4];
-            for (int i = 0; i < 4; i++) AbortType[i] = 0;
+            var AbortType_0 = new List<int>();
+            var AbortType_1 = new List<int>();
+            var AbortType_2 = new List<int>();
+            var AbortType_3 = new List<int>();
             //Skip the epochs upto warm up epochs
             for (int epochNumber = numWarmupEpoch; epochNumber < workload.numEpochs; epochNumber++)
             {                
@@ -102,7 +104,8 @@ namespace ExperimentController
                 long aggStartTime = results[epochNumber,0].startTime;
                 long aggEndTime = results[epochNumber,0].endTime;
                 aggLatencies.AddRange(results[epochNumber, 0].latencies);
-                for (int i = 0; i < 4; i++) AbortType[i] += results[epochNumber, 0].abortType[i];
+                var aggAbortType = new int[4];
+                for (int i = 0; i < 4; i++) aggAbortType[i] = results[epochNumber, 0].abortType[i];
                 for (int workerNode = 1; workerNode < numWorkerNodes; workerNode++)
                 {
                     aggNumCommitted += results[epochNumber, workerNode].numCommitted;
@@ -111,21 +114,29 @@ namespace ExperimentController
                     aggStartTime = (results[epochNumber,workerNode].startTime < aggStartTime) ? results[epochNumber,workerNode].startTime : aggStartTime;
                     aggEndTime = (results[epochNumber,workerNode].endTime < aggEndTime) ? results[epochNumber,workerNode].endTime : aggEndTime;
                     aggLatencies.AddRange(results[epochNumber,workerNode].latencies);
-                    for (int i = 0; i < 4; i++) AbortType[i] += results[epochNumber, workerNode].abortType[i];
+                    for (int i = 0; i < 4; i++) aggAbortType[i] += results[epochNumber, workerNode].abortType[i];
                 }
                 float committedTxnThroughput = (float)aggNumCommitted * 1000 / (float) (aggEndTime - aggStartTime);  // the throughput only include committed transactions
-                float abortRate = (float)(aggNumTransactions - aggNumCommitted) * 100 / (float) aggNumNonDetTxn;    // the abort rate is based on all non-det txns
+                float abortRate = 0;
+                if (aggNumNonDetTxn > 0) abortRate = (float)(aggNumTransactions - aggNumCommitted) * 100 / (float) aggNumNonDetTxn;    // the abort rate is based on all non-det txns
+                AbortType_0.Add(aggAbortType[0] / (aggNumTransactions - aggNumCommitted));
+                AbortType_1.Add(aggAbortType[1] / (aggNumTransactions - aggNumCommitted));
+                AbortType_2.Add(aggAbortType[2] / (aggNumTransactions - aggNumCommitted));
+                AbortType_3.Add(aggAbortType[3] / (aggNumTransactions - aggNumCommitted));
                 throughPutAccumulator.Add(committedTxnThroughput);
                 abortRateAccumulator.Add(abortRate);
             }
             //Compute statistics on the accumulators, maybe a better way is to maintain a sorted list
             var throughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(throughPutAccumulator.ToArray());
             var abortRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(abortRateAccumulator.ToArray());
-            for (int i = 0; i < 4; i++) AbortType[i] /= (workload.numEpochs - numWarmupEpoch) * numWorkerNodes;
+            var Abort_0 = ArrayStatistics.Mean(AbortType_0.ToArray());
+            var Abort_1 = ArrayStatistics.Mean(AbortType_1.ToArray());
+            var Abort_2 = ArrayStatistics.Mean(AbortType_2.ToArray());
+            var Abort_3 = ArrayStatistics.Mean(AbortType_3.ToArray());
             Console.WriteLine($"Results across {workload.numEpochs} with first {numWarmupEpoch} epochs being for warmup follows");
             Console.WriteLine($"Mean Throughput per second = { throughputMeanAndSd.Item1}, standard deviation = { throughputMeanAndSd.Item2}");
             Console.WriteLine($"Mean Abort rate (%) = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
-            Console.WriteLine($"Abort Type: RWConflict = {AbortType[0]}, NotSerializable = {AbortType[1]}, Applogic = {AbortType[2]}, UnExpect = {AbortType[3]}");
+            Console.WriteLine($"Abort Type: RWConflict = {Abort_0}, NotSerializable = {Abort_1}, Applogic = {Abort_2}, UnExpect = {Abort_3}");
             //Compute quantiles
             //var aggLatenciesArray = Array.ConvertAll(aggLatencies.ToArray(), e => Convert.ToDouble(e));
             //var aggLatenciesArray = aggLatencies.ToArray();
