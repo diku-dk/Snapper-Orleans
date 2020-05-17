@@ -64,12 +64,8 @@ namespace Concurrency.Implementation
         private uint myId, neighbourId;
         private Boolean spawned = false;
 
-        //disable token
-        BatchToken token;
-
         public override Task OnActivateAsync()
         {
-            token = new BatchToken(-1, -1);
             batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
             batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
             lastBatchIDMap = new Dictionary<int, int>();
@@ -113,10 +109,7 @@ namespace Concurrency.Implementation
                 detEmitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
             }
             emitting = detEmitPromiseMap[myEmitSeq];
-            if (emitting.Task.IsCompleted != true)
-            {
-                await emitting.Task;
-            }
+            if (emitting.Task.IsCompleted != true) await emitting.Task;
             context.highestBatchIdCommitted = this.highestCommittedBatchID;
             //context.transactionID = -1;    // changed by Yijian
             return context;
@@ -172,7 +165,6 @@ namespace Concurrency.Implementation
             context.highestBatchIdCommitted = this.highestCommittedBatchID;
             return context;
         }
-
 
         public async Task CheckBackoff(BatchToken token)
         {

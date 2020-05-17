@@ -96,7 +96,7 @@ namespace Concurrency.Implementation
                 {
                     canCommit = this.CheckSerializability(t1.Result).Result;
                     if (canCommit) canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
-                    else result.setException(MyExceptionType.NotSerializable);
+                    else result.Exp_NotSerializable = true;
                 }
                 else Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
 

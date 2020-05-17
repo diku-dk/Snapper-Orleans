@@ -6,8 +6,6 @@ using System.Threading.Tasks;
 
 namespace Utilities
 {
-    public enum MyExceptionType {NoExp, RWConflict, NotSerializable, AppLogic, UnExpect};
-
     [Serializable]
     public class FunctionInput
     {
@@ -42,8 +40,11 @@ namespace Utilities
         public Boolean isBeforeAfterConsecutive = false;
         public Boolean readOnly = false;
         public Tuple<Guid, String> grainWithHighestBeforeBid;
-        public MyExceptionType exp;
         public Boolean isDet = true;
+        public Boolean Exp_RWConflict = false;
+        public Boolean Exp_NotSerializable = false;
+        public Boolean Exp_AppLogic = false;
+        public Boolean Exp_UnExpect = false;
 
         public FunctionResult(Object resultObject=null)
         {
@@ -53,12 +54,15 @@ namespace Utilities
             this.afterSet = new HashSet<int>();
             this.maxBeforeBid = int.MinValue;
             this.minAfterBid = int.MaxValue;
-            this.exp = MyExceptionType.NoExp;
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
         {
-            if (this.exp == MyExceptionType.NoExp) this.exp = r.exp;
+            this.Exp_AppLogic |= r.Exp_AppLogic;
+            this.Exp_NotSerializable |= r.Exp_NotSerializable;
+            this.Exp_RWConflict |= r.Exp_RWConflict;
+            this.Exp_UnExpect |= r.Exp_UnExpect;
+
             this.exception |= r.exception;
             foreach (var entry in r.grainsInNestedFunctions)
                 if (this.grainsInNestedFunctions.ContainsKey(entry.Key) == false)
@@ -103,15 +107,9 @@ namespace Utilities
             resultObject = result;
         }
 
-        public void setException(MyExceptionType e)
+        public void setException()
         {
             exception = true;
-            exp = e;
-        }
-
-        public MyExceptionType getExceptionType()
-        {
-            return exp;
         }
 
         public Boolean hasException()
@@ -124,7 +122,6 @@ namespace Utilities
             beforeSet.UnionWith(bSet);
             afterSet.UnionWith(aSet);
         }
-        
     }
 
     [Serializable]

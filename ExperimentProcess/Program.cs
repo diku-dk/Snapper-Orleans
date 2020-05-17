@@ -89,23 +89,10 @@ namespace ExperimentProcess
                         }
                         else
                         {
-                            switch (task.Result.getExceptionType())
-                            {
-                                case MyExceptionType.RWConflict:
-                                    abortType[0]++;
-                                    break;
-                                case MyExceptionType.NotSerializable:
-                                    abortType[1]++;
-                                    break;
-                                case MyExceptionType.AppLogic:
-                                    abortType[2]++;
-                                    break;
-                                case MyExceptionType.UnExpect:
-                                    abortType[3]++;
-                                    break;
-                                default:
-                                    throw new Exception("Exception: Unexpected abort type.");
-                            }
+                            abortType[0] += task.Result.Exp_RWConflict ? 1 : 0;
+                            abortType[1] += task.Result.Exp_NotSerializable ? 1 : 0;
+                            abortType[2] += task.Result.Exp_AppLogic ? 1 : 0;
+                            abortType[3] += task.Result.Exp_UnExpect ? 1 : 0;
                         }
                     }
                     tasks.Remove(task);

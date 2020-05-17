@@ -55,7 +55,8 @@ namespace AccountTransfer.Grains
             catch(Exception)
             {
                 //Console.WriteLine($"\n {e.Message}");
-                ret.setException(MyExceptionType.RWConflict);
+                ret.Exp_RWConflict = true;
+                ret.setException();
             }
             
             return ret;
@@ -76,7 +77,8 @@ namespace AccountTransfer.Grains
             catch (Exception)
             {
                 //Console.WriteLine($"\n {e.Message}");
-                ret.setException(MyExceptionType.RWConflict);
+                ret.Exp_RWConflict = true;
+                ret.setException();
             }
             return ret;
         }
@@ -93,7 +95,8 @@ namespace AccountTransfer.Grains
             }
             catch (Exception e)
             {
-                ret.setException(MyExceptionType.RWConflict);
+                ret.Exp_RWConflict = true;
+                ret.setException();
             }
             ret.setResult(v);
             return ret;

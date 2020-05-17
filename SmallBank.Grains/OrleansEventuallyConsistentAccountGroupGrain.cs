@@ -42,20 +42,23 @@ namespace SmallBank.Grains
                     var id = myState.account[custName];
                     if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
                     {
-                        ret.setException(MyExceptionType.AppLogic);
+                        ret.Exp_AppLogic = true;
+                        ret.setException();
                         return ret;
                     }
                     ret.setResult(myState.savingAccount[id] + myState.checkingAccount[id]);
                 }
                 else
                 {
-                    ret.setException(MyExceptionType.AppLogic);
+                    ret.Exp_AppLogic = true;
+                    ret.setException();
                     return ret;
                 }
             }
             catch (Exception)
             {
-                ret.setException(MyExceptionType.UnExpect);
+                ret.Exp_UnExpect = true; 
+                ret.setException();
             }
             return ret;
         }
@@ -76,14 +79,16 @@ namespace SmallBank.Grains
                 }
                 if (!myState.checkingAccount.ContainsKey(id))
                 {
-                    ret.setException(MyExceptionType.AppLogic);
+                    ret.Exp_AppLogic = true;
+                    ret.setException();
                     return ret;
                 }
                 myState.checkingAccount[id] += inputTuple.Item2; //Can also be negative for checking account                
             }
             catch (Exception)
             {
-                ret.setException(MyExceptionType.UnExpect);
+                ret.Exp_UnExpect = true; 
+                ret.setException();
             }
             return ret;
         }
@@ -101,25 +106,29 @@ namespace SmallBank.Grains
                     var id = myState.account[inputTuple.Item1];
                     if (!myState.savingAccount.ContainsKey(id))
                     {
-                        ret.setException(MyExceptionType.AppLogic);
+                        ret.Exp_AppLogic = true;
+                        ret.setException();
                         return ret;
                     }
                     if (myState.savingAccount[id] < inputTuple.Item2)
                     {
-                        ret.setException(MyExceptionType.AppLogic);
+                        ret.Exp_AppLogic = true;
+                        ret.setException();
                         return ret;
                     }
                     myState.savingAccount[id] -= inputTuple.Item2;
                 }
                 else
                 {
-                    ret.setException(MyExceptionType.AppLogic);
+                    ret.Exp_AppLogic = true;
+                    ret.setException();
                     return ret;
                 }
             }
             catch (Exception)
             {
-                ret.setException(MyExceptionType.UnExpect);
+                ret.Exp_UnExpect = true; 
+                ret.setException();
             }
             return ret;
         }
@@ -141,7 +150,8 @@ namespace SmallBank.Grains
                 }
                 if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item3)
                 {
-                    ret.setException(MyExceptionType.AppLogic);
+                    ret.Exp_AppLogic = true;
+                    ret.setException();
                     return ret;
                 }
                 var gID = this.MapCustomerIdToGroup(inputTuple.Item2.Item2);
@@ -158,17 +168,14 @@ namespace SmallBank.Grains
                     task = destination.StartTransaction("DepositChecking", funcInput);
                 }
                 await task;
-                if (task.Result.hasException() == true)
-                {
-                    ret.setException(task.Result.getExceptionType());
-                    return ret;
-                }
                 ret.mergeWithFunctionResult(task.Result);
+                if (task.Result.hasException() == true) return ret;
                 myState.checkingAccount[id] -= inputTuple.Item3;
             }
             catch (Exception)
             {
-                ret.setException(MyExceptionType.UnExpect);
+                ret.Exp_UnExpect = true; 
+                ret.setException();
             }
             return ret;
         }
@@ -186,27 +193,27 @@ namespace SmallBank.Grains
                     var id = myState.account[inputTuple.Item1];
                     if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
                     {
-                        ret.setException(MyExceptionType.AppLogic);
+                        ret.Exp_AppLogic = true;
+                        ret.setException();
                         return ret;
                     }
                     if (myState.savingAccount[id] + myState.checkingAccount[id] < inputTuple.Item2)
                     {
                         myState.checkingAccount[id] -= (inputTuple.Item2 + 1); //Pay a penalty                        
                     }
-                    else
-                    {
-                        myState.checkingAccount[id] -= inputTuple.Item2;
-                    }
+                    else myState.checkingAccount[id] -= inputTuple.Item2;
                 }
                 else
                 {
-                    ret.setException(MyExceptionType.AppLogic);
+                    ret.Exp_AppLogic = true;
+                    ret.setException();
                     return ret;
                 }
             }
             catch (Exception)
             {
-                ret.setException(MyExceptionType.UnExpect);
+                ret.Exp_UnExpect = true; 
+                ret.setException();
             }
             return ret;
         }
@@ -228,7 +235,8 @@ namespace SmallBank.Grains
 
                 if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item2 * inputTuple.Item3.Count)
                 {
-                    ret.setException(MyExceptionType.AppLogic);
+                    ret.Exp_AppLogic = true;
+                    ret.setException();
                     return ret;
                 }
                 else
@@ -261,7 +269,8 @@ namespace SmallBank.Grains
             }
             catch (Exception)
             {
-                ret.setException(MyExceptionType.UnExpect);
+                ret.Exp_UnExpect = true; 
+                ret.setException();
             }
             return ret;
         }
@@ -288,7 +297,8 @@ namespace SmallBank.Grains
             }
             catch (Exception)
             {
-                ret.setException(MyExceptionType.UnExpect);
+                ret.Exp_UnExpect = true; 
+                ret.setException();
             }
             return ret;
         }
@@ -307,7 +317,8 @@ namespace SmallBank.Grains
 
                 if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
                 {
-                    ret.setException(MyExceptionType.AppLogic);
+                    ret.Exp_AppLogic = true;
+                    ret.setException();
                 }
                 else
                 {
@@ -327,7 +338,8 @@ namespace SmallBank.Grains
             }
             catch (Exception)
             {
-                ret.setException(MyExceptionType.UnExpect);
+                ret.Exp_UnExpect = true; 
+                ret.setException();
             }
             return ret;
         }
