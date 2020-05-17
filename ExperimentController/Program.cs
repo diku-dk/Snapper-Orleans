@@ -119,10 +119,20 @@ namespace ExperimentController
                 float committedTxnThroughput = (float)aggNumCommitted * 1000 / (float) (aggEndTime - aggStartTime);  // the throughput only include committed transactions
                 float abortRate = 0;
                 if (aggNumNonDetTxn > 0) abortRate = (float)(aggNumTransactions - aggNumCommitted) * 100 / (float) aggNumNonDetTxn;    // the abort rate is based on all non-det txns
-                AbortType_0.Add(aggAbortType[0] / (aggNumTransactions - aggNumCommitted));
-                AbortType_1.Add(aggAbortType[1] / (aggNumTransactions - aggNumCommitted));
-                AbortType_2.Add(aggAbortType[2] / (aggNumTransactions - aggNumCommitted));
-                AbortType_3.Add(aggAbortType[3] / (aggNumTransactions - aggNumCommitted));
+                if (aggNumTransactions - aggNumCommitted > 0)
+                {
+                    AbortType_0.Add(aggAbortType[0] / (aggNumTransactions - aggNumCommitted));
+                    AbortType_1.Add(aggAbortType[1] / (aggNumTransactions - aggNumCommitted));
+                    AbortType_2.Add(aggAbortType[2] / (aggNumTransactions - aggNumCommitted));
+                    AbortType_3.Add(aggAbortType[3] / (aggNumTransactions - aggNumCommitted));
+                }
+                else
+                {
+                    AbortType_0.Add(0);
+                    AbortType_1.Add(0);
+                    AbortType_2.Add(0);
+                    AbortType_3.Add(0);
+                }
                 throughPutAccumulator.Add(committedTxnThroughput);
                 abortRateAccumulator.Add(abortRate);
             }

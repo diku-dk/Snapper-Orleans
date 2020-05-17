@@ -184,8 +184,9 @@ namespace SmallBank.Grains
                 }
                 myState.checkingAccount[id] += inputTuple.Item2;             
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                Console.WriteLine($"Exception: Read Wrute Conflict, {e.Message}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -325,6 +326,7 @@ namespace SmallBank.Grains
             }
             catch (Exception e)
             {
+                Console.WriteLine($"Exception: Read Write Conflict, {e.Message}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }

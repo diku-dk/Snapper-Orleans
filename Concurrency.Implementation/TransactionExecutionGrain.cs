@@ -89,14 +89,23 @@ namespace Concurrency.Implementation
                 await t1;
                 //Console.WriteLine($"grain {myPrimaryKey}, Transaction {context.transactionID}: completed executing.\n");
                 result = new FunctionResult(t1.Result.resultObject);
-                canCommit = !t1.Result.hasException();
 
-                //canCommit = canCommit & serializable;
-                if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)
+                result.Exp_AppLogic = t1.Result.Exp_AppLogic;
+                result.Exp_NotSerializable = t1.Result.Exp_NotSerializable;
+                result.Exp_RWConflict = t1.Result.Exp_RWConflict;
+                result.Exp_UnExpect = t1.Result.Exp_UnExpect;
+
+                canCommit = !t1.Result.hasException();
+                if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)   //canCommit = canCommit & serializable;
                 {
                     canCommit = this.CheckSerializability(t1.Result).Result;
                     if (canCommit) canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
-                    else result.Exp_NotSerializable = true;
+                    else
+                    {
+                        result.Exp_NotSerializable = true;
+                        result.setException();
+                        Console.WriteLine("Not Serializable!!");
+                    } 
                 }
                 else Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
 
@@ -109,7 +118,12 @@ namespace Concurrency.Implementation
                     }
                     else await Commit_2PC(context.transactionID, t1.Result);
                 }
-                else await Abort_2PC(context.transactionID, t1.Result);
+                else
+                {
+                    await Abort_2PC(context.transactionID, t1.Result);   // this will only happen if 2PC fails
+                    result.setException();
+                    Console.WriteLine("2PC failed");
+                }
             }
             catch (Exception e)
             {
@@ -242,7 +256,7 @@ namespace Concurrency.Implementation
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine($"\n Exception::InvokeFunction: {e.Message.ToString()}");
+                    Console.WriteLine($"\n Exception::InvokeFunction: {e.Message}");
                 }
 
                 //Update before set and after set
