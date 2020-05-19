@@ -44,8 +44,8 @@ namespace ExperimentProcess
                 int numTransaction = 0;
                 int numNonDetTxn = 0;
                 var latencies = new List<double>();
-                var abortType = new int[4];
-                for (int i = 0; i < 4; i++) abortType[i] = 0;
+                var abortType = new int[5];
+                for (int i = 0; i < 5; i++) abortType[i] = 0;
                 var tasks = new List<Task<FunctionResult>>();
                 var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
                 //var tasks = new List<Task<TransactionContext>>();
@@ -92,7 +92,8 @@ namespace ExperimentProcess
                             abortType[0] += task.Result.Exp_RWConflict ? 1 : 0;
                             abortType[1] += task.Result.Exp_NotSerializable ? 1 : 0;
                             abortType[2] += task.Result.Exp_AppLogic ? 1 : 0;
-                            abortType[3] += task.Result.Exp_UnExpect ? 1 : 0;
+                            abortType[3] += task.Result.Exp_2PC ? 1 : 0;
+                            abortType[4] += task.Result.Exp_UnExpect ? 1 : 0;
                         }
                     }
                     tasks.Remove(task);
@@ -102,6 +103,7 @@ namespace ExperimentProcess
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
                 Console.WriteLine($"Finish epoch {eIndex}, total_num_txn = {numTransaction}, non-det = {numNonDetTxn}, commit = {numCommit}, total_time = {endTime - startTime}, tp = {1000 * numCommit / (endTime - startTime)}. ");
+                Console.WriteLine($"RWConflict = {abortType[0]}, NotSerilizable = {abortType[1]}, AppLogic = {abortType[2]}, 2PC = {abortType[3]}, UnExpect = {abortType[4]}. ");
                 //Wait for the tasks exceeding epoch time but do not count them
                 if (tasks.Count != 0)
                 {

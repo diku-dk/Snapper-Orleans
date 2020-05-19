@@ -44,9 +44,10 @@ namespace Utilities
         public Boolean Exp_RWConflict = false;
         public Boolean Exp_NotSerializable = false;
         public Boolean Exp_AppLogic = false;
+        public Boolean Exp_2PC = false;
         public Boolean Exp_UnExpect = false;
 
-        public FunctionResult(Object resultObject=null)
+        public FunctionResult(Object resultObject = null)
         {
             this.resultObject = resultObject;
             this.grainsInNestedFunctions = new Dictionary<Guid, String>();
@@ -67,15 +68,15 @@ namespace Utilities
             foreach (var entry in r.grainsInNestedFunctions)
                 if (this.grainsInNestedFunctions.ContainsKey(entry.Key) == false)
                     this.grainsInNestedFunctions.Add(entry.Key, entry.Value);
-             
-            if(this.beforeSet.Count == 0 && this.afterSet.Count == 0)
+
+            if (this.beforeSet.Count == 0 && this.afterSet.Count == 0)
             {
                 this.grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
                 this.maxBeforeBid = r.maxBeforeBid;
                 this.minAfterBid = r.minAfterBid;
                 this.beforeSet = r.beforeSet;
                 this.afterSet = r.afterSet;
-            } 
+            }
             else
             {
                 this.beforeSet.UnionWith(r.beforeSet);
@@ -87,13 +88,13 @@ namespace Utilities
                 }
                 this.minAfterBid = (this.minAfterBid > r.minAfterBid) ? r.minAfterBid : this.minAfterBid;
                 isBeforeAfterConsecutive &= r.isBeforeAfterConsecutive;
-            }            
+            }
         }
 
         public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, Boolean consecutive, Tuple<Guid, string> tuple)
         {
 
-            if(this.maxBeforeBid < maxBeforeBid)
+            if (this.maxBeforeBid < maxBeforeBid)
             {
                 this.maxBeforeBid = maxBeforeBid;
                 grainWithHighestBeforeBid = tuple;
@@ -132,14 +133,10 @@ namespace Utilities
         public string func;
 
         public FunctionCall(Type t, String func, FunctionInput funcInput)
-        {        
+        {
             this.type = t;
             this.func = func;
-            this.funcInput = funcInput;    
+            this.funcInput = funcInput;
         }
     }
-
-    
-
-    
 }

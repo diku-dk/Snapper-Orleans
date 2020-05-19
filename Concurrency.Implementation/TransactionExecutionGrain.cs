@@ -77,35 +77,30 @@ namespace Concurrency.Implementation
             try
             {
                 context = await myCoordinator.NewTransaction();
-                //if (context.transactionID == 200)
-                //  Console.WriteLine($"start txn 200");
                 //myScheduler.ackBatchCommit(context.highestBatchIdCommitted);
                 functionCallInput.context = context;
-                //context = functionCallInput.context;    // changed by Yijian (when tid is assigned by client)
                 context.coordinatorKey = this.myPrimaryKey;
-                //Console.WriteLine($"Transaction {context.transactionID}: is started.\n");
                 FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
                 t1 = this.Execute(c1);
                 await t1;
                 //Console.WriteLine($"grain {myPrimaryKey}, Transaction {context.transactionID}: completed executing.\n");
                 result = new FunctionResult(t1.Result.resultObject);
 
-                result.Exp_AppLogic |= t1.Result.Exp_AppLogic;
-                result.Exp_NotSerializable |= t1.Result.Exp_NotSerializable;
-                result.Exp_RWConflict |= t1.Result.Exp_RWConflict;
-                result.Exp_UnExpect |= t1.Result.Exp_UnExpect;
+                result.Exp_AppLogic = t1.Result.Exp_AppLogic ? true : false;
+                result.Exp_NotSerializable = t1.Result.Exp_NotSerializable ? true : false;
+                result.Exp_RWConflict = t1.Result.Exp_RWConflict ? true : false;
+                result.Exp_UnExpect = t1.Result.Exp_UnExpect ? true : false;
 
                 canCommit = !t1.Result.hasException();
                 if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)   //canCommit = canCommit & serializable;
                 {
                     canCommit = this.CheckSerializability(t1.Result).Result;
-                    if (canCommit) canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
-                    else
+                    if (canCommit)
                     {
-                        result.Exp_NotSerializable = true;
-                        result.setException();
-                        Console.WriteLine("Not Serializable!!");
-                    } 
+                        canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
+                        if (!canCommit) result.Exp_2PC = true;
+                    }
+                    else result.Exp_NotSerializable = true;
                 }
                 else Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
 
@@ -120,9 +115,8 @@ namespace Concurrency.Implementation
                 }
                 else
                 {
-                    await Abort_2PC(context.transactionID, t1.Result);   // this will only happen if 2PC fails
                     result.setException();
-                    //Console.WriteLine("2PC failed");
+                    await Abort_2PC(context.transactionID, t1.Result);   // this will only happen if 2PC fails
                 }
             }
             catch (Exception e)
@@ -139,8 +133,6 @@ namespace Concurrency.Implementation
                 }
                 else await this.GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);
             }
-            //if (context.transactionID == 20000)
-            //  Console.WriteLine($"txn 20000 finished");
             result.isDet = false;
             return result;
         }
