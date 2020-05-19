@@ -105,7 +105,7 @@ namespace ExperimentController
                 long aggStartTime = results[epochNumber,0].startTime;
                 long aggEndTime = results[epochNumber,0].endTime;
                 aggLatencies.AddRange(results[epochNumber, 0].latencies);
-                var aggAbortType = new float[4];
+                var aggAbortType = new float[5];
                 for (int i = 0; i < 5; i++) aggAbortType[i] = results[epochNumber, 0].abortType[i];
                 for (int workerNode = 1; workerNode < numWorkerNodes; workerNode++)
                 {
