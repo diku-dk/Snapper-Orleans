@@ -150,7 +150,7 @@ namespace ExperimentController
             Console.WriteLine($"Results across {workload.numEpochs} with first {numWarmupEpoch} epochs being for warmup follows");
             Console.WriteLine($"Mean Throughput per second = { throughputMeanAndSd.Item1}, standard deviation = { throughputMeanAndSd.Item2}");
             Console.WriteLine($"Mean Abort rate (%) = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
-            Console.WriteLine($"Abort Type: RWConflict = {Abort_0}, NotSerializable = {Abort_1}, Applogic = {Abort_2}, 2PC = {AbortType_3}, UnExpect = {Abort_4}");
+            Console.WriteLine($"Abort Type: RWConflict = {Abort_0}, NotSerializable = {Abort_1}, Applogic = {Abort_2}, 2PC = {Abort_3}, UnExpect = {Abort_4}");
             //Compute quantiles
             //var aggLatenciesArray = Array.ConvertAll(aggLatencies.ToArray(), e => Convert.ToDouble(e));
             //var aggLatenciesArray = aggLatencies.ToArray();

@@ -238,8 +238,8 @@ namespace ExperimentProcess
             long aggStartTime = results[0].startTime;
             long aggEndTime = results[0].endTime;
             var aggLatencies = new List<double>();
-            var aggAbortType = new int[4];
-            for (int j = 0; j < 4; j++) aggAbortType[j] = results[0].abortType[j];
+            var aggAbortType = new int[5];
+            for (int j = 0; j < 5; j++) aggAbortType[j] = results[0].abortType[j];
             aggLatencies.AddRange(results[0].latencies);
             for(int i = 1;i < results.Length; i++)    // reach thread has a result
             {
@@ -249,7 +249,7 @@ namespace ExperimentProcess
                 aggStartTime = (results[i].startTime < aggStartTime) ? results[i].startTime : aggStartTime;
                 aggEndTime = (results[i].endTime < aggEndTime) ? results[i].endTime : aggEndTime;     // ????
                 aggLatencies.AddRange(results[i].latencies);
-                for (int j = 0; j < 4; j++) aggAbortType[j] += results[i].abortType[j];
+                for (int j = 0; j < 5; j++) aggAbortType[j] += results[i].abortType[j];
             }
             return new WorkloadResults(aggNumTransactions, aggNumCommitted, aggNumNonDetTxn, aggStartTime, aggEndTime, aggLatencies, aggAbortType);
         }

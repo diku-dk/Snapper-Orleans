@@ -54,8 +54,6 @@ namespace Utilities
             this.latencies = latencies;
             this.abortType = abortType;
         }
-
-
     }
 
     [Serializable]
