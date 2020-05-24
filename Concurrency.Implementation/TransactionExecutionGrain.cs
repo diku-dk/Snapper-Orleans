@@ -24,6 +24,7 @@ namespace Concurrency.Implementation
         //protected Random rnd;
         private IGlobalTransactionCoordinatorGrain myCoordinator;
         private TransactionScheduler myScheduler;
+        private int highestCommittedBid;
 
         public TransactionExecutionGrain(String myUserClassName)
         {
@@ -33,6 +34,7 @@ namespace Concurrency.Implementation
 
         public async override Task OnActivateAsync()
         {
+            highestCommittedBid = -1;
             myPrimaryKey = this.GetPrimaryKey();
             var configTuple = await this.GrainFactory.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0)).GetConfiguration(myUserClassName, myPrimaryKey);
             // configTuple: Tuple<ExecutionGrainConfiguration, uint>
@@ -57,6 +59,7 @@ namespace Concurrency.Implementation
         public async Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String, int>> grainAccessInformation, String startFunction, FunctionInput inputs)
         {
             TransactionContext context = await myCoordinator.NewTransaction(grainAccessInformation);
+            highestCommittedBid = context.highestBatchIdCommitted;
             inputs.context = context;
             FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
             //Console.WriteLine($"{myPrimaryKey} receives tid for txn {context.transactionID}. ");
@@ -77,7 +80,7 @@ namespace Concurrency.Implementation
             try
             {
                 context = await myCoordinator.NewTransaction();
-                //myScheduler.ackBatchCommit(context.highestBatchIdCommitted);
+                highestCommittedBid = context.highestBatchIdCommitted;
                 functionCallInput.context = context;
                 context.coordinatorKey = this.myPrimaryKey;
                 FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
@@ -174,8 +177,14 @@ namespace Concurrency.Implementation
         public async Task<Boolean> CheckSerializability(FunctionResult result)
         {
             if (result.beforeSet.Count == 0) return true;
+            if (result.maxBeforeBid <= highestCommittedBid) return true;
             if (result.isBeforeAfterConsecutive && result.maxBeforeBid < result.minAfterBid) return true;
-            if (result.maxBeforeBid >= result.minAfterBid) return false;
+            if (result.maxBeforeBid >= result.minAfterBid)
+            {
+                Console.WriteLine("Abort due to result.maxBeforeBid >= result.minAfterBid");
+                return false;
+            }
+            Console.WriteLine("Abort with unsureness");
             // isBeforeAfterConsecutive = false && result.maxBeforeBid < result.minAfterBid
             //TODO HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(result.maxBeforeBidPerGrain, result.grainsInNestedFunctions);
             return false;
