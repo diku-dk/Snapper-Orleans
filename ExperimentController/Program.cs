@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using SmallBank.Interfaces;
 using MathNet.Numerics.Statistics;
+using Concurrency.Interface.Logging;
 
 namespace ExperimentController
 {
@@ -59,7 +60,7 @@ namespace ExperimentController
             var backoffIntervalMsecs = int.Parse(snapperConfigSection["backoffIntervalMsecs"]);            
             var numCoordinators = uint.Parse(snapperConfigSection["numCoordinators"]);
             //Create the configuration objects to be used for ConfigurationGrain
-            exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMSecs);
+            exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(StorageWrapperType.DYNAMODB), new ConcurrencyConfiguration(nonDetCCType), maxNonDetWaitingLatencyInMSecs);
             coordConfig = new CoordinatorGrainConfiguration(batchIntervalMSecs, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
 
             //Parse workload specific configuration, assumes only one defined in file

@@ -76,22 +76,13 @@ namespace Concurrency.Implementation
         // called directly by client
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(ExecutionGrainConfiguration config)
         {
-            if (config == null)
-            {
-                throw new ArgumentNullException(nameof(config));
-            }
+            if (config == null) throw new ArgumentNullException(nameof(config));
             //Support only single config changes for now
-            if (this.executionGrainGlobalConfig == null)
-            {
-                this.executionGrainGlobalConfig = config;
-            }
-            else
-            {
-                throw new NotImplementedException("Cannot support multiple configuration updates for now");
-            }
+            if (this.executionGrainGlobalConfig == null) this.executionGrainGlobalConfig = config;
+            else throw new NotImplementedException("Cannot support multiple configuration updates for now");
         }
-
-        // TODO: used for what purpose???? (Yijian)
+        
+        // used to give different grains different configurations
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(Dictionary<Tuple<string, Guid>, ExecutionGrainConfiguration> grainSpecificConfigs)
         {
             //Insert or update the existing configuration

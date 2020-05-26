@@ -35,14 +35,8 @@ namespace Concurrency.Implementation.Logging
             Console.WriteLine("Initialized dynamodb client");
             this.grainType = grainType;
             this.grainKey = grainKey.ToByteArray();
-            if (singleTable)
-            {
-                logName = "XLibLog"; 
-            }
-            else
-            {
-                logName = grainType + grainKey;
-            }
+            if (singleTable) logName = "XLibLog"; 
+            else logName = grainType + grainKey;
         }
                 
         async Task createTableIfNotExists()
