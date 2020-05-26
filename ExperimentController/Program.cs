@@ -93,6 +93,7 @@ namespace ExperimentController
             var aggLatencies = new List<double>();
             var throughPutAccumulator = new List<float>();
             var abortRateAccumulator = new List<float>();
+            var abortRateInAllAccumulator = new List<float>();
             var AbortType_0 = new List<float>();
             var AbortType_1 = new List<float>();
             var AbortType_2 = new List<float>();
@@ -122,6 +123,7 @@ namespace ExperimentController
                 float committedTxnThroughput = (float)aggNumCommitted * 1000 / (aggEndTime - aggStartTime);  // the throughput only include committed transactions
                 float abortRate = 0;
                 if (aggNumNonDetTxn > 0) abortRate = (float)(aggNumTransactions - aggNumCommitted) * 100 / aggNumNonDetTxn;    // the abort rate is based on all non-det txns
+                var abortRateInAll = (float)(aggNumTransactions - aggNumCommitted) * 100 / aggNumTransactions;
                 if (aggNumTransactions - aggNumCommitted > 0)
                 {
                     AbortType_0.Add(aggAbortType[0] / (aggNumTransactions - aggNumCommitted));
@@ -140,10 +142,12 @@ namespace ExperimentController
                 }
                 throughPutAccumulator.Add(committedTxnThroughput);
                 abortRateAccumulator.Add(abortRate);
+                abortRateInAllAccumulator.Add(abortRateInAll);
             }
             //Compute statistics on the accumulators, maybe a better way is to maintain a sorted list
             var throughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(throughPutAccumulator.ToArray());
             var abortRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(abortRateAccumulator.ToArray());
+            var abortRateInAllMeanAndSd = ArrayStatistics.MeanStandardDeviation(abortRateInAllAccumulator.ToArray());
             var Abort_0 = ArrayStatistics.Mean(AbortType_0.ToArray());
             var Abort_1 = ArrayStatistics.Mean(AbortType_1.ToArray());
             var Abort_2 = ArrayStatistics.Mean(AbortType_2.ToArray());
@@ -151,7 +155,8 @@ namespace ExperimentController
             var Abort_4 = ArrayStatistics.Mean(AbortType_4.ToArray());
             Console.WriteLine($"Results across {workload.numEpochs} with first {numWarmupEpoch} epochs being for warmup follows");
             Console.WriteLine($"Mean Throughput per second = { throughputMeanAndSd.Item1}, standard deviation = { throughputMeanAndSd.Item2}");
-            Console.WriteLine($"Mean Abort rate (%) = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
+            Console.WriteLine($"Mean Abort rate in ACT txn (%) = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
+            Console.WriteLine($"Mean Abort rate in all txn (%) = {abortRateInAllMeanAndSd.Item1}, standard deviation = {abortRateInAllMeanAndSd.Item2}");
             Console.WriteLine($"Abort Type: RWConflict = {Abort_0}, NotSerializable = {Abort_1}, Applogic = {Abort_2}, 2PC = {Abort_3}, UnExpect = {Abort_4}");
             //Compute quantiles
             //var aggLatenciesArray = Array.ConvertAll(aggLatencies.ToArray(), e => Convert.ToDouble(e));

@@ -180,21 +180,30 @@ namespace Concurrency.Implementation
             if (result.maxBeforeBid <= highestCommittedBid) return true;
             if (result.maxBeforeBid <= result.highestCommittedBid)
             {
-                Console.WriteLine("Return true due to collected highestBid");
+                //Console.WriteLine("Return true due to collected highestBid");
                 return true;
-            } 
+            }
             if (result.isBeforeAfterConsecutive && result.maxBeforeBid < result.minAfterBid) return true;
             if (result.maxBeforeBid >= result.minAfterBid)
             {
-                Console.WriteLine("Abort due to result.maxBeforeBid >= result.minAfterBid");
+                //Console.WriteLine("Abort due to result.maxBeforeBid >= result.minAfterBid");
                 return false;
             }
-            
+
             // isBeforeAfterConsecutive = false && result.maxBeforeBid < result.minAfterBid
             //TODO HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(result.maxBeforeBidPerGrain, result.grainsInNestedFunctions);
-            var highestBid = await myCoordinator.GetHighestCommittedBid();
-            if (result.maxBeforeBid <= highestBid) return true;
-            Console.WriteLine("Abort with unsureness");
+            /*
+            var highestBid = -1;
+            try
+            {
+                highestBid = await myCoordinator.GetHighestCommittedBid();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Exception:fail to ask coordinator, {e.Message}");
+            }
+            if (result.maxBeforeBid <= highestBid) return true;*/
+            //Console.WriteLine("Abort with unsureness");
             return false;
         }
 
