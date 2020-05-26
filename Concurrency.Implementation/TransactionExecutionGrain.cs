@@ -178,15 +178,19 @@ namespace Concurrency.Implementation
         {
             if (result.beforeSet.Count == 0) return true;
             if (result.maxBeforeBid <= highestCommittedBid) return true;
+            if (result.maxBeforeBid <= result.highestCommittedBid) return true;
             if (result.isBeforeAfterConsecutive && result.maxBeforeBid < result.minAfterBid) return true;
             if (result.maxBeforeBid >= result.minAfterBid)
             {
                 Console.WriteLine("Abort due to result.maxBeforeBid >= result.minAfterBid");
                 return false;
             }
-            Console.WriteLine("Abort with unsureness");
+            
             // isBeforeAfterConsecutive = false && result.maxBeforeBid < result.minAfterBid
             //TODO HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(result.maxBeforeBidPerGrain, result.grainsInNestedFunctions);
+            var highestBid = await myCoordinator.GetHighestCommittedBid();
+            if (result.maxBeforeBid <= highestBid) return true;
+            Console.WriteLine("Abort with unsureness");
             return false;
         }
 
@@ -308,6 +312,7 @@ namespace Concurrency.Implementation
             else if (batchScheduleMap[minAfterBid].lastBatchID == maxBeforeBid || maxBeforeBid == int.MinValue)
                 isBeforeAfterConsecutive = true;
             invokeRet.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive, new Tuple<Guid, string>(this.myPrimaryKey, this.myUserClassName));
+            if (invokeRet.highestCommittedBid < highestCommittedBid) invokeRet.highestCommittedBid = highestCommittedBid;
         }
 
         public async Task<FunctionResult> InvokeFunction(FunctionCall call)

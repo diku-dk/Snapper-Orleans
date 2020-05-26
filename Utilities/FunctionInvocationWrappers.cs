@@ -46,6 +46,7 @@ namespace Utilities
         public Boolean Exp_AppLogic = false;
         public Boolean Exp_2PC = false;
         public Boolean Exp_UnExpect = false;
+        public int highestCommittedBid = -1;
 
         public FunctionResult(Object resultObject = null)
         {

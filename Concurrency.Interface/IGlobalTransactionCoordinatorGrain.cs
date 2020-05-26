@@ -17,6 +17,9 @@ namespace Concurrency.Interface
         /// </summary>
         /// 
         [AlwaysInterleave]
+        Task<int> GetHighestCommittedBid();
+
+        [AlwaysInterleave]
         Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<String, int>> grainAccessInformation);
 
         /// <summary>

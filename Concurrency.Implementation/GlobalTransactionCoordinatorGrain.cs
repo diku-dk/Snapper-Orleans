@@ -91,6 +91,11 @@ namespace Concurrency.Implementation
             return base.OnActivateAsync();
         }
 
+        public async Task<int> GetHighestCommittedBid()
+        {
+            return highestCommittedBatchID;
+        }
+
         /**
          *Client calls this function to submit deterministic transaction
          */
