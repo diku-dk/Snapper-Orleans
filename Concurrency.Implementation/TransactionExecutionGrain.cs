@@ -178,7 +178,11 @@ namespace Concurrency.Implementation
         {
             if (result.beforeSet.Count == 0) return true;
             if (result.maxBeforeBid <= highestCommittedBid) return true;
-            if (result.maxBeforeBid <= result.highestCommittedBid) return true;
+            if (result.maxBeforeBid <= result.highestCommittedBid)
+            {
+                Console.WriteLine("Return true due to collected highestBid");
+                return true;
+            } 
             if (result.isBeforeAfterConsecutive && result.maxBeforeBid < result.minAfterBid) return true;
             if (result.maxBeforeBid >= result.minAfterBid)
             {

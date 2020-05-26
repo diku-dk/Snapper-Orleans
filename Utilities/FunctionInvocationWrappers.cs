@@ -60,6 +60,7 @@ namespace Utilities
 
         public void mergeWithFunctionResult(FunctionResult r)
         {
+            if (this.highestCommittedBid < r.highestCommittedBid) this.highestCommittedBid = r.highestCommittedBid;
             this.Exp_AppLogic |= r.Exp_AppLogic;
             this.Exp_NotSerializable |= r.Exp_NotSerializable;
             this.Exp_RWConflict |= r.Exp_RWConflict;
