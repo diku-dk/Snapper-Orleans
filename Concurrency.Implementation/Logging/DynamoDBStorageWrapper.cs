@@ -20,8 +20,8 @@ namespace Concurrency.Implementation.Logging
         const string ATT_KEY_1 = "GRAIN_REFERENCE";
         const string ATT_KEY_2 = "SEQUENCE_NUMBER";
         const string ATT_VALUE = "VALUE";
-        const String DYNAMODB_ACCESS_KEY_ID = "";
-        const String DYNAMODB_ACCESS_KEY_VALUE = "";
+        const String DYNAMODB_ACCESS_KEY_ID = "AKIAJILO2SVPTNUZB55Q";
+        const String DYNAMODB_ACCESS_KEY_VALUE = "5htrwZJMn7JGjyqXP9MsqZ4rRAJjqZt+LAiT9w5I";
         const int READ_CAPACITY_UNITS = 10;
         const int WRITE_CAPACITY_UNITS = 10;
         
@@ -55,7 +55,8 @@ namespace Concurrency.Implementation.Logging
                     await Task.Delay(TimeSpan.FromSeconds(5));
                 } while (response.Table.TableStatus != TableStatus.ACTIVE);
                 tableExists = true;
-            } catch(ResourceNotFoundException)
+            } 
+            catch(ResourceNotFoundException)
             {
                 tableExists = false;
             }
@@ -100,10 +101,8 @@ namespace Concurrency.Implementation.Logging
                 while(true)
                 {                    
                     var response = await client.DescribeTableAsync(describeTableRequest);
-                    if (response.Table.TableStatus == TableStatus.ACTIVE)
-                        break;
-                    else
-                        await Task.Delay(TimeSpan.FromSeconds(5));
+                    if (response.Table.TableStatus == TableStatus.ACTIVE) break;
+                    else await Task.Delay(TimeSpan.FromSeconds(5));
                 }                    
             }
         }
