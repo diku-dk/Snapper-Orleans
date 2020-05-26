@@ -76,7 +76,7 @@ namespace Concurrency.Implementation
             myPrimaryKey = this.GetPrimaryKey();
 
             //Enable the following line for log
-            log = new Simple2PCLoggingProtocol<String>(this.GetType().ToString(), myPrimaryKey, StorageWrapperType.DYNAMODB);
+            //log = new Simple2PCLoggingProtocol<String>(this.GetType().ToString(), myPrimaryKey, StorageWrapperType.DYNAMODB);
             this.batchesWaitingForCommit = new SortedSet<int>();
             detEmitSeq = 0;
             nonDetEmitSeq = 0;

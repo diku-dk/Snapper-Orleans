@@ -31,7 +31,7 @@ namespace Concurrency.Implementation.Logging
 
         public DynamoDBStorageWrapper(String grainType, Guid grainKey)
         {
-            client = new AmazonDynamoDBClient(DYNAMODB_ACCESS_KEY_ID, DYNAMODB_ACCESS_KEY_VALUE, Amazon.RegionEndpoint.USWest2);
+            client = new AmazonDynamoDBClient(DYNAMODB_ACCESS_KEY_ID, DYNAMODB_ACCESS_KEY_VALUE, Amazon.RegionEndpoint.USEast1);
             Console.WriteLine("Initialized dynamodb client");
             this.grainType = grainType;
             this.grainKey = grainKey.ToByteArray();
@@ -51,7 +51,7 @@ namespace Concurrency.Implementation.Logging
                 do
                 {
                     response = await client.DescribeTableAsync(describeTableRequest);
-                    Console.WriteLine("Current table status = {0}", response.Table.TableStatus);
+                    Console.WriteLine($"Current table status = {response.Table.TableStatus}");
                     await Task.Delay(TimeSpan.FromSeconds(5));
                 } while (response.Table.TableStatus != TableStatus.ACTIVE);
                 tableExists = true;
