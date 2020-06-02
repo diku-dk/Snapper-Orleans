@@ -13,6 +13,7 @@ using Concurrency.Implementation.Logging;
 
 namespace Concurrency.Implementation
 {
+    [CoordPlacementStrategy]
     public class GlobalTransactionCoordinatoGrain : Grain, IGlobalTransactionCoordinatorGrain
 
     {

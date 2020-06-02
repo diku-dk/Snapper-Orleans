@@ -6,6 +6,10 @@ using Orleans.Hosting;
 using Orleans.Configuration;
 using System.Net;
 using Utilities;
+using Microsoft.Extensions.DependencyInjection;
+using Orleans.Runtime;
+using Orleans.Runtime.Placement;
+using Concurrency.Implementation;
 
 namespace OrleansSiloHost
 {
@@ -23,10 +27,8 @@ namespace OrleansSiloHost
             try
             {
                 ISiloHost host;
-                if (localCluster) 
-                    host = await StartSilo();
-                else
-                    host = await StartClusterSilo();
+                if (localCluster) host = await StartSilo();
+                else host = await StartClusterSilo();
                 Console.WriteLine("Press Enter to terminate...");
                 Console.ReadLine();
 
@@ -97,9 +99,9 @@ namespace OrleansSiloHost
                     //options.ClassSpecificCollectionAge[typeof(MyGrainImplementation).FullName] = TimeSpan.FromMinutes(5);
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
-                //.Configure<SchedulingOptions>(o => o.MaxActiveThreads = 32)
                 .UseDynamoDBClustering(dynamoDBOptions)
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
+                .ConfigureServices(ConfigureServices);
 
             if (enableOrleansTxn)
                 builder.AddMemoryGrainStorageAsDefault().UseTransactions();
@@ -107,6 +109,12 @@ namespace OrleansSiloHost
             var host = builder.Build();            
             await host.StartAsync();
             return host;
+        }
+
+        private static void ConfigureServices(IServiceCollection services)
+        {
+            services.AddSingletonNamedService<PlacementStrategy, CoordPlacementStrategy>(nameof(CoordPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, CoordPlacement>(typeof(CoordPlacementStrategy));
         }
     }
 }
