@@ -19,9 +19,8 @@ namespace Concurrency.Implementation
         private int GetSiloNumber(Guid coordID, int siloLen)
         {
             var IDs = coordID.ToString().Split("-", StringSplitOptions.RemoveEmptyEntries);
-            var number = Convert.ToInt32(IDs[0]);
-            Console.WriteLine($"Convert guid {coordID} to int {number}.");
-            return number % siloLen;
+            var number = Convert.ToInt32(IDs[0], 16);
+            return number / 4;   // 4 coordinators in each silo host
         }
     }
 
