@@ -18,6 +18,7 @@ namespace ExperimentProcess
         IDiscreteDistribution detDistribution;
         IDiscreteDistribution grainDistribution;
         IDiscreteDistribution transferAmountDistribution;
+        IDiscreteDistribution numGrainInMultiTransferDistribution;
 
         int numCoord = 2;
         int index = 0;
@@ -39,6 +40,7 @@ namespace ExperimentProcess
             transactionTypeDistribution = new DiscreteUniform(0, 99, new Random());
             detDistribution = new DiscreteUniform(0, 99, new Random());
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
+            numGrainInMultiTransferDistribution = new DiscreteUniform(4, 9, new Random());
         }
 
         //getBalance, depositChecking, transfer, transacSaving, writeCheck, multiTransfer
@@ -155,10 +157,12 @@ namespace ExperimentProcess
                 grainAccessInfo.Add(Helper.convertUInt32ToGuid(destinationId), new Tuple<String, int>("SmallBank.Grains.CustomerAccountGroupGrain", 1));
             }
             else
-            {                
+            {
+                var numGrain = numGrainInMultiTransferDistribution.Sample();
                 var accountGrains = new HashSet<uint>();  
                 do accountGrains.Add((uint)grainDistribution.Sample());
-                while (accountGrains.Count != config.numGrainsMultiTransfer);
+                //while (accountGrains.Count != config.numGrainsMultiTransfer);
+                while (accountGrains.Count != numGrain);
                 grainAccessInfo = new Dictionary<Guid, Tuple<string, int>>();
                 Tuple<String, UInt32> item1 = null;
                 float item2 = transferAmountDistribution.Sample();

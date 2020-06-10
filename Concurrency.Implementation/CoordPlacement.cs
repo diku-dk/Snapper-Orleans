@@ -20,7 +20,8 @@ namespace Concurrency.Implementation
         {
             var IDs = coordID.ToString().Split("-", StringSplitOptions.RemoveEmptyEntries);
             var number = Convert.ToInt32(IDs[0], 16);
-            return number / 4;   // 4 coordinators in each silo host
+            //return number / 4;   // 4 coordinators in each silo host
+            return 0;    // single silo
         }
     }
 

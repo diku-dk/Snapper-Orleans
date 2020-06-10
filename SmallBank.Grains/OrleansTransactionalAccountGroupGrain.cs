@@ -24,11 +24,11 @@ namespace SmallBank.Grains
     using InitAccountInput = Tuple<UInt32, UInt32>;
 
     class OrleansTransactionalAccountGroupGrain : Orleans.Grain, IOrleansTransactionalAccountGroupGrain
-    {   
+    {
         public uint numAccountPerGroup = 1;
         private readonly ITransactionalState<CustomerAccountGroup> state;
 
-        public OrleansTransactionalAccountGroupGrain([TransactionalState("state")]ITransactionalState<CustomerAccountGroup> state)
+        public OrleansTransactionalAccountGroupGrain([TransactionalState("state")] ITransactionalState<CustomerAccountGroup> state)
         {
             this.state = state ?? throw new ArgumentNullException(nameof(state));
         }
@@ -176,7 +176,6 @@ namespace SmallBank.Grains
                 else
                 {
                     var destination = this.GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
-                    FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
                     task = destination.StartTransaction("DepositChecking", funcInput);
                 }
 
@@ -184,7 +183,6 @@ namespace SmallBank.Grains
                 ret.mergeWithFunctionResult(task.Result);
                 if (task.Result.hasException() == true) return ret;
                 await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] -= inputTuple.Item3);
-                //myState.checkingAccount[id] -= inputTuple.Item3;
             }
             catch (Exception)
             {
@@ -368,6 +366,7 @@ namespace SmallBank.Grains
             }
             return ret;
         }
+
         Task<FunctionResult> IOrleansTransactionalAccountGroupGrain.StartTransaction(string startFunction, FunctionInput inputs)
         {
             AllTxnTypes fnType;

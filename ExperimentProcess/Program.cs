@@ -16,10 +16,10 @@ namespace ExperimentProcess
     {
         static Boolean LocalCluster;
         static IClusterClient[] clients;
-        //static String sinkAddress = ">tcp://localhost:5558";
-        //static String controllerAddress = ">tcp://localhost:5575";
-        static String sinkAddress = ">tcp://18.188.44.200:5558";         // controller public IP
-        static String controllerAddress = ">tcp://18.188.44.200:5575";   // controller public IP
+        static String sinkAddress = ">tcp://localhost:5558";
+        static String controllerAddress = ">tcp://localhost:5575";
+        //static String sinkAddress = ">tcp://18.188.44.200:5558";         // controller public IP
+        //static String controllerAddress = ">tcp://18.188.44.200:5575";   // controller public IP
         static PushSocket sink = new PushSocket(sinkAddress);
         static WorkloadResults[] results;        
         static IBenchmark[] benchmarks;
@@ -48,8 +48,6 @@ namespace ExperimentProcess
                 for (int i = 0; i < 5; i++) abortType[i] = 0;
                 var tasks = new List<Task<FunctionResult>>();
                 var reqs = new Dictionary<Task<FunctionResult>, TimeSpan>();
-                //var tasks = new List<Task<TransactionContext>>();
-                //var reqs = new Dictionary<Task<TransactionContext>, TimeSpan>();
                 //Wait for all threads to arrive at barrier point
                 barriers[eIndex].SignalAndWait();
                 globalWatch.Restart();
@@ -61,7 +59,6 @@ namespace ExperimentProcess
                         //Pipeline remaining tasks
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, global_tid);
-                        //global_tid += numWorker;
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);                      
                     } 
@@ -74,11 +71,12 @@ namespace ExperimentProcess
                         //Needed to catch exception of individual task (not caught by Snapper's exception) which would not be thrown by WhenAny
                         await task;
                     } 
-                    catch (Exception)    // this exception is only related to OrleansTransaction
+                    catch (Exception e)    // this exception is only related to OrleansTransaction
                     {
+                        Console.WriteLine($"Exception:{e.Message}");
                         noException = false;
                     }
-                    if (!task.Result.isDet) numNonDetTxn++;
+                    //if (!task.Result.isDet) numNonDetTxn++;
                     if (noException)
                     {
                         if (!task.Result.hasException())
@@ -111,9 +109,9 @@ namespace ExperimentProcess
                     {
                         await Task.WhenAll(tasks);
                     }
-                    catch (Exception e)
+                    catch (Exception)
                     {
-                        Console.WriteLine($"Exception: {e.Message}. ");
+                        //Console.WriteLine($"Exception: {e.Message}. ");
                     }
                 }
                 WorkloadResults res = new WorkloadResults(numTransaction, numCommit, numNonDetTxn, startTime, endTime, latencies, abortType);

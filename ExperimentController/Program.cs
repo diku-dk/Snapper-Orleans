@@ -20,10 +20,10 @@ namespace ExperimentController
 {
     class Program
     {
-        //static String workerAddress = "@tcp://localhost:5575";
-        //static String sinkAddress = "@tcp://localhost:5558";
-        static String workerAddress = "@tcp://*:5575";
-        static String sinkAddress = "@tcp://172.31.42.128:5558";    // controller private IP
+        static String workerAddress = "@tcp://localhost:5575";
+        static String sinkAddress = "@tcp://localhost:5558";
+        //static String workerAddress = "@tcp://*:5575";
+        //static String sinkAddress = "@tcp://172.31.42.128:5558";    // controller private IP
         static int numWorkerNodes;
         static int numWarmupEpoch;
         static IClusterClient client;
@@ -254,7 +254,8 @@ namespace ExperimentController
                 else client = await config.StartClientWithRetriesToCluster();
             }
 
-            if(workload.grainImplementationType == ImplementationType.SNAPPER) {
+            if(workload.grainImplementationType == ImplementationType.SNAPPER) 
+            {
                 var configGrain = client.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0));
                 await configGrain.UpdateNewConfiguration(exeConfig);
                 await configGrain.UpdateNewConfiguration(coordConfig);
@@ -265,7 +266,7 @@ namespace ExperimentController
 
         private static async void LoadGrains()
         {
-            Console.WriteLine($"Load grains, numAccounts = {workload.numAccounts}, numAccountPerGroup = {workload.numAccountsPerGroup}. ");
+            Console.WriteLine($"Load grains, numGrains = {workload.numAccounts / workload.numAccountsPerGroup}, numAccountPerGroup = {workload.numAccountsPerGroup}. ");
             var tasks = new List<Task<FunctionResult>>(); 
             var batchSize = -1; //If you want to load the grains in sequence instead of all concurrent
             for(uint i = 0; i < workload.numAccounts / workload.numAccountsPerGroup; i++)
@@ -291,7 +292,7 @@ namespace ExperimentController
                     default:
                         throw new Exception("Unknown grain implementation type");
                 }
-                if(batchSize > 0 && (i+1)%batchSize == 0) 
+                if(batchSize > 0 && (i + 1) % batchSize == 0) 
                 {
                     await Task.WhenAll(tasks);
                     tasks.Clear();
