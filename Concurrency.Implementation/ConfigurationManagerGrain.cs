@@ -39,6 +39,7 @@ namespace Concurrency.Implementation
                 throw new Exception("No information about coordinators has been registered");
             }
             nextCoordinatorId = (nextCoordinatorId + 1) % coordinatorGrainGlobalConfig.numCoordinators;
+            await Task.CompletedTask;
             return (executionGrainSpecificConfigs.ContainsKey(tuple)) ? new Tuple<ExecutionGrainConfiguration, uint>(executionGrainSpecificConfigs[tuple], nextCoordinatorId) : new Tuple<ExecutionGrainConfiguration, uint>(executionGrainGlobalConfig, nextCoordinatorId);
         }
 
@@ -76,6 +77,7 @@ namespace Concurrency.Implementation
         // called directly by client
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(ExecutionGrainConfiguration config)
         {
+            await Task.CompletedTask;
             if (config == null) throw new ArgumentNullException(nameof(config));
             //Support only single config changes for now
             if (this.executionGrainGlobalConfig == null) this.executionGrainGlobalConfig = config;
@@ -90,6 +92,7 @@ namespace Concurrency.Implementation
             {
                 executionGrainSpecificConfigs[entry.Key] = entry.Value;
             }
+            await Task.CompletedTask;
         }
     }
 }

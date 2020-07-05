@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
 using Concurrency.Interface;
-using Concurrency.Interface.Nondeterministic;
 using Concurrency.Interface.Logging;
 using Utilities;
 using System.Diagnostics;
@@ -21,14 +20,12 @@ namespace Concurrency.Implementation
         protected ITransactionalState<TState> state;
         protected ILoggingProtocol<TState> log = null;
         protected String myUserClassName;
-        //protected Random rnd;
         private IGlobalTransactionCoordinatorGrain myCoordinator;
         private TransactionScheduler myScheduler;
         private int highestCommittedBid;
 
         public TransactionExecutionGrain(String myUserClassName)
         {
-
             this.myUserClassName = myUserClassName;
         }
 
@@ -36,18 +33,18 @@ namespace Concurrency.Implementation
         {
             highestCommittedBid = -1;
             myPrimaryKey = this.GetPrimaryKey();
-            var configTuple = await this.GrainFactory.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0)).GetConfiguration(myUserClassName, myPrimaryKey);
+            var configTuple = await GrainFactory.GetGrain<IConfigurationManagerGrain>(Helper.convertUInt32ToGuid(0)).GetConfiguration(myUserClassName, myPrimaryKey);
             // configTuple: Tuple<ExecutionGrainConfiguration, uint>
             // uint: coordinator ID
-            myCoordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(configTuple.Item2));
+            myCoordinator = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(configTuple.Item2));
             // new HybridState<TState>(ConcurrencyType type)
-            this.state = new HybridState<TState>(configTuple.Item1.nonDetCCConfiguration.nonDetConcurrencyManager);
+            state = new HybridState<TState>(configTuple.Item1.nonDetCCConfiguration.nonDetConcurrencyManager);
             if (configTuple.Item1.logConfiguration.isLoggingEnabled)
             {
-                log = new Simple2PCLoggingProtocol<TState>(this.GetType().ToString(), myPrimaryKey, configTuple.Item1.logConfiguration.loggingStorageWrapper);
+                log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myPrimaryKey, configTuple.Item1.logConfiguration.loggingStorageWrapper);
             }
             batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();
-            myScheduler = new TransactionScheduler(batchScheduleMap, configTuple.Item1.maxNonDetWaitingLatencyInMs, this.GrainFactory);
+            myScheduler = new TransactionScheduler(batchScheduleMap, configTuple.Item1.maxNonDetWaitingLatencyInMs, GrainFactory);
             coordinatorMap = new Dictionary<int, Guid>();
         }
 
@@ -61,185 +58,81 @@ namespace Concurrency.Implementation
             TransactionContext context = await myCoordinator.NewTransaction(grainAccessInformation);
             highestCommittedBid = context.highestBatchIdCommitted;
             inputs.context = context;
-            FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, inputs);
-            //Console.WriteLine($"{myPrimaryKey} receives tid for txn {context.transactionID}. ");
-            Task<FunctionResult> t1 = this.Execute(c1);
+            FunctionCall c1 = new FunctionCall(GetType(), startFunction, inputs);
+            Task<FunctionResult> t1 = Execute(c1);
             Task t2 = myCoordinator.checkBatchCompletion(context.batchID);
             await Task.WhenAll(t1, t2);
             t1.Result.isDet = true;
             return t1.Result;
-            //return new FunctionResult();
         }
 
         public async Task<FunctionResult> StartTransaction(String startFunction, FunctionInput functionCallInput)
         {
-            FunctionResult result = null;
             TransactionContext context = null;
             Task<FunctionResult> t1 = null;
             Boolean canCommit = false;
             try
             {
-                context = await myCoordinator.NewTransaction();
-                highestCommittedBid = context.highestBatchIdCommitted;
-                functionCallInput.context = context;
-                context.coordinatorKey = this.myPrimaryKey;
-                FunctionCall c1 = new FunctionCall(this.GetType(), startFunction, functionCallInput);
-                t1 = this.Execute(c1);
+                context = functionCallInput.context;   // added by Yijian for CC test
+                //context = await myCoordinator.NewTransaction();
+                //highestCommittedBid = context.highestBatchIdCommitted;
+                //functionCallInput.context = context;
+                context.coordinatorKey = myPrimaryKey;
+                var c1 = new FunctionCall(GetType(), startFunction, functionCallInput);
+                t1 = Execute(c1);
                 await t1;
-                //Console.WriteLine($"grain {myPrimaryKey}, Transaction {context.transactionID}: completed executing.\n");
-                result = new FunctionResult(t1.Result.resultObject);
-
-                result.Exp_AppLogic = t1.Result.Exp_AppLogic ? true : false;
-                result.Exp_NotSerializable = t1.Result.Exp_NotSerializable ? true : false;
-                result.Exp_RWConflict = t1.Result.Exp_RWConflict ? true : false;
-                result.Exp_UnExpect = t1.Result.Exp_UnExpect ? true : false;
+                t1.Result.tid = context.transactionID;
 
                 canCommit = !t1.Result.hasException();
-                if (t1.Result.grainsInNestedFunctions.Count > 1 && canCommit)   //canCommit = canCommit & serializable;
+                Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey));
+                if (t1.Result.grainsInNestedFunctions.Count == 1)
                 {
-                    canCommit = this.CheckSerializability(t1.Result).Result;
                     if (canCommit)
                     {
-                        canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
-                        if (!canCommit) result.Exp_2PC = true;
+                        var t = Commit(context.transactionID);
+                        await t;
+                        t1.Result.afterState.Add(t.Result.Item1, t.Result.Item2);    // added by Yijian
                     }
-                    else result.Exp_NotSerializable = true;
-                }
-                else Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey) || !canCommit);
-
-                if (canCommit)
-                {
-                    if (t1.Result.grainsInNestedFunctions.Count == 1)
+                    else
                     {
-                        Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey));
-                        await Commit(context.transactionID);
-                    }
-                    else await Commit_2PC(context.transactionID, t1.Result);
+                        t1.Result.setException();
+                        await Abort(context.transactionID);
+                    } 
                 }
-                else
+                else    // t1.Result.grainsInNestedFunctions.Count > 1
                 {
-                    result.setException();
-                    await Abort_2PC(context.transactionID, t1.Result);   // this will only happen if 2PC fails
+                    if (canCommit)
+                    {
+                        canCommit = CheckSerializability(t1.Result).Result;
+                        if (canCommit)
+                        {
+                            canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
+                            if (!canCommit) t1.Result.Exp_2PC = true;
+                        }
+                        else t1.Result.Exp_NotSerializable = true;
+                    }
+
+                    if (canCommit) await Commit_2PC(context.transactionID, t1.Result);
+                    else
+                    {
+                        t1.Result.setException();
+                        await Abort_2PC(context.transactionID, t1.Result);
+                    }
                 }
             }
             catch (Exception e)
             {
-                Console.WriteLine($"\n Exception(StartTransaction)::{this.myPrimaryKey}: transaction {startFunction} {context.transactionID} exception {e.Message}");
+                Console.WriteLine($"\n Exception(StartTransaction)::{myPrimaryKey}: transaction {startFunction} {context.transactionID} exception {e.Message}");
             }
 
             if (t1.Result.beforeSet.Count != 0)
             {
-                //Console.WriteLine($"Non-det txn {context.transactionID} is waiting for batch {t1.Result.maxBeforeBid} to commit.");
-                if (t1.Result.grainWithHighestBeforeBid.Item1 == myPrimaryKey && t1.Result.grainWithHighestBeforeBid.Item2.Equals(this.myUserClassName))
-                {
-                    await this.WaitForBatchCommit(t1.Result.maxBeforeBid);
-                }
-                else await this.GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);
+                if (t1.Result.grainWithHighestBeforeBid.Item1 == myPrimaryKey && t1.Result.grainWithHighestBeforeBid.Item2.Equals(myUserClassName))
+                    await WaitForBatchCommit(t1.Result.maxBeforeBid);
+                else await GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);
             }
-            result.isDet = false;
-            return result;
-        }
-
-        public async Task<Boolean> Prepare_2PC(int tid, Guid coordinatorKey, FunctionResult result)
-        {
-            Dictionary<Guid, String> grainIDsInTransaction = result.grainsInNestedFunctions;
-            bool hasException = result.hasException();
-            bool canCommit = !hasException;
-            if (!hasException)
-            {
-                // Prepare Phase
-                HashSet<Guid> participants = new HashSet<Guid>();
-                participants.UnionWith(grainIDsInTransaction.Keys);
-                Task logTask = Task.CompletedTask;
-                if (log != null)
-                    logTask = log.HandleBeforePrepareIn2PC(tid, coordinatorKey, participants);
-
-                List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
-                //Console.WriteLine($"Transaction {context.transactionID} send prepare messages to {grainIDsInTransaction.Count} grains. \n");
-                foreach (var grain in grainIDsInTransaction)
-                {
-                    prepareResult.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(tid));
-                }
-                await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
-                foreach (Task<Boolean> vote in prepareResult)
-                {
-
-                    if (vote.Result == false)
-                    {
-                        canCommit = false;
-                        break;
-                    }
-                }
-            }
-            return canCommit;
-        }
-        // TODO: changed by Yijian
-        public async Task<Boolean> CheckSerializability(FunctionResult result)
-        {
-            if (result.beforeSet.Count == 0) return true;
-            if (result.maxBeforeBid <= highestCommittedBid) return true;
-            if (result.maxBeforeBid <= result.highestCommittedBid)
-            {
-                //Console.WriteLine("Return true due to collected highestBid");
-                return true;
-            }
-            if (result.isBeforeAfterConsecutive && result.maxBeforeBid < result.minAfterBid) return true;
-            if (result.maxBeforeBid >= result.minAfterBid)
-            {
-                //Console.WriteLine("Abort due to result.maxBeforeBid >= result.minAfterBid");
-                return false;
-            }
-
-            // isBeforeAfterConsecutive = false && result.maxBeforeBid < result.minAfterBid
-            //TODO HashSet<int> completeAfterSet = await myCoordinator.GetCompleteAfterSet(result.maxBeforeBidPerGrain, result.grainsInNestedFunctions);
-            /*
-            var highestBid = -1;
-            try
-            {
-                highestBid = await myCoordinator.GetHighestCommittedBid();
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"Exception:fail to ask coordinator, {e.Message}");
-            }
-            if (result.maxBeforeBid <= highestBid) return true;*/
-            //Console.WriteLine("Abort with unsureness");
-            return false;
-        }
-
-        public async Task WaitForBatchCommit(int bid)
-        {
-            await myScheduler.waitForBatchCommit(bid);
-        }
-
-
-        public async Task Commit_2PC(int tid, FunctionResult result)
-        {
-            Dictionary<Guid, String> grainIDsInTransaction = result.grainsInNestedFunctions;
-            List<Task> commitTasks = new List<Task>();
-            if (log != null)
-                commitTasks.Add(log.HandleOnCommitIn2PC(state, tid, coordinatorMap[tid]));
-            //Console.WriteLine($"Transaction {context.transactionID}: prepared to commit. \n");
-            foreach (var grain in grainIDsInTransaction)
-            {
-                commitTasks.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(tid));
-            }
-            await Task.WhenAll(commitTasks);
-            //Console.WriteLine($"Transaction {tid}: committed. \n");
-        }
-
-        public async Task Abort_2PC(int tid, FunctionResult result)
-        {
-            Dictionary<Guid, String> grainIDsInTransaction = result.grainsInNestedFunctions;
-            List<Task> abortTasks = new List<Task>();
-            //Presume Abort
-            //Console.WriteLine($"Transaction {context.transactionID}: prepared to abort. \n");
-            foreach (var grain in grainIDsInTransaction)
-            {
-                abortTasks.Add(this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(tid));
-            }
-            await Task.WhenAll(abortTasks);
-            //Console.WriteLine($"Transaction {tid}: aborted. \n");
+            t1.Result.isDet = false;
+            return t1.Result;
         }
 
         /**
@@ -249,12 +142,10 @@ namespace Concurrency.Implementation
          */
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
-            //Console.WriteLine($"\n {this.myPrimaryKey}: receive bid {schedule.batchID}, last bid = {schedule.lastBatchID}, highest commit bid = {schedule.highestCommittedBatchId}");        
             // Add by Yijian (can handle the situation when receive a schedule whose lastBatchID is also -1)
             myScheduler.ackBatchCommit(schedule.highestCommittedBatchId);
             batchScheduleMap.Add(schedule.batchID, schedule);
             myScheduler.RegisterDeterministicBatchSchedule(schedule.batchID);
-            //Console.WriteLine($"\n {this.myPrimaryKey} has registered bid {schedule.batchID}. ");
             return Task.CompletedTask;
         }
 
@@ -265,7 +156,6 @@ namespace Concurrency.Implementation
         {
             if (call.funcInput.context.isDeterministic == false)
             {
-                //Non-deterministic exection
                 FunctionResult invokeRet = null;
                 try
                 {
@@ -276,10 +166,8 @@ namespace Concurrency.Implementation
                 {
                     Console.WriteLine($"\n Exception::InvokeFunction: {e.Message}");
                 }
-
-                //Update before set and after set
                 int tid = call.funcInput.context.transactionID;
-                updateExecutionResult(tid, invokeRet);
+                updateExecutionResult(tid, invokeRet);   //Update before set and after set
                 return invokeRet;
             }
             else
@@ -296,11 +184,10 @@ namespace Concurrency.Implementation
                     if (log != null && state != null)
                         await log.HandleOnCompleteInDeterministicProtocol(state, bid, batchScheduleMap[bid].globalCoordinator);
 
-                    var coordinator = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(batchScheduleMap[bid].globalCoordinator);
-                    Task ack = coordinator.AckBatchCompletion(bid, myPrimaryKey);
+                    var coordinator = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(batchScheduleMap[bid].globalCoordinator);
+                    var ack = coordinator.AckBatchCompletion(bid, myPrimaryKey);
                 }
                 return ret;
-                //XXX: Check if this works -> return new FunctionResult(ret);
             }
         }
 
@@ -308,12 +195,12 @@ namespace Concurrency.Implementation
         public void updateExecutionResult(int tid, FunctionResult invokeRet)
         {
             if (invokeRet.grainWithHighestBeforeBid == null)
-                invokeRet.grainWithHighestBeforeBid = new Tuple<Guid, string>(this.myPrimaryKey, this.myUserClassName);
+                invokeRet.grainWithHighestBeforeBid = new Tuple<Guid, string>(myPrimaryKey, myUserClassName);
 
             int maxBeforeBid, minAfterBid;
             bool isBeforeAfterConsecutive = false;
 
-            if (!invokeRet.grainsInNestedFunctions.ContainsKey(this.myPrimaryKey))
+            if (!invokeRet.grainsInNestedFunctions.ContainsKey(myPrimaryKey))
                 invokeRet.grainsInNestedFunctions.Add(myPrimaryKey, myUserClassName);
 
             var beforeSet = myScheduler.getBeforeSet(tid, out maxBeforeBid);
@@ -324,7 +211,7 @@ namespace Concurrency.Implementation
             if (minAfterBid == int.MaxValue) isBeforeAfterConsecutive = false;
             else if (batchScheduleMap[minAfterBid].lastBatchID == maxBeforeBid || maxBeforeBid == int.MinValue)
                 isBeforeAfterConsecutive = true;
-            invokeRet.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive, new Tuple<Guid, string>(this.myPrimaryKey, this.myUserClassName));
+            invokeRet.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive, new Tuple<Guid, string>(myPrimaryKey, myUserClassName));
             if (invokeRet.highestCommittedBid < highestCommittedBid) invokeRet.highestCommittedBid = highestCommittedBid;
         }
 
@@ -340,18 +227,79 @@ namespace Concurrency.Implementation
             return t.Result;
         }
 
-        private void Cleanup(int tid)
+        public async Task<Boolean> CheckSerializability(FunctionResult result)
         {
-            coordinatorMap.Remove(tid);
+            await Task.CompletedTask;
+            if (result.beforeSet.Count == 0) return true;
+            if (result.maxBeforeBid <= highestCommittedBid) return true;
+            if (result.maxBeforeBid <= result.highestCommittedBid) return true;
+            if (result.isBeforeAfterConsecutive && result.maxBeforeBid < result.minAfterBid) return true;
+            if (result.maxBeforeBid >= result.minAfterBid) return false;
+            return false;
+        }
+
+        public async Task WaitForBatchCommit(int bid)
+        {
+            await myScheduler.waitForBatchCommit(bid);
+        }
+
+        public async Task<Boolean> Prepare_2PC(int tid, Guid coordinatorKey, FunctionResult result)
+        {
+            Dictionary<Guid, String> grainIDsInTransaction = result.grainsInNestedFunctions;
+            bool hasException = result.hasException();
+            bool canCommit = !hasException;
+            if (!hasException)
+            {
+                // Prepare Phase
+                HashSet<Guid> participants = new HashSet<Guid>();
+                participants.UnionWith(grainIDsInTransaction.Keys);
+                Task logTask = Task.CompletedTask;
+                if (log != null) logTask = log.HandleBeforePrepareIn2PC(tid, coordinatorKey, participants);
+
+                List<Task<Boolean>> prepareResult = new List<Task<Boolean>>();
+                foreach (var grain in grainIDsInTransaction)
+                    prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Prepare(tid));
+                
+                await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
+                foreach (Task<Boolean> vote in prepareResult)
+                {
+                    if (vote.Result == false)
+                    {
+                        canCommit = false;
+                        break;
+                    }
+                }
+            }
+            return canCommit;
+        }
+        
+        public async Task Commit_2PC(int tid, FunctionResult result)
+        {
+            var grainIDsInTransaction = result.grainsInNestedFunctions;
+            var commitTasks = new List<Task<Tuple<Guid, Object>>>();
+            if (log != null) await log.HandleOnCommitIn2PC(state, tid, coordinatorMap[tid]);
+            foreach (var grain in grainIDsInTransaction)
+                commitTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Commit(tid));
+            await Task.WhenAll(commitTasks);
+            foreach (var t in commitTasks) result.afterState.Add(t.Result.Item1, t.Result.Item2); // added by Yijian
+        }
+
+        public async Task Abort_2PC(int tid, FunctionResult result)
+        {
+            var grainIDsInTransaction = result.grainsInNestedFunctions;
+            var abortTasks = new List<Task>();
+            //Presume Abort
+            foreach (var grain in grainIDsInTransaction)
+                abortTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grain.Value).Abort(tid));
+            await Task.WhenAll(abortTasks);
         }
 
         public async Task Abort(int tid)
         {
-            //Console.WriteLine($"\n\n Grain {this.myPrimaryKey}: receives Abort message for transaction {tid}. \n\n");
+            //Console.WriteLine($"{myPrimaryKey} aborts transaction {tid}. ");
             if (state == null) return;
-
             var tasks = new List<Task>();
-            tasks.Add(this.state.Abort(tid));
+            tasks.Add(state.Abort(tid));
 
             //Presume Abort
             //if (log != null)
@@ -361,27 +309,31 @@ namespace Concurrency.Implementation
             await Task.WhenAll(tasks);
         }
 
-        public async Task Commit(int tid)
+        public async Task<Tuple<Guid, Object>> Commit(int tid)
         {
-            if (state == null) return;
+            if (state == null) return null;
             var tasks = new List<Task>();
-            tasks.Add(this.state.Commit(tid));
+            await state.Commit(tid);
+            var res = new Tuple<Guid, object>(myPrimaryKey, state.GetCommittedState(tid).Clone());
+            //tasks.Add(state.Commit(tid));
             if (log != null) tasks.Add(log.HandleOnCommitIn2PC(state, tid, coordinatorMap[tid]));
             myScheduler.ackComplete((int)tid);
             Cleanup(tid);
             await Task.WhenAll(tasks);
+            return res;   // added by Yijian
         }
 
-        /**
-         * Stateless grain always vote "yes" for 2PC.
-         */
         public async Task<bool> Prepare(int tid)
         {
-            if (state == null) return true;
-            var prepareResult = await this.state.Prepare(tid);
-            if (prepareResult && log != null)
-                if (log != null) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
+            if (state == null) return true;  // Stateless grain always vote "yes" for 2PC
+            var prepareResult = await state.Prepare(tid);
+            if (prepareResult && log != null) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
             return prepareResult;
+        }
+
+        private void Cleanup(int tid)
+        {
+            coordinatorMap.Remove(tid);
         }
     }
 }

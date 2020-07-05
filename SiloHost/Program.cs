@@ -15,8 +15,8 @@ namespace OrleansSiloHost
 {
     public class Program
     {
-        static readonly bool localCluster = false;
-        static readonly bool enableOrleansTxn = true;
+        static readonly bool localCluster = true;
+        static readonly bool enableOrleansTxn = false;
         public static int Main(string[] args)
         {
             return RunMainAsync().Result;
@@ -62,9 +62,10 @@ namespace OrleansSiloHost
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
                 //.Configure<SchedulingOptions>(o => o.MaxActiveThreads = 1)
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
+                .ConfigureServices(ConfigureServices);
 
-            if(enableOrleansTxn)
+            if (enableOrleansTxn)
                 builder.AddMemoryGrainStorageAsDefault().UseTransactions();
             
             var host = builder.Build();
@@ -82,7 +83,6 @@ namespace OrleansSiloHost
                 options.Service = "eu-west-1";
                 options.WriteCapacityUnits = 10;
                 options.ReadCapacityUnits = 10;
-
             };
 
             var builder = new SiloHostBuilder()

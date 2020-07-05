@@ -95,6 +95,7 @@ namespace Concurrency.Implementation
 
         public async Task<int> GetHighestCommittedBid()
         {
+            await Task.CompletedTask;
             return highestCommittedBatchID;
         }
 
@@ -167,7 +168,7 @@ namespace Concurrency.Implementation
             }
             catch (Exception e)
             {
-                //Console.WriteLine($"Exception :: Coordinator {myId}: receives new non deterministic transaction {e.Message}");
+                Console.WriteLine($"Exception :: Coordinator {myId}: receives new non deterministic transaction {e.Message}");
             }
             context.highestBatchIdCommitted = this.highestCommittedBatchID;
             return context;
@@ -504,6 +505,7 @@ namespace Concurrency.Implementation
             this.neighbourId = neighbourId;
             disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
             Console.WriteLine($"\n Coordinator {myId}: is initialized, my next neighbour is coordinator {neighbourId}");
+            await Task.CompletedTask;
         }
     }
 }

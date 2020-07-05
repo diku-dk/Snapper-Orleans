@@ -42,27 +42,12 @@ namespace Utilities
         public bool Remove(Node<T> node)
         {
 
-            if (!Contains(node))
-                return false;
-            size--;
-            if (head == node)
-            {
-                head = node.next;
-            }
-            if (tail == node)
-            {
-                tail = node.prev;
-            }
-
-            if (node.prev != null)
-            {
-                node.prev.next = node.next;
-            }
-
-            if (node.next != null)
-            {
-                node.next.prev = node.prev;
-            }
+            if (!Contains(node)) return false;
+            size --;
+            if (head == node) head = node.next;
+            if (tail == node) tail = node.prev;
+            if (node.prev != null) node.prev.next = node.next;
+            if (node.next != null) node.next.prev = node.prev;
             return true;
 
         }
@@ -70,8 +55,7 @@ namespace Utilities
         public Boolean Contains(Node<T> node)
         {
             Boolean isFound = false;
-            if (head == null)
-                return isFound;
+            if (head == null) return isFound;
             Node<T> next = head;
             while (next != null)
             {

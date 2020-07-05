@@ -15,8 +15,6 @@ namespace SmallBank.Interfaces
 
         Task<FunctionResult> WriteCheck(FunctionInput fin);
 
-        Task<FunctionResult> Amalgamate(FunctionInput fin);
-
         Task<FunctionResult> Balance(FunctionInput fin);
 
         Task<FunctionResult> Transfer(FunctionInput fin);

@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 using Concurrency.Implementation;
+using Concurrency.Interface;
 using SmallBank.Interfaces;
 using Utilities;
 
@@ -32,9 +32,8 @@ namespace SmallBank.Grains
             account = new Dictionary<string, UInt32>();
             savingAccount = new Dictionary<UInt32, float>();
             checkingAccount = new Dictionary<UInt32, float>();
-
-            
         }
+
         object ICloneable.Clone()
         {
             var clonedCustomerAccount = new CustomerAccountGroup();
@@ -45,7 +44,6 @@ namespace SmallBank.Grains
             return clonedCustomerAccount;
         }
     }
-
 
     public class CustomerAccountGroupGrain : TransactionExecutionGrain<CustomerAccountGroup>, ICustomerAccountGroupGrain
     {
@@ -60,8 +58,6 @@ namespace SmallBank.Grains
         public CustomerAccountGroupGrain() : base("SmallBank.Grains.CustomerAccountGroupGrain")
         {
         }
-
-
 
         public async Task<FunctionResult> InitBankAccounts(FunctionInput fin)
         {
@@ -79,47 +75,10 @@ namespace SmallBank.Grains
                 {
                     uint accountId = minAccountID + i;
                     myState.account.Add(accountId.ToString(), accountId);
-                    myState.savingAccount.Add(accountId, uint.MaxValue);
-                    myState.checkingAccount.Add(accountId, uint.MaxValue);
-                }
-            }
-            catch (Exception)
-            {
-                ret.Exp_RWConflict = true;
-                ret.setException();
-            }
-            return ret;
-        }
-
-
-        public async Task<FunctionResult> Amalgamate(FunctionInput fin)
-        {
-            TransactionContext context = fin.context;
-            FunctionResult ret = new FunctionResult();
-            try
-            {
-                var myState = await state.Read(context);
-                var tuple = (AmalgamateInput)fin.inputObject;
-                var id = tuple.Item1;
-                float balance = 0;
-
-                if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
-                {
-                    ret.Exp_AppLogic = true;
-                    ret.setException();
-                }
-                    
-                else balance = myState.savingAccount[id] + myState.checkingAccount[id];
-
-                //By invoking with 0 amount and no state mutation, we make the execution deterministic
-                var destGrain = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(MapCustomerIdToGroup(tuple.Item2));
-                var result = await destGrain.Execute(new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", new FunctionInput(fin, new Tuple<Tuple<String, UInt32>, float>(new Tuple<String, UInt32>(String.Empty, id), balance))));
-                ret.mergeWithFunctionResult(result);
-                if(!ret.hasException())
-                {
-                    //By ensuring state mutation on no exception, we make it deterministic
-                    myState.savingAccount[id] = 0;
-                    myState.checkingAccount[id] = 0;
+                    //myState.savingAccount.Add(accountId, uint.MaxValue);
+                    //myState.checkingAccount.Add(accountId, uint.MaxValue);
+                    myState.savingAccount.Add(accountId, 1000);
+                    myState.checkingAccount.Add(accountId, 1000);
                 }
             }
             catch (Exception)
@@ -137,6 +96,7 @@ namespace SmallBank.Grains
             try
             {
                 var myState = await state.Read(context);
+                ret.beforeState.Add(myPrimaryKey, myState);
                 var custName = (BalanceInput)fin.inputObject;
                 if (myState.account.ContainsKey(custName))
                 {
@@ -158,6 +118,7 @@ namespace SmallBank.Grains
             }
             catch (Exception)
             {
+                //Console.WriteLine($"Transaction Balance {context.transactionID} fail to read {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -171,22 +132,24 @@ namespace SmallBank.Grains
             try
             {
                 var myState = await state.ReadWrite(context);
+                //Console.WriteLine($"DepositChecking transaction {context.transactionID} RW {myPrimaryKey}. ");
+                ret.readOnly = false;
+                ret.beforeState.Add(myPrimaryKey, myState);
                 var inputTuple = (DepositCheckingInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
-                // changed by Yijian, not necessary to check if null or empty
-                //if (!String.IsNullOrEmpty(custName)) id = myState.account[custName];
+                if (!String.IsNullOrEmpty(custName)) id = myState.account[custName];
                 if (!myState.checkingAccount.ContainsKey(id))
                 {
                     ret.Exp_AppLogic = true;
                     ret.setException();
                     return ret;
                 }
-                myState.checkingAccount[id] += inputTuple.Item2;             
+                myState.checkingAccount[id] += inputTuple.Item2;
             }
             catch (Exception e)
             {
-                //Console.WriteLine($"Exception: Read Write Conflict, {e.Message}. ");
+                //Console.WriteLine($"Transaction DepositChecking {context.transactionID} fail to RW {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -200,13 +163,14 @@ namespace SmallBank.Grains
             try
             {
                 var myState = await state.ReadWrite(context);
+                //Console.WriteLine($"MultiTransfer transaction {context.transactionID} RW {myPrimaryKey}. ");
+                ret.readOnly = false;
+                ret.beforeState.Add(myPrimaryKey, myState);
                 var inputTuple = (MultiTransferInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
-                // changed by Yijian, not necessary to check if null or empty
-                // if (!String.IsNullOrEmpty(custName)) id = myState.account[custName];
-                //if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item2 * inputTuple.Item3.Count)
-                if (!myState.checkingAccount.ContainsKey(id))
+                if (!String.IsNullOrEmpty(custName)) id = myState.account[custName];
+                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item2 * inputTuple.Item3.Count)
                 {
                     ret.Exp_AppLogic = true;
                     ret.setException();
@@ -214,11 +178,13 @@ namespace SmallBank.Grains
                 }
                 else
                 {
-                    List<Tuple<String, UInt32>> destinations = inputTuple.Item3;
-                    List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
-                    foreach (var tuple in destinations){
+                    myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                    var destinations = inputTuple.Item3;
+                    var tasks = new List<Task<FunctionResult>>();
+                    foreach (var tuple in destinations)
+                    {
                         var gID = MapCustomerIdToGroup(tuple.Item2);
-                        FunctionInput funcInput = new FunctionInput(fin, new DepositCheckingInput(new Tuple<String, UInt32>(tuple.Item1, tuple.Item2), inputTuple.Item2));
+                        var funcInput = new FunctionInput(fin, new DepositCheckingInput(new Tuple<String, UInt32>(tuple.Item1, tuple.Item2), inputTuple.Item2));
                         if (gID == myState.GroupID)
                         {
                             Task<FunctionResult> localCall = DepositChecking(funcInput);
@@ -227,20 +193,20 @@ namespace SmallBank.Grains
                         else
                         {
                             var destination = this.GrainFactory.GetGrain<ICustomerAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
-                            FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
+                            var funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
                             tasks.Add(destination.Execute(funcCall));
                         }
                     }
-                    if (!context.isDeterministic)   // det txn no need to await, because they will never abort
-                    {
-                        await Task.WhenAll(tasks);
-                        foreach (Task<FunctionResult> task in tasks) ret.mergeWithFunctionResult(task.Result);
-                    }
-                    if (!ret.hasException()) myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                    await Task.WhenAll(tasks);
+                    foreach (Task<FunctionResult> task in tasks) ret.mergeWithFunctionResult(task.Result);
+                    // can do rollback here, because the next txn will not start until this PACT is finished
+                    if (context.isDeterministic && ret.hasException())    // rollback
+                        myState.checkingAccount[id] += inputTuple.Item2 * inputTuple.Item3.Count;
                 }
             }
             catch (Exception)
             {
+                //Console.WriteLine($"Transaction MultiTransfer {context.transactionID} fail to RW {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -254,6 +220,8 @@ namespace SmallBank.Grains
             try
             {
                 var myState = await state.ReadWrite(context);
+                ret.readOnly = false;
+                ret.beforeState.Add(myPrimaryKey, myState);
                 var inputTuple = (TransactSavingInput)fin.inputObject;
                 if (myState.account.ContainsKey(inputTuple.Item1))
                 {
@@ -264,13 +232,12 @@ namespace SmallBank.Grains
                         ret.setException();
                         return ret;
                     }
-                    /*
                     if (myState.savingAccount[id] < inputTuple.Item2)
                     {
                         ret.Exp_AppLogic = true;
                         ret.setException();
                         return ret;
-                    }*/
+                    }
                     myState.savingAccount[id] -= inputTuple.Item2;
                 }
                 else
@@ -282,6 +249,7 @@ namespace SmallBank.Grains
             }
             catch (Exception)
             {
+                //Console.WriteLine($"Transaction TransactSaving {context.transactionID} fail to RW {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -295,18 +263,20 @@ namespace SmallBank.Grains
             try
             {
                 var myState = await state.ReadWrite(context);
+                ret.readOnly = false;
+                ret.beforeState.Add(myPrimaryKey, myState);
                 var inputTuple = (TransferInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
-                //changed by Yijian, not necessary to check if null or empty
-                //if (!String.IsNullOrEmpty(custName)) id = myState.account[custName];
-                // if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item3)
-                if (!myState.checkingAccount.ContainsKey(id))
+                if (!String.IsNullOrEmpty(custName)) id = myState.account[custName];
+                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item3)
                 {
                     ret.Exp_AppLogic = true;
                     ret.setException();
                     return ret;
                 }
+                myState.checkingAccount[id] -= inputTuple.Item3;
+
                 var gID = this.MapCustomerIdToGroup(inputTuple.Item2.Item2);
                 FunctionInput funcInput = new FunctionInput(fin, new DepositCheckingInput(inputTuple.Item2, inputTuple.Item3));
                 Task<FunctionResult> task;
@@ -317,16 +287,14 @@ namespace SmallBank.Grains
                     FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
                     task = destination.Execute(funcCall);
                 }
-                if (!context.isDeterministic)   // det txn no need to await, because they will never abort
-                {
-                    await task;
-                    ret.mergeWithFunctionResult(task.Result);
-                }
-                if (!ret.hasException()) myState.checkingAccount[id] -= inputTuple.Item3;
+                await task;
+                ret.mergeWithFunctionResult(task.Result);
+                if (context.isDeterministic && ret.hasException())   // rollback for PACT
+                    myState.checkingAccount[id] += inputTuple.Item3; 
             }
             catch (Exception e)
             {
-                //Console.WriteLine($"Exception: Read Write Conflict, {e.Message}. ");
+                //Console.WriteLine($"Ttransaction Transfer {context.transactionID} fail to RW {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -340,6 +308,8 @@ namespace SmallBank.Grains
             try
             {
                 var myState = await state.ReadWrite(context);
+                ret.readOnly = false;
+                ret.beforeState.Add(myPrimaryKey, myState);
                 var inputTuple = (WriteCheckInput)fin.inputObject;
                 if (myState.account.ContainsKey(inputTuple.Item1))
                 {
@@ -351,9 +321,7 @@ namespace SmallBank.Grains
                         return ret;
                     }
                     if (myState.savingAccount[id] + myState.checkingAccount[id] < inputTuple.Item2)
-                    {
-                        myState.checkingAccount[id] -= (inputTuple.Item2 + 1); //Pay a penalty                        
-                    }
+                        myState.checkingAccount[id] -= (inputTuple.Item2 + 1);    // Pay a penalty  
                     else myState.checkingAccount[id] -= inputTuple.Item2;
                 }
                 else
@@ -365,12 +333,11 @@ namespace SmallBank.Grains
             }
             catch (Exception)
             {
+                //Console.WriteLine($"Transaction WriteCheck {context.transactionID} fail to RW {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
             return ret;
         }
-
-
     }
 }

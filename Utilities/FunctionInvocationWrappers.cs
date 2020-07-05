@@ -21,15 +21,14 @@ namespace Utilities
         {
             inputObject = data;
         }
-
-        public FunctionInput()
-        {
-        }
     }
 
     [Serializable]
     public class FunctionResult
     {
+        public int tid;
+        public Dictionary<Guid, Object> beforeState;
+        public Dictionary<Guid, Object> afterState;
         public Object resultObject;
         public Dictionary<Guid, String> grainsInNestedFunctions;
         public Boolean exception = false;
@@ -38,7 +37,7 @@ namespace Utilities
         public int maxBeforeBid;
         public int minAfterBid;
         public Boolean isBeforeAfterConsecutive = false;
-        public Boolean readOnly = false;
+        public Boolean readOnly = true;
         public Tuple<Guid, String> grainWithHighestBeforeBid;
         public Boolean isDet = true;
         public Boolean Exp_RWConflict = false;
@@ -50,16 +49,23 @@ namespace Utilities
 
         public FunctionResult(Object resultObject = null)
         {
+            beforeState = new Dictionary<Guid, object>();
+            afterState = new Dictionary<Guid, object>();
             this.resultObject = resultObject;
-            this.grainsInNestedFunctions = new Dictionary<Guid, String>();
-            this.beforeSet = new HashSet<int>();
-            this.afterSet = new HashSet<int>();
-            this.maxBeforeBid = int.MinValue;
-            this.minAfterBid = int.MaxValue;
+            grainsInNestedFunctions = new Dictionary<Guid, String>();
+            beforeSet = new HashSet<int>();
+            afterSet = new HashSet<int>();
+            maxBeforeBid = int.MinValue;
+            minAfterBid = int.MaxValue;
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
         {
+            foreach (var item in r.beforeState)
+                // if the grain is accessed multiple times by a transaction
+                if (!beforeState.ContainsKey(item.Key)) beforeState.Add(item.Key, item.Value);
+            
+            readOnly &= r.readOnly;
             if (this.highestCommittedBid < r.highestCommittedBid) this.highestCommittedBid = r.highestCommittedBid;
             this.Exp_AppLogic |= r.Exp_AppLogic;
             this.Exp_NotSerializable |= r.Exp_NotSerializable;

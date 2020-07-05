@@ -93,7 +93,7 @@ namespace AccountTransfer.Grains
                 Balance balance = await state.Read(context);
                 v = balance.value;
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 ret.Exp_RWConflict = true;
                 ret.setException();

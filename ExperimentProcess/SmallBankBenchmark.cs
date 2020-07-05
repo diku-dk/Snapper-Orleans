@@ -40,10 +40,10 @@ namespace ExperimentProcess
             transactionTypeDistribution = new DiscreteUniform(0, 99, new Random());
             detDistribution = new DiscreteUniform(0, 99, new Random());
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
-            numGrainInMultiTransferDistribution = new DiscreteUniform(4, 9, new Random());
+            numGrainInMultiTransferDistribution = new DiscreteUniform(10, 15, new Random());
         }
 
-        //getBalance, depositChecking, transfer, transacSaving, writeCheck, multiTransfer
+        // getBalance, depositChecking, transfer, transacSaving, writeCheck, multiTransfer
         public TxnType nextTransactionType()
         {
             int type = transactionTypeDistribution.Sample();
@@ -106,13 +106,97 @@ namespace ExperimentProcess
             return grainId * config.numAccountsPerGroup + (uint)accountIdDistribution.Sample();
         }
 
-        public Task<FunctionResult> newTransaction(IClusterClient client, int global_tid)   // Yijian add gloal_tid
+        public Task<FunctionResult> newTransaction(IClusterClient client, int global_tid, TxnType type)   // added by Yijian for CC test
         {
-            TxnType type = nextTransactionType();
-            FunctionInput input = null ;
+            FunctionInput input = null;
             uint groupId = 0;
             Dictionary<Guid, Tuple<String, int>> grainAccessInfo = null;
-            if (type != TxnType.Transfer && type!= TxnType.MultiTransfer)
+            if (type != TxnType.Transfer && type != TxnType.MultiTransfer)
+            {
+                groupId = (uint)grainDistribution.Sample();
+                var accountId = getAccountForGrain(groupId);
+                switch (type)
+                {
+                    case TxnType.Balance:
+                        input = new FunctionInput(accountId.ToString());
+                        break;
+                    case TxnType.DepositChecking:
+                        Tuple<Tuple<String, UInt32>, float> args1 = new Tuple<Tuple<string, uint>, float>(new Tuple<string, uint>(accountId.ToString(), accountId), 1);
+                        input = new FunctionInput(args1);
+                        break;
+                    case TxnType.TransactSaving:
+                        Tuple<String, float> args2 = new Tuple<string, float>(accountId.ToString(), 1);
+                        input = new FunctionInput(args2);
+                        break;
+                    case TxnType.WriteCheck:
+                        Tuple<String, float> args3 = new Tuple<string, float>(accountId.ToString(), 1);
+                        input = new FunctionInput(args3);
+                        break;
+                    default:
+                        break;
+                }
+                grainAccessInfo = new Dictionary<Guid, Tuple<string, int>>();
+                grainAccessInfo.Add(Helper.convertUInt32ToGuid(groupId), new Tuple<String, int>("SmallBank.Grains.CustomerAccountGroupGrain", 1));
+            }
+            else if (type == TxnType.Transfer)
+            {
+                groupId = (uint)grainDistribution.Sample();
+                var sourceAccountId = getAccountForGrain(groupId);
+                var item1 = new Tuple<string, uint>(sourceAccountId.ToString(), sourceAccountId);
+                uint destinationId;
+                do destinationId = (uint)grainDistribution.Sample();
+                while (groupId == destinationId);    // find a group which is not source group
+                var destinationAccountId = getAccountForGrain(destinationId);
+                Tuple<String, UInt32> item2 = new Tuple<string, uint>(destinationAccountId.ToString(), destinationAccountId);
+                float item3 = 1;
+                Tuple<Tuple<String, UInt32>, Tuple<String, UInt32>, float> args = new Tuple<Tuple<string, uint>, Tuple<string, uint>, float>(item1, item2, item3);
+                input = new FunctionInput(args);
+                grainAccessInfo = new Dictionary<Guid, Tuple<string, int>>();
+                grainAccessInfo.Add(Helper.convertUInt32ToGuid(groupId), new Tuple<String, int>("SmallBank.Grains.CustomerAccountGroupGrain", 1));
+                grainAccessInfo.Add(Helper.convertUInt32ToGuid(destinationId), new Tuple<String, int>("SmallBank.Grains.CustomerAccountGroupGrain", 1));
+            }
+            else
+            {
+                var numGrain = numGrainInMultiTransferDistribution.Sample();
+                var accountGrains = new HashSet<uint>();
+                do accountGrains.Add((uint)grainDistribution.Sample());
+                //while (accountGrains.Count != config.numGrainsMultiTransfer);
+                while (accountGrains.Count != numGrain);
+                grainAccessInfo = new Dictionary<Guid, Tuple<string, int>>();
+                Tuple<String, UInt32> item1 = null;
+                float item2 = 1;         // source account transfer item2 for every destination account
+                List<Tuple<string, uint>> item3 = new List<Tuple<String, uint>>();
+                bool first = true;
+                foreach (var item in accountGrains)
+                {
+                    if (first)
+                    {
+                        first = false;
+                        groupId = item;
+                        grainAccessInfo.Add(Helper.convertUInt32ToGuid(groupId), new Tuple<String, int>("SmallBank.Grains.CustomerAccountGroupGrain", 1));
+                        uint sourceId = getAccountForGrain(item);
+                        item1 = new Tuple<String, uint>(sourceId.ToString(), sourceId);
+                        continue;
+                    }
+                    uint destAccountId = getAccountForGrain(item);
+                    item3.Add(new Tuple<string, uint>(destAccountId.ToString(), destAccountId));
+                    grainAccessInfo.Add(Helper.convertUInt32ToGuid(item), new Tuple<String, int>("SmallBank.Grains.CustomerAccountGroupGrain", 1));
+                }
+                var args = new Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32>>>(item1, item2, item3);
+                input = new FunctionInput(args);
+            }
+            input.context = new TransactionContext(global_tid);   // added by Yijian
+            var task = Execute(client, groupId, type.ToString(), input, grainAccessInfo);
+            return task;
+        }
+
+        public Task<FunctionResult> newTransaction(IClusterClient client, int global_tid)   // Yijian add gloal_tid
+        {
+            var type = nextTransactionType();
+            FunctionInput input = null;
+            uint groupId = 0;
+            Dictionary<Guid, Tuple<String, int>> grainAccessInfo = null;
+            if (type != TxnType.Transfer && type != TxnType.MultiTransfer)
             {
                 groupId = (uint)grainDistribution.Sample();
                 var accountId = getAccountForGrain(groupId);
@@ -139,7 +223,7 @@ namespace ExperimentProcess
                 grainAccessInfo = new Dictionary<Guid, Tuple<string, int>>();
                 grainAccessInfo.Add(Helper.convertUInt32ToGuid(groupId), new Tuple<String, int>("SmallBank.Grains.CustomerAccountGroupGrain", 1));
             }
-            else if(type == TxnType.Transfer)
+            else if (type == TxnType.Transfer)
             {
                 groupId = (uint)grainDistribution.Sample();
                 var sourceAccountId = getAccountForGrain(groupId);
@@ -147,9 +231,9 @@ namespace ExperimentProcess
                 uint destinationId;
                 do destinationId = (uint)grainDistribution.Sample();
                 while (groupId == destinationId);    // find a group which is not source group
-                var destinationAccountId = getAccountForGrain(destinationId);                
+                var destinationAccountId = getAccountForGrain(destinationId);
                 Tuple<String, UInt32> item2 = new Tuple<string, uint>(destinationAccountId.ToString(), destinationAccountId);
-                float item3 = (uint) transferAmountDistribution.Sample();
+                float item3 = (uint)transferAmountDistribution.Sample();
                 Tuple<Tuple<String, UInt32>, Tuple<String, UInt32>, float> args = new Tuple<Tuple<string, uint>, Tuple<string, uint>, float>(item1, item2, item3);
                 input = new FunctionInput(args);
                 grainAccessInfo = new Dictionary<Guid, Tuple<string, int>>();
@@ -159,7 +243,7 @@ namespace ExperimentProcess
             else
             {
                 var numGrain = numGrainInMultiTransferDistribution.Sample();
-                var accountGrains = new HashSet<uint>();  
+                var accountGrains = new HashSet<uint>();
                 do accountGrains.Add((uint)grainDistribution.Sample());
                 //while (accountGrains.Count != config.numGrainsMultiTransfer);
                 while (accountGrains.Count != numGrain);
@@ -170,12 +254,12 @@ namespace ExperimentProcess
                 bool first = true;
                 foreach (var item in accountGrains)
                 {
-                    if(first)
+                    if (first)
                     {
                         first = false;
                         groupId = item;
                         grainAccessInfo.Add(Helper.convertUInt32ToGuid(groupId), new Tuple<String, int>("SmallBank.Grains.CustomerAccountGroupGrain", 1));
-                        uint sourceId = getAccountForGrain(item);                        
+                        uint sourceId = getAccountForGrain(item);
                         item1 = new Tuple<String, uint>(sourceId.ToString(), sourceId);
                         continue;
                     }
@@ -186,7 +270,7 @@ namespace ExperimentProcess
                 var args = new Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32>>>(item1, item2, item3);
                 input = new FunctionInput(args);
             }
-            //input.context = new TransactionContext(global_tid);   // added by Yijian
+            input.context = new TransactionContext(global_tid);   // added by Yijian
             var task = Execute(client, groupId, type.ToString(), input, grainAccessInfo);
             return task;
         }

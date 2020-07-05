@@ -37,7 +37,7 @@ namespace Concurrency.Interface
         Task<bool> Prepare(int tid);
 
         [AlwaysInterleave]
-        Task Commit(int tid);
+        Task<Tuple<Guid, Object>> Commit(int tid);   // changed by Yijian
 
         [AlwaysInterleave]
         Task Abort(int tid);

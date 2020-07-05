@@ -16,7 +16,7 @@ namespace Concurrency.Implementation
         private CommittedState<TState> myState;
 
         // when execution grain is initialized, its hybrid state is initialized
-        public HybridState(ConcurrencyType type=ConcurrencyType.TIMESTAMP) : this(new TState(), type)
+        public HybridState(ConcurrencyType type = ConcurrencyType.TIMESTAMP) : this(new TState(), type)
         {
             ;
         }
@@ -43,7 +43,8 @@ namespace Concurrency.Implementation
             try
             {
                 nonDetStateManager.Abort(tid);
-            }catch(Exception e)
+            }
+            catch(Exception e)
             {
                 Console.WriteLine($"\n Exception(Abort)::transaction {tid} exception {e.Message}");
             }

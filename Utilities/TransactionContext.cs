@@ -62,6 +62,5 @@ namespace Utilities
             Committed,
             Completed
         }
-
     }
 }
