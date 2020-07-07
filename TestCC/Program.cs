@@ -240,7 +240,7 @@ namespace TestCC
         private static async void LoadGrains()
         {
             Console.WriteLine($"Load grains, numGrains = {numGrain}, numAccountPerGroup = {numAccountPerGrain}. ");
-            var tasks = new List<Task>();
+            var tasks = new List<Task<FunctionResult>>();
             for (uint i = 0; i < numGrain; i++)
             {
                 var groupGUID = Helper.convertUInt32ToGuid(i);
@@ -253,6 +253,7 @@ namespace TestCC
                 balances.Add(groupGUID, new Tuple<float, float>(uint.MaxValue, uint.MaxValue));
             }
             await Task.WhenAll(tasks);
+            foreach (var t in tasks) Debug.Assert(!t.Result.hasException());
             Console.WriteLine("Finish loading grains.");
             loadingDone = true;
         }

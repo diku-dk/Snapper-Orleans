@@ -122,7 +122,7 @@ namespace Concurrency.Implementation
             }
             catch (Exception e)
             {
-                Console.WriteLine($"\n Exception(StartTransaction)::{myPrimaryKey}: transaction {startFunction} {context.transactionID} exception {e.Message}");
+                Console.WriteLine($"\n Exception(StartTransaction)::{myPrimaryKey}: transaction {startFunction} {context.transactionID} exception {e.Message}, {e.StackTrace}");
             }
 
             if (t1.Result.beforeSet.Count != 0)
