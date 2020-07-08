@@ -24,6 +24,8 @@ namespace Concurrency.Implementation
         private TransactionScheduler myScheduler;
         private int highestCommittedBid;
 
+        private int lastCommitTid = -1;
+
         public TransactionExecutionGrain(String myUserClassName)
         {
             this.myUserClassName = myUserClassName;
@@ -85,39 +87,31 @@ namespace Concurrency.Implementation
 
                 canCommit = !t1.Result.hasException();
                 Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myPrimaryKey));
-                if (t1.Result.grainsInNestedFunctions.Count == 1)
+                if (canCommit)
                 {
+                    canCommit = CheckSerializability(t1.Result).Result;
                     if (canCommit)
                     {
-                        var t = Commit(context.transactionID);
-                        await t;
-                        t1.Result.afterState.Add(t.Result.Item1, t.Result.Item2);    // added by Yijian
+                        canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
+                        if (!canCommit) t1.Result.Exp_2PC = true;
                     }
-                    else
-                    {
-                        t1.Result.setException();
-                        await Abort(context.transactionID);
-                    } 
+                    else t1.Result.Exp_NotSerializable = true;
                 }
-                else    // t1.Result.grainsInNestedFunctions.Count > 1
-                {
-                    if (canCommit)
-                    {
-                        canCommit = CheckSerializability(t1.Result).Result;
-                        if (canCommit)
-                        {
-                            canCommit = await Prepare_2PC(context.transactionID, myPrimaryKey, t1.Result);
-                            if (!canCommit) t1.Result.Exp_2PC = true;
-                        }
-                        else t1.Result.Exp_NotSerializable = true;
-                    }
 
-                    if (canCommit) await Commit_2PC(context.transactionID, t1.Result);
-                    else
+                if (canCommit)
+                {
+                    /*
+                    if (!t1.Result.readOnly)  // all RW transactions commit in timestamp order
                     {
-                        t1.Result.setException();
-                        await Abort_2PC(context.transactionID, t1.Result);
-                    }
+                        Debug.Assert(context.transactionID > lastCommitTid);
+                        lastCommitTid = context.transactionID;
+                    } */
+                    await Commit_2PC(context.transactionID, t1.Result);
+                } 
+                else
+                {
+                    t1.Result.setException();
+                    await Abort_2PC(context.transactionID, t1.Result);
                 }
             }
             catch (Exception e)
