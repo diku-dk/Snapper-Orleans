@@ -65,6 +65,7 @@ namespace Concurrency.Implementation
             Task t2 = myCoordinator.checkBatchCompletion(context.batchID);
             await Task.WhenAll(t1, t2);
             t1.Result.isDet = true;
+            t1.Result.txnType = startFunction;
             return t1.Result;
         }
 
@@ -75,10 +76,10 @@ namespace Concurrency.Implementation
             Boolean canCommit = false;
             try
             {
-                context = functionCallInput.context;   // added by Yijian for CC test
-                //context = await myCoordinator.NewTransaction();
-                //highestCommittedBid = context.highestBatchIdCommitted;
-                //functionCallInput.context = context;
+                //context = functionCallInput.context;   // added by Yijian for CC test
+                context = await myCoordinator.NewTransaction();
+                highestCommittedBid = context.highestBatchIdCommitted;
+                functionCallInput.context = context;
                 context.coordinatorKey = myPrimaryKey;
                 var c1 = new FunctionCall(GetType(), startFunction, functionCallInput);
                 t1 = Execute(c1);
@@ -126,6 +127,7 @@ namespace Concurrency.Implementation
                 else await GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);
             }
             t1.Result.isDet = false;
+            t1.Result.txnType = startFunction;
             return t1.Result;
         }
 
@@ -136,6 +138,7 @@ namespace Concurrency.Implementation
          */
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
+            //Console.WriteLine($"{myPrimaryKey} receives batch {schedule.batchID}. ");
             // Add by Yijian (can handle the situation when receive a schedule whose lastBatchID is also -1)
             myScheduler.ackBatchCommit(schedule.highestCommittedBatchId);
             batchScheduleMap.Add(schedule.batchID, schedule);

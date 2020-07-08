@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Concurrency.Implementation;
 using Concurrency.Interface;
@@ -118,7 +119,6 @@ namespace SmallBank.Grains
             }
             catch (Exception)
             {
-                //Console.WriteLine($"Transaction Balance {context.transactionID} fail to read {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -132,7 +132,6 @@ namespace SmallBank.Grains
             try
             {
                 var myState = await state.ReadWrite(context);
-                //Console.WriteLine($"DepositChecking transaction {context.transactionID} RW {myPrimaryKey}. ");
                 ret.readOnly = false;
                 ret.beforeState.Add(myPrimaryKey, myState);
                 var inputTuple = (DepositCheckingInput)fin.inputObject;
@@ -149,7 +148,6 @@ namespace SmallBank.Grains
             }
             catch (Exception e)
             {
-                //Console.WriteLine($"Transaction DepositChecking {context.transactionID} fail to RW {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -163,7 +161,6 @@ namespace SmallBank.Grains
             try
             {
                 var myState = await state.ReadWrite(context);
-                //Console.WriteLine($"MultiTransfer transaction {context.transactionID} RW {myPrimaryKey}. ");
                 ret.readOnly = false;
                 ret.beforeState.Add(myPrimaryKey, myState);
                 var inputTuple = (MultiTransferInput)fin.inputObject;
@@ -206,7 +203,6 @@ namespace SmallBank.Grains
             }
             catch (Exception)
             {
-                //Console.WriteLine($"Transaction MultiTransfer {context.transactionID} fail to RW {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -249,7 +245,6 @@ namespace SmallBank.Grains
             }
             catch (Exception)
             {
-                //Console.WriteLine($"Transaction TransactSaving {context.transactionID} fail to RW {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -294,7 +289,6 @@ namespace SmallBank.Grains
             }
             catch (Exception e)
             {
-                //Console.WriteLine($"Ttransaction Transfer {context.transactionID} fail to RW {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }
@@ -333,7 +327,6 @@ namespace SmallBank.Grains
             }
             catch (Exception)
             {
-                //Console.WriteLine($"Transaction WriteCheck {context.transactionID} fail to RW {myPrimaryKey}. ");
                 ret.Exp_RWConflict = true;
                 ret.setException();
             }

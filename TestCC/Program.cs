@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Utilities;
 using Orleans;
 using System.Threading.Tasks;
@@ -26,8 +26,8 @@ namespace TestCC
         static int num_txn_type = 6;
         static int[] txn_type = new int[num_txn_type];
         static IBenchmark benchmark = new SmallBankBenchmark();
-        //static ConcurrencyType nonDetCCType = ConcurrencyType.S2PL;
-        static ConcurrencyType nonDetCCType = ConcurrencyType.TIMESTAMP;
+        static ConcurrencyType nonDetCCType = ConcurrencyType.S2PL;
+        //static ConcurrencyType nonDetCCType = ConcurrencyType.TIMESTAMP;
         static volatile bool asyncInitializationDone = false;
         static volatile bool loadingDone = false;
         static WorkloadConfiguration config = new WorkloadConfiguration();
@@ -129,7 +129,7 @@ namespace TestCC
             {
                 if (t.Result.hasException()) abort++;
                 else Debug.Assert(!t.Result.Exp_2PC && !t.Result.Exp_AppLogic && !t.Result.Exp_NotSerializable && !t.Result.Exp_RWConflict && !t.Result.Exp_UnExpect);
-            } 
+            }
             Console.WriteLine($"{abort} txn abroted, abort rate = {100.0 * abort / txn_type.Sum()}%. ");
 
             // check the final state of all grains
@@ -166,6 +166,7 @@ namespace TestCC
             {
                 if (!t.Result.hasException())
                 {
+                    var type = all_txn_type[t.Result.tid];
                     Debug.Assert(t.Result.beforeState.Count == t.Result.afterState.Count);
                     foreach (var item in t.Result.beforeState) Debug.Assert(t.Result.afterState.ContainsKey(item.Key));
                     foreach (var item in t.Result.beforeState)
@@ -174,12 +175,12 @@ namespace TestCC
                         var before_saving = ((CustomerAccountGroup)item.Value).savingAccount.First().Value;
                         var before_checking = ((CustomerAccountGroup)item.Value).checkingAccount.First().Value;
                         var item2 = t.Result.afterState[grain];
-                        var after_saving = ((CustomerAccountGroup)item.Value).savingAccount.First().Value;
-                        var after_checking = ((CustomerAccountGroup)item.Value).checkingAccount.First().Value;
-                        Debug.Assert(before_saving == after_saving && before_checking == after_checking);
+                        var after_saving = ((CustomerAccountGroup)item2).savingAccount.First().Value;
+                        var after_checking = ((CustomerAccountGroup)item2).checkingAccount.First().Value;
+                        if (nonDetCCType == ConcurrencyType.S2PL) Debug.Assert(before_saving == after_saving && before_checking == after_checking);
+                        else if (type != TxnType.Balance) Debug.Assert(before_saving == after_saving && before_checking == after_checking);
                     }
-                    
-                    var type = all_txn_type[t.Result.tid];
+
                     switch (type)
                     {
                         case TxnType.Balance:
@@ -216,9 +217,7 @@ namespace TestCC
             // check the total amount of saving and checking balance
             var expect_all_saving = numGrain * 1000 - commit_txn_type[3];    // TransactSaving
             var expect_all_checking = numGrain * 1000 + commit_txn_type[1] - commit_txn_type[4];  // DepositChecking, WriteCheck
-            if (expect_all_saving != real_all_saving)
-                Console.WriteLine($"expect_all_saving = {expect_all_saving}, real_all_saving = {real_all_saving}");
-            //Debug.Assert(expect_all_saving == real_all_saving);
+            Debug.Assert(expect_all_saving == real_all_saving);
             Debug.Assert(expect_all_checking >= real_all_checking);
 
             Console.WriteLine("Finished running experiment. Press Enter to exit");

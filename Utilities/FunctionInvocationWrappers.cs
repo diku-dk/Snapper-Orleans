@@ -27,6 +27,7 @@ namespace Utilities
     public class FunctionResult
     {
         public int tid;
+        public String txnType;
         public Dictionary<Guid, Object> beforeState;
         public Dictionary<Guid, Object> afterState;
         public Object resultObject;

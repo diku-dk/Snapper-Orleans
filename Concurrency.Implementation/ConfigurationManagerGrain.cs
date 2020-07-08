@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using Orleans;
 using Concurrency.Interface;
 using System.Threading.Tasks;
@@ -61,7 +60,6 @@ namespace Concurrency.Implementation
                 }
                 await Task.WhenAll(tasks);
 
-                // disable token
                 //Inject token to coordinator 0
                 var coord0 = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(0));
                 BatchToken token = new BatchToken(-1, -1);
