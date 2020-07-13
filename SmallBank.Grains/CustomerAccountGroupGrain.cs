@@ -314,9 +314,11 @@ namespace SmallBank.Grains
                         ret.setException();
                         return ret;
                     }
+                    /*
                     if (myState.savingAccount[id] + myState.checkingAccount[id] < inputTuple.Item2)
                         myState.checkingAccount[id] -= (inputTuple.Item2 + 1);    // Pay a penalty  
-                    else myState.checkingAccount[id] -= inputTuple.Item2;
+                    else myState.checkingAccount[id] -= inputTuple.Item2;*/
+                    myState.checkingAccount[id] -= inputTuple.Item2;
                 }
                 else
                 {

@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Utilities;
-using Concurrency.Interface;
 
 namespace ExperimentProcess
 {
@@ -37,7 +36,7 @@ namespace ExperimentProcess
             transactionTypeDistribution = new DiscreteUniform(0, 99, new Random());
             detDistribution = new DiscreteUniform(0, 99, new Random());
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
-            numGrainInMultiTransferDistribution = new DiscreteUniform(10, 15, new Random());
+            numGrainInMultiTransferDistribution = new DiscreteUniform(2, 6, new Random());
         }
 
         // getBalance, depositChecking, transfer, transacSaving, writeCheck, multiTransfer
@@ -148,7 +147,7 @@ namespace ExperimentProcess
             }
             else
             {
-                var numGrain = numGrainInMultiTransferDistribution.Sample();
+                var numGrain = Math.Pow(2, numGrainInMultiTransferDistribution.Sample());
                 var accountGrains = new HashSet<uint>();
                 do accountGrains.Add((uint)grainDistribution.Sample());
                 //while (accountGrains.Count != config.numGrainsMultiTransfer);
@@ -233,7 +232,7 @@ namespace ExperimentProcess
             }
             else
             {
-                var numGrain = numGrainInMultiTransferDistribution.Sample();
+                var numGrain = Math.Pow(2, numGrainInMultiTransferDistribution.Sample());
                 var accountGrains = new HashSet<uint>();
                 do accountGrains.Add((uint)grainDistribution.Sample());
                 //while (accountGrains.Count != config.numGrainsMultiTransfer);
@@ -318,7 +317,7 @@ namespace ExperimentProcess
             }
             else
             {
-                var numGrain = numGrainInMultiTransferDistribution.Sample();
+                var numGrain = Math.Pow(2, numGrainInMultiTransferDistribution.Sample());
                 var accountGrains = new HashSet<uint>();
                 do accountGrains.Add((uint)grainDistribution.Sample());
                 //while (accountGrains.Count != config.numGrainsMultiTransfer);

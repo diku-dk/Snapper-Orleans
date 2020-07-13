@@ -6,15 +6,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
-    <ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj" />
-    <ProjectReference Include="..\Utilities\Utilities.csproj" />
-    <ProjectReference Include="..\ExperimentProcess\ExperimentProcess.csproj" />
-  </ItemGroup>
-  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging" Version="3.1.5" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="3.1.5" />
     <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.2.1" />
     <PackageReference Include="Microsoft.Orleans.Core" Version="3.2.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
+    <ProjectReference Include="..\ExperimentProcess\ExperimentProcess.csproj" />
+    <ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj" />
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
 </Project>

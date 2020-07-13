@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 using SmallBank.Interfaces;
 using Utilities;
@@ -303,7 +302,6 @@ namespace SmallBank.Grains
             return ret;
         }
 
-
         public async Task<FunctionResult> Amalgamate(FunctionInput fin)
         {
             TransactionContext context = fin.context;
@@ -343,6 +341,7 @@ namespace SmallBank.Grains
             }
             return ret;
         }
+
         Task<FunctionResult> IOrleansEventuallyConsistentAccountGroupGrain.StartTransaction(string startFunction, FunctionInput inputs)
         {
             AllTxnTypes fnType;
