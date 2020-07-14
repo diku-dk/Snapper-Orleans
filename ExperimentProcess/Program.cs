@@ -74,7 +74,7 @@ namespace ExperimentProcess
                         Console.WriteLine($"Exception:{e.Message}");
                         noException = false;
                     }
-                    //if (!task.Result.isDet) numNonDetTxn++;
+                    if (!task.Result.isDet) numNonDetTxn++;
                     if (noException)
                     {
                         if (!task.Result.hasException())

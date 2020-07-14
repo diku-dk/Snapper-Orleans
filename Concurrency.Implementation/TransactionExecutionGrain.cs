@@ -126,9 +126,20 @@ namespace Concurrency.Implementation
                     await WaitForBatchCommit(t1.Result.maxBeforeBid);
                 else await GrainFactory.GetGrain<ITransactionExecutionGrain>(t1.Result.grainWithHighestBeforeBid.Item1, t1.Result.grainWithHighestBeforeBid.Item2).WaitForBatchCommit(t1.Result.maxBeforeBid);
             }
-            t1.Result.isDet = false;
-            t1.Result.txnType = startFunction;
-            return t1.Result;
+            var res = new FunctionResult(t1.Result.resultObject);
+            res.isDet = false;
+            res.txnType = startFunction;
+            res.afterState = t1.Result.afterState;
+            res.beforeState = t1.Result.beforeState;
+            res.exception = t1.Result.exception;
+            res.Exp_2PC = t1.Result.Exp_2PC;
+            res.Exp_AppLogic = t1.Result.Exp_AppLogic;
+            res.Exp_NotSerializable = t1.Result.Exp_NotSerializable;
+            res.Exp_RWConflict = t1.Result.Exp_RWConflict;
+            res.Exp_UnExpect = t1.Result.Exp_UnExpect;
+            res.readOnly = t1.Result.readOnly;
+            res.tid = t1.Result.tid;
+            return res;
         }
 
         /**

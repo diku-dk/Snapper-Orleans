@@ -154,8 +154,8 @@ namespace ExperimentController
             var Abort_3 = ArrayStatistics.Mean(AbortType_3.ToArray());
             var Abort_4 = ArrayStatistics.Mean(AbortType_4.ToArray());
             Console.WriteLine($"Results across {workload.numEpochs} with first {numWarmupEpoch} epochs being for warmup follows");
-            Console.WriteLine($"Mean Throughput per second = { throughputMeanAndSd.Item1}, standard deviation = { throughputMeanAndSd.Item2}");
-            Console.WriteLine($"Mean Abort rate in ACT txn (%) = { abortRateMeanAndSd.Item1}, standard deviation = { abortRateMeanAndSd.Item2}");
+            Console.WriteLine($"Mean Throughput per second = { throughputMeanAndSd.Item1}, standard deviation = {throughputMeanAndSd.Item2}");
+            Console.WriteLine($"Mean Abort rate in ACT txn (%) = {abortRateMeanAndSd.Item1}, standard deviation = {abortRateMeanAndSd.Item2}");
             Console.WriteLine($"Mean Abort rate in all txn (%) = {abortRateInAllMeanAndSd.Item1}, standard deviation = {abortRateInAllMeanAndSd.Item2}");
             Console.WriteLine($"Abort Type: RWConflict = {Abort_0}, NotSerializable = {Abort_1}, Applogic = {Abort_2}, 2PC = {Abort_3}, UnExpect = {Abort_4}");
             //Compute quantiles
