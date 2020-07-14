@@ -14,17 +14,15 @@ namespace Concurrency.Implementation.Nondeterministic
         private TState activeState;     // In-memory version of the persistent state
 
         private SortedDictionary<int, Tuple<bool, TaskCompletionSource<bool>>> waitinglist;   // bool: isReader
-        private int concurrentReaders;
-        private int minWorkReader;      // decide if a writer can be added after concurrent working readers
-        private int maxWaitWriter;      // decide if a reader can be added before waiting writers
+        private SortedSet<int> concurrentReaders; // minWorkReader used to decide if a writer can be added after concurrent working readers
+        private int maxWaitWriter;   // decide if a reader can be added before waiting writers
 
         // transaction who gets the semophrore will only release it when aborts or commits
         public S2PLTransactionalState()
         {
             var descendingComparer = Comparer<int>.Create((x, y) => y.CompareTo(x));
             waitinglist = new SortedDictionary<int, Tuple<bool, TaskCompletionSource<bool>>>(descendingComparer);
-            concurrentReaders = 0;
-            minWorkReader = -1;
+            concurrentReaders = new SortedSet<int>();
             maxWaitWriter = -1;
         }
 
@@ -36,12 +34,11 @@ namespace Concurrency.Implementation.Nondeterministic
                 var mylock = new TaskCompletionSource<bool>();
                 mylock.SetResult(true);
                 waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(true, mylock));
-                Debug.Assert(concurrentReaders == 0);
-                concurrentReaders++;
-                minWorkReader = tid;
+                Debug.Assert(concurrentReaders.Count == 0);
+                concurrentReaders.Add(tid);
                 return committedState.GetState();
             }
-            if (concurrentReaders > 0)  // there are multiple readers reading the grain now
+            if (concurrentReaders.Count > 0)  // there are multiple readers reading the grain now
             {
                 if (waitinglist.ContainsKey(tid))   // tid wants to read again
                 {
@@ -53,8 +50,7 @@ namespace Concurrency.Implementation.Nondeterministic
                 {
                     mylock.SetResult(true);
                     waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(true, mylock));
-                    concurrentReaders++;
-                    minWorkReader = Math.Min(minWorkReader, tid);
+                    concurrentReaders.Add(tid);
                     return committedState.GetState();
                 }
                 // otherwise, the reader need to be added after the waiting writer
@@ -95,14 +91,14 @@ namespace Concurrency.Implementation.Nondeterministic
                 Debug.Assert(waitinglist[tid].Item2.Task.IsCompleted);  // tid must be reading or writing the grain right now
                 if (waitinglist[tid].Item1)    // if tid has been added as a reader before
                 {
-                    Debug.Assert(concurrentReaders > 0);     // right now there must be readers working
+                    Debug.Assert(concurrentReaders.Count > 0);     // right now there must be readers working
                     throw new DeadlockAvoidanceException($"txn {tid} is aborted because lock upgrade is not allowed. ");
                 }
                 return activeState;  // if tid has been added as a writer before, this writer must be working now
             }
-            if (concurrentReaders > 0)  // right now there are multiple readers reading
+            if (concurrentReaders.Count > 0)  // right now there are multiple readers reading
             {
-                if (tid < minWorkReader)
+                if (tid < concurrentReaders.Min)
                 {
                     var mylock = new TaskCompletionSource<bool>();
                     waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(false, mylock));
@@ -138,12 +134,11 @@ namespace Concurrency.Implementation.Nondeterministic
             waitinglist.Remove(tid);
             if (isReader)
             {
-                concurrentReaders--;
-                if (concurrentReaders == 0) Debug.Assert(waitinglist.Count == 0 || !waitinglist.First().Value.Item1);
+                concurrentReaders.Remove(tid);
+                if (concurrentReaders.Count == 0) Debug.Assert(waitinglist.Count == 0 || !waitinglist.First().Value.Item1);
             }
-            if (concurrentReaders == 0)
+            if (concurrentReaders.Count == 0)
             {
-                minWorkReader = -1;
                 maxWaitWriter = -1;
                 if (waitinglist.Count == 0) return;
                 if (waitinglist.First().Value.Item1)   // if next waiting transaction is a reader
@@ -155,8 +150,7 @@ namespace Concurrency.Implementation.Nondeterministic
                         if (!txn.Value.Item1) break;
                         else
                         {
-                            concurrentReaders++;
-                            minWorkReader = Math.Min(minWorkReader, txn.Key);
+                            concurrentReaders.Add(txn.Key);
                             tasks.Add(txn.Value.Item2);
                         }
                     }

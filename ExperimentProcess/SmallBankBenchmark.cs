@@ -36,7 +36,7 @@ namespace ExperimentProcess
             transactionTypeDistribution = new DiscreteUniform(0, 99, new Random());
             detDistribution = new DiscreteUniform(0, 99, new Random());
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
-            numGrainInMultiTransferDistribution = new DiscreteUniform(2, 6, new Random());
+            numGrainInMultiTransferDistribution = new DiscreteUniform(2, 3, new Random());
         }
 
         // getBalance, depositChecking, transfer, transacSaving, writeCheck, multiTransfer

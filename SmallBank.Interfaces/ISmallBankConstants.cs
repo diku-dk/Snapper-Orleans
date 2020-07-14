@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace SmallBank.Interfaces
+﻿namespace SmallBank.Interfaces
 {   
     public enum BenchTxnType { Balance, DepositChecking, Transfer, TransactSaving, WriteCheck, MultiTransfer };
 

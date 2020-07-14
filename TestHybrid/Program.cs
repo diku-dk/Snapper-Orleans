@@ -21,7 +21,7 @@ namespace TestHybrid
         static IClusterClient client;
         static Random random = new Random();
         //static uint numGrain = (uint)random.Next(Max);
-        static uint numGrain = 1000;
+        static uint numGrain = 500;
         static uint numAccountPerGrain = 1;
         static uint numCoordinator = 2;
         static int num_txn_type = 6;
@@ -29,8 +29,8 @@ namespace TestHybrid
         static int[] act_txn_type = new int[num_txn_type];
         static int[] act_commit_txn_type = new int[num_txn_type];
         static IBenchmark benchmark = new SmallBankBenchmark();
-        //static ConcurrencyType nonDetCCType = ConcurrencyType.S2PL;
-        static ConcurrencyType nonDetCCType = ConcurrencyType.TIMESTAMP;
+        static ConcurrencyType nonDetCCType = ConcurrencyType.S2PL;
+        //static ConcurrencyType nonDetCCType = ConcurrencyType.TIMESTAMP;
         static volatile bool asyncInitializationDone = false;
         static volatile bool loadingDone = false;
         static WorkloadConfiguration config = new WorkloadConfiguration();
@@ -46,11 +46,13 @@ namespace TestHybrid
             var txn_type = new int[num_txn_type];
             for (int i = 0; i < num_txn_type; i++)
             {
-                txn_type[i] = random.Next(Max);
+                //txn_type[i] = random.Next(Max);
+                txn_type[i] = 0;
                 pact_txn_type[i] = 0;
                 act_txn_type[i] = 0;
                 act_commit_txn_type[i] = 0;
             }
+            txn_type[2] = 1;
 
             // initialize benchmark configuration
             config.distribution = Distribution.UNIFORM;

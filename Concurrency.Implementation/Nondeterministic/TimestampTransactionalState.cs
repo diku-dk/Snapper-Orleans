@@ -8,6 +8,7 @@ using Utilities;
 
 namespace Concurrency.Implementation.Nondeterministic
 {
+    // all RW transactions commit in timestamp order
     public class TimestampTransactionalState<TState> : INonDetTransactionalState<TState> where TState : ICloneable, new()
     {
         private int lastCommitTid;
@@ -33,6 +34,7 @@ namespace Concurrency.Implementation.Nondeterministic
             if (transactionMap.ContainsKey(tid))  // if tid has written the state before
             {
                 Debug.Assert(transactionMap[tid].data.status.Equals(Status.Executing));
+                if (transactionMap[tid].data.rts > tid) throw new DeadlockAvoidanceException($"Transaction {tid} fail to write because a more recent transaction has read. ");
                 return Task.FromResult<TState>(transactionMap[tid].data.state);
             }
             var lastNode = findLastNonAbortedTransaction();
@@ -59,6 +61,7 @@ namespace Concurrency.Implementation.Nondeterministic
                 if (prev != lastNode.data.tid) throw new DeadlockAvoidanceException($"Transaction {tid} is aborted to enforce repeatable read. ");
                 Debug.Assert(lastNode.data.rts >= prev);
             }
+            // If tid hasn't accessed this grain before
             lastNode.data.rts = tid;
             state = lastNode.data.state;
             copy = (TState)state.Clone();
@@ -89,7 +92,6 @@ namespace Concurrency.Implementation.Nondeterministic
                 node = transactionList.Append(info);
                 node.data.ExecutionPromise.SetResult(true);
                 node.data.status = Status.Committed;
-                transactionMap.Add(tid, node);
                 readDependencyMap.Add(tid, -1);
                 return Task.FromResult<TState>(copy);
             }
@@ -140,7 +142,6 @@ namespace Concurrency.Implementation.Nondeterministic
         public void Commit(int tid, CommittedState<TState> committedState)
         {
             Debug.Assert(readDependencyMap.ContainsKey(tid) || transactionMap.ContainsKey(tid));
-            //Debug.Assert(tid > lastCommitTid);
             lastCommitTid = Math.Max(lastCommitTid, tid);
             if (readDependencyMap.ContainsKey(tid))
             {
