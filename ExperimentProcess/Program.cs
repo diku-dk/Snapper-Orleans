@@ -56,7 +56,7 @@ namespace ExperimentProcess
                     {
                         //Pipeline remaining tasks
                         var asyncReqStartTime = globalWatch.Elapsed;
-                        var newTask = benchmark.newTransaction(client, 1);
+                        var newTask = benchmark.newTransaction(client, -1);
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);                      
                     } 

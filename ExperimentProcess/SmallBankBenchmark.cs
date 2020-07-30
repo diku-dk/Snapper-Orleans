@@ -36,7 +36,7 @@ namespace ExperimentProcess
             transactionTypeDistribution = new DiscreteUniform(0, 99, new Random());
             detDistribution = new DiscreteUniform(0, 99, new Random());
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
-            numGrainInMultiTransferDistribution = new DiscreteUniform(2, 3, new Random());
+            numGrainInMultiTransferDistribution = new DiscreteUniform(5, 6, new Random());
         }
 
         // getBalance, depositChecking, transfer, transacSaving, writeCheck, multiTransfer
@@ -260,12 +260,11 @@ namespace ExperimentProcess
                 var args = new Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32>>>(item1, item2, item3);
                 input = new FunctionInput(args);
             }
-            input.context = new TransactionContext(global_tid);   // added by Yijian
             var task = Execute(client, groupId, type.ToString(), input, grainAccessInfo);
             return task;
         }
 
-        public Task<FunctionResult> newTransaction(IClusterClient client)   // Yijian add gloal_tid
+        public Task<FunctionResult> newTransaction(IClusterClient client) 
         {
             var type = nextTransactionType();
             FunctionInput input = null;

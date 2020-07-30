@@ -16,21 +16,22 @@ namespace TestHybrid
 {
     class Program
     {
+        static bool local = false;
         static int Max = 3000;
-        static int numTxn = 10000;
+        static int numTxn = 500000;
         static IClusterClient client;
         static Random random = new Random();
         //static uint numGrain = (uint)random.Next(Max);
-        static uint numGrain = 500;
+        static uint numGrain = 10;
         static uint numAccountPerGrain = 1;
-        static uint numCoordinator = 2;
+        static uint numCoordinator = 4;
         static int num_txn_type = 6;
         static int[] pact_txn_type = new int[num_txn_type];
         static int[] act_txn_type = new int[num_txn_type];
         static int[] act_commit_txn_type = new int[num_txn_type];
         static IBenchmark benchmark = new SmallBankBenchmark();
-        //static ConcurrencyType nonDetCCType = ConcurrencyType.S2PL;
-        static ConcurrencyType nonDetCCType = ConcurrencyType.TIMESTAMP;
+        static ConcurrencyType nonDetCCType = ConcurrencyType.S2PL;
+        //static ConcurrencyType nonDetCCType = ConcurrencyType.TIMESTAMP;
         static volatile bool asyncInitializationDone = false;
         static volatile bool loadingDone = false;
         static WorkloadConfiguration config = new WorkloadConfiguration();
@@ -52,13 +53,13 @@ namespace TestHybrid
                 act_txn_type[i] = 0;
                 act_commit_txn_type[i] = 0;
             }
-            txn_type[2] = 1;
+            txn_type[2] = 100;
 
             // initialize benchmark configuration
             config.distribution = Distribution.UNIFORM;
             config.numAccountsPerGroup = numAccountPerGrain;
             config.numAccounts = numAccountPerGrain * numGrain;
-            config.deterministicTxnPercent = 0;
+            config.deterministicTxnPercent = 100;
             config.mixture = new int[num_txn_type - 1];
             for (int i = 0; i < num_txn_type - 1; i++) config.mixture[i] = txn_type[i] * 100 / txn_type.Sum();
             config.grainImplementationType = ImplementationType.SNAPPER;
@@ -226,7 +227,8 @@ namespace TestHybrid
         private static async void InitiateClientAndSpawnConfigurationCoordinator()
         {
             ClientConfiguration config = new ClientConfiguration();
-            client = await config.StartClientWithRetries();
+            if (local) client = await config.StartClientWithRetries();
+            else client = await config.StartClientWithRetriesToCluster();
 
             exeConfig = new ExecutionGrainConfiguration(new LoggingConfiguration(), new ConcurrencyConfiguration(nonDetCCType), 1000);
             coordConfig = new CoordinatorGrainConfiguration(100, 10000, 120, numCoordinator);

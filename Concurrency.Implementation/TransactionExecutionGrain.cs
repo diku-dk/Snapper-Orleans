@@ -65,7 +65,7 @@ namespace Concurrency.Implementation
             Task t2 = myCoordinator.checkBatchCompletion(context.batchID);
             await Task.WhenAll(t1, t2);
             t1.Result.isDet = true;
-            t1.Result.txnType = startFunction;
+            t1.Result.txnType = startFunction;   // for CC correctness test
             return t1.Result;
         }
 

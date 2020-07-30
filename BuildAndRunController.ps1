@@ -1,4 +1,4 @@
-﻿# First build the Orleans vNext nuget packages locally
+# First build the Orleans vNext nuget packages locally
 if((Test-Path "..\..\vNext\Binaries\Debug\") -eq $false) { 
      # this will only work in Windows. 
      # Alternatively build the nuget packages and place them in the <root>/vNext/Binaries/Debug folder 
@@ -17,4 +17,4 @@ if ($LastExitCode -ne 0) { return; }
 
 # Run the 2 console apps in different windows
 
-Start-Process "dotnet" -ArgumentList "run --project MyProcess --no-build"
+Start-Process "dotnet" -ArgumentList "run --project ExperimentController --no-build"
