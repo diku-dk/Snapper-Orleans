@@ -1,6 +1,6 @@
-﻿using Orleans.Concurrency;
+﻿using Utilities;
+using Orleans.Concurrency;
 using System.Threading.Tasks;
-using Utilities;
 
 namespace Concurrency.Interface.Nondeterministic
 {

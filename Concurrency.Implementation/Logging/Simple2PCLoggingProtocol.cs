@@ -1,33 +1,48 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
-using Concurrency.Interface.Logging;
-using Concurrency.Interface;
 using Utilities;
+using Concurrency.Interface;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Concurrency.Interface.Logging;
 
 namespace Concurrency.Implementation.Logging
-{    
+{
     class Simple2PCLoggingProtocol<TState> : ILoggingProtocol<TState>
     {
-        IKeyValueStorageWrapper logStorage;
-        String grainType;
-        Guid grainPrimaryKey;
-        int sequenceNumber;
+        private int grainID;
+        private int sequenceNumber;
+        private ISerializer serializer;
+        private IKeyValueStorageWrapper logStorage;
 
-        public Simple2PCLoggingProtocol(String grainType, Guid grainPrimaryKey, StorageWrapperType storage) {
-            this.grainType = grainType;
-            this.grainPrimaryKey = grainPrimaryKey;
-            this.sequenceNumber = 0;            
-            switch(storage)
+        public Simple2PCLoggingProtocol(string grainType, int grainID, dataFormatType dataFormat, StorageWrapperType storage)
+        {
+            this.grainID = grainID;
+            sequenceNumber = 0;
+            switch (storage)
             {
                 case StorageWrapperType.FILESYSTEM:
-                    const string basePath = @"C:\Users\x\orleans-logs\";
-                    logStorage = new FileKeyValueStorageWrapper(basePath, grainType, grainPrimaryKey);
+                    logStorage = new FileKeyValueStorageWrapper(grainType, grainID);
                     break;
                 case StorageWrapperType.DYNAMODB:
-                    logStorage = new DynamoDBStorageWrapper(grainType, grainPrimaryKey);
+                    logStorage = new DynamoDBStorageWrapper(grainType, grainID);
                     break;
+                case StorageWrapperType.INMEMORY:
+                    logStorage = new InMemoryStorageWrapper();
+                    break;
+                default:
+                    throw new Exception($"Exception: Unknown StorageWrapper {storage}");
+            }
+
+            switch (dataFormat)
+            {
+                case dataFormatType.BINARY:
+                    serializer = new BinarySerializer();
+                    break;
+                case dataFormatType.MSGPACK:
+                    serializer = new MsgPackSerializer();
+                    break;
+                default:
+                    throw new Exception($"Exception: Unknown serailizer {dataFormat}");
             }
         }
 
@@ -41,48 +56,47 @@ namespace Concurrency.Implementation.Logging
             }
             return returnVal;
         }
-        async Task ILoggingProtocol<TState>.HandleBeforePrepareIn2PC(int tid, Guid coordinatorKey, HashSet<Guid> grains)
+        async Task ILoggingProtocol<TState>.HandleBeforePrepareIn2PC(int tid, int coordinatorKey, HashSet<int> grains)
         {
-            var logRecord = new LogParticipant(getSequenceNumber(), grainPrimaryKey, tid, grains);
-            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), Helper.serializeToByteArray<LogParticipant>(logRecord));
+            var logRecord = new LogParticipant(getSequenceNumber(), grainID, tid, grains);
+            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnAbortIn2PC(ITransactionalState<TState> state, int tid, Guid coordinatorKey)
-        {            
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.ABORT, coordinatorKey, tid);            
-            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), Helper.serializeToByteArray<LogFormat<TState>>(logRecord));
+        async Task ILoggingProtocol<TState>.HandleOnAbortIn2PC(ITransactionalState<TState> state, int tid, int coordinatorKey)
+        {
+            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.ABORT, coordinatorKey, tid);
+            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
         }
 
-        // TODO: state is not written to log ? (Yijian)
-        async Task ILoggingProtocol<TState>.HandleOnCommitIn2PC(ITransactionalState<TState> state, int tid, Guid coordinatorKey)
+        async Task ILoggingProtocol<TState>.HandleOnCommitIn2PC(ITransactionalState<TState> state, int tid, int coordinatorKey)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.COMMIT, coordinatorKey, tid);
-            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), Helper.serializeToByteArray<LogFormat<TState>>(logRecord));
-            
+            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
+
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnPrepareIn2PC(ITransactionalState<TState> state, int tid, Guid coordinatorKey)
+        async Task ILoggingProtocol<TState>.HandleOnPrepareIn2PC(ITransactionalState<TState> state, int tid, int coordinatorKey)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.PREPARE, coordinatorKey, tid, state.GetPreparedState(tid));
-            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), Helper.serializeToByteArray<LogFormat<TState>>(logRecord));            
+            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnCompleteInDeterministicProtocol(ITransactionalState<TState> state, int bid, Guid coordinatorKey)
+        async Task ILoggingProtocol<TState>.HandleOnCompleteInDeterministicProtocol(ITransactionalState<TState> state, int bid, int coordinatorKey)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMPLETE, coordinatorKey, bid, state.GetCommittedState(bid));
-            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), Helper.serializeToByteArray<LogFormat<TState>>(logRecord));
+            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, HashSet<Guid> grains)
+        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, HashSet<int> grains)
         {
-            var logRecord = new LogParticipant(getSequenceNumber(), grainPrimaryKey, bid, grains);
-            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), Helper.serializeToByteArray<LogParticipant>(logRecord));
+            var logRecord = new LogParticipant(getSequenceNumber(), grainID, bid, grains);
+            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
         }
 
         async Task ILoggingProtocol<TState>.HandleOnCommitInDeterministicProtocol(int bid)
         {
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMMIT, grainPrimaryKey, bid);
-            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), Helper.serializeToByteArray<LogFormat<TState>>(logRecord)); 
+            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMMIT, grainID, bid);
+            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
         }
 
 

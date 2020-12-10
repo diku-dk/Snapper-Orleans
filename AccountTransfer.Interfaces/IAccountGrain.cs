@@ -8,8 +8,8 @@ namespace AccountTransfer.Interfaces
 {
     public class TransferInput
     {
-        public UInt32 sourceAccount;
-        public UInt32 destinationAccount;
+        public uint sourceAccount;
+        public uint destinationAccount;
         public float transferAmount;
 
         public TransferInput(uint sourceAccount, uint destinationAccount, float transferAmount)
@@ -22,8 +22,8 @@ namespace AccountTransfer.Interfaces
 
     public class TransferOneToMultiInput
     {
-        public UInt32 sourceAccount;
-        public List<UInt32> destinationAccounts;
+        public uint sourceAccount;
+        public List<uint> destinationAccounts;
         public float transferAmount;
 
         public TransferOneToMultiInput(uint sourceAccount, List<uint> destinationAccounts, float transferAmount)

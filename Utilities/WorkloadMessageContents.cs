@@ -1,15 +1,42 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace Utilities
 {
-  
-    public enum BenchmarkType {SMALLBANK};
+    public enum BenchmarkType {SMALLBANK, TPCC};
+    public enum Distribution { ZIPFIAN, UNIFORM, HOTRECORD }
     public enum ImplementationType { SNAPPER, ORLEANSEVENTUAL, ORLEANSTXN };
-    public enum Distribution { ZIPFIAN, UNIFORM}
-
    
+    public class Constants
+    {
+        public const string logPath = @"D:\log\";
+        public const string dataPath = @"C:\Users\Administrator\Desktop\data\";
+
+        public const bool multiWorker = false;
+        public const string controller_Local_SinkAddress = "@tcp://localhost:5558";
+        public const string controller_Local_WorkerAddress = "@tcp://localhost:5575";
+        public const string worker_Local_SinkAddress = ">tcp://localhost:5558";
+        public const string worker_Local_ControllerAddress = ">tcp://localhost:5575";
+
+        public const string controller_Remote_SinkAddress = "@tcp://172.31.12.68:5558";  // controller private IP
+        public const string controller_Remote_WorkerAddress = "@tcp://*:5575";
+        public const string worker_Remote_SinkAddress = ">tcp://18.188.44.200:5558";    // controller public IP
+        public const string worker_Remote_ControllerAddress = ">tcp://18.188.44.200:5558";  // controller public IP
+
+        public const bool multiSilo = false;
+        public const bool localCluster = false;
+        public const int numCoordPerSilo = 8;
+        public const string LocalSilo = "dev";
+        public const string ClusterSilo = "ec2";
+        public const string ServiceID = "Snapper";
+        public const string LogTable = "SnapperLog";
+        public const string ServiceRegion = "us-east-2";
+        public const string AccessKey = "AKIAQHVFG6FCI24D3EFV";
+        public const string GrainStateTable = "SnapperGrainStateTable";
+        public const string SiloMembershipTable = "SnapperMembershipTable";
+        public const string SecretKey = "4ZqPYtEtNxht7PwJGySzVqTJtSYmfuGcuVuy3Dsk";
+    }
+
     [Serializable]
     public class WorkloadConfiguration
     {
@@ -22,8 +49,8 @@ namespace Utilities
         public int epochDurationMSecs;
         public Distribution distribution;
         //SmallBank Specific configurations
-        public uint numAccounts;
-        public uint numAccountsPerGroup;
+        public int numAccounts;
+        public int numAccountsPerGroup;
         public int[] mixture;//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
         public int numAccountsMultiTransfer;
         public int numGrainsMultiTransfer;
@@ -36,40 +63,56 @@ namespace Utilities
     [Serializable]
     public class WorkloadResults
     {
-        public int[] abortType;
-        public int numCommitted;
-        public int numTransactions;
+        public int numDeadlock;
+        public int numNotSerializable;
+        public int numDetCommitted;
+        public int numNonDetCommitted;
+        public int numDetTxn;
         public int numNonDetTxn;
         public long startTime;
         public long endTime;
         public List<double> latencies;
+        public List<double> networkTime;
+        public List<double> emitTime;
+        public List<double> executeTime;
+        public List<double> waitBatchCommitTime;
 
-        public WorkloadResults(int numTransactions, int numCommitted, int numNonDetTxn, long startTime, long endTime, List<double> latencies, int[] abortType)
+        public List<double> det_latencies;
+        public List<double> det_networkTime;
+        public List<double> det_emitTime;
+        public List<double> det_waitBatchScheduleTime;
+        public List<double> det_executeTime;
+        public List<double> det_waitBatchCommitTime;
+
+        public WorkloadResults(int numDetTxn, int numNonDetTxn, int numDetCommitted, int numNonDetCommitted, long startTime, long endTime, int numNotSerializable, int numDeadlock)
         {
-            this.numTransactions = numTransactions;
-            this.numCommitted = numCommitted;
+            this.numDetTxn = numDetTxn;
             this.numNonDetTxn = numNonDetTxn;
+            this.numDetCommitted = numDetCommitted;
+            this.numNonDetCommitted = numNonDetCommitted;
             this.startTime = startTime;
             this.endTime = endTime;
-            this.latencies = latencies;
-            this.abortType = abortType;
+            this.numNotSerializable = numNotSerializable;
+            this.numDeadlock = numDeadlock;
         }
-    }
 
-    [Serializable]
-    public class AggregatedWorkloadResults
-    {
-        public List<List<WorkloadResults>> results;
-
-        public AggregatedWorkloadResults(List<WorkloadResults>[] input)
+        public void setTime(List<double> latencies, List<double> networkTime, List<double> emitTime, List<double> executeTime, List<double> waitBatchCommitTime)
         {
-            results = new List<List<WorkloadResults>>();
-            for(int i=0; i<input.Length; i++)
-            {
-                results.Add(input[i]);
-            }
+            this.latencies = latencies;
+            this.networkTime = networkTime;
+            this.emitTime = emitTime;
+            this.executeTime = executeTime;
+            this.waitBatchCommitTime = waitBatchCommitTime;
         }
 
-
+        public void setDetTime(List<double> latencies, List<double> networkTime, List<double> emitTime, List<double> waitBatchScheduleTime, List<double> executeTime, List<double> waitBatchCommitTime)
+        {
+            det_latencies = latencies;
+            det_networkTime = networkTime;
+            det_emitTime = emitTime;
+            det_waitBatchScheduleTime = waitBatchScheduleTime;
+            det_executeTime = executeTime;
+            det_waitBatchCommitTime = waitBatchCommitTime;
+        }
     }
 }

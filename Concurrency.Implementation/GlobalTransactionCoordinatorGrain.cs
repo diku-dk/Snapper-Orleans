@@ -1,144 +1,135 @@
-﻿using Orleans;
-using Concurrency.Interface;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System;
+using Orleans;
 using Utilities;
-using System.Threading.Tasks;
-using Concurrency.Interface.Logging;
-using System.Timers;
 using System.Diagnostics;
-using System.Threading;
+using Concurrency.Interface;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Concurrency.Interface.Logging;
 using Concurrency.Implementation.Logging;
 
 namespace Concurrency.Implementation
 {
     [CoordPlacementStrategy]
     public class GlobalTransactionCoordinatoGrain : Grain, IGlobalTransactionCoordinatorGrain
-
     {
-        protected Guid myPrimaryKey;
-        private IGlobalTransactionCoordinatorGrain neighbour;
-        private List<IGlobalTransactionCoordinatorGrain> coordinatorList;
-
-        //Timer
-        private IDisposable disposable;
-        private int batchIntervalMSecs;
+        private int myID;
+        private int neighborID;
+        private int batchIntraCount;
+        private int batchInterCount;
+        private int tokenIntraCount;
+        private int tokenInterCount;
+        private string grainClassName;
+        private int highestCommittedBatchID;
+        private ILoggingProtocol<string> log;
         private int backoffTimeIntervalMSecs;
-        private int idleIntervalTillBackOffSecs;
-        private TimeSpan waitingTime;
-        private TimeSpan batchInterval;
-        private float smoothingPreAllocationFactor = 0.5f;
-
-        //Batch Schedule
-        // only include batches that are emitted from this coordinator
-        private Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>> batchSchedulePerGrain;
-        private Dictionary<int, Dictionary<Guid, String>> batchGrainClassName;
-        private SortedSet<int> batchesWaitingForCommit;
-
-
-        //Maintains the status of batch processing
-        private Dictionary<int, int> lastBatchIDMap;   // the last emitted batch before this batch among all coordinators
-        private Dictionary<int, TaskCompletionSource<Boolean>> batchStatusMap;
-        private int highestCommittedBatchID = -1;
-
-        //Maintains the number of uncompleted grains of each batch
-        private Dictionary<int, int> expectedAcksPerBatch;
-
-        //Information controlling the emitting of non-deterministic transactions
         private int detEmitSeq, nonDetEmitSeq;
-        Dictionary<int, TaskCompletionSource<Boolean>> detEmitPromiseMap, nonDetEmitPromiseMap;
+        private int idleIntervalTillBackOffSecs;
+        private float smoothingPreAllocationFactor;
+        private Dictionary<int, int> lastBatchIDMap;       // <bid, lastBid>
+        private Dictionary<int, int> coordEmitLastBatch;   // <bid, coordID who emit lastBid>
+        private SortedList<int, DateTime> batchStartTime;
+        private Dictionary<int, int> expectedAcksPerBatch;
+        private List<IGlobalTransactionCoordinatorGrain> coordList;
+        private Dictionary<int, TaskCompletionSource<bool>> batchesWaitingForCommit;
+        Dictionary<int, TaskCompletionSource<bool>> detEmitPromiseMap, nonDetEmitPromiseMap;
+        private Dictionary<int, Dictionary<int, DeterministicBatchSchedule>> batchSchedulePerGrain;
+
         Dictionary<int, int> nonDetEmitID;
         Dictionary<int, int> nonDeterministicEmitSize;
-        //List buffering the incoming deterministic transaction requests
+
+        // List buffering the incoming deterministic transaction requests
         Dictionary<int, List<TransactionContext>> deterministicTransactionRequests;
         private int numTransactionIdsPreAllocated;
         private int numTransactionIdsReserved;
         private int tidToAllocate;
 
-        //Emitting status
-        private Boolean isEmitTimerOn = false;
-
-        // TODO: log is not initialized (Yijian)
-        private ILoggingProtocol<String> log;
-
-        //For test only
-        private uint myId, neighbourId;
-        private Boolean spawned = false;
-
         public override Task OnActivateAsync()
         {
-            batchSchedulePerGrain = new Dictionary<int, Dictionary<Guid, DeterministicBatchSchedule>>();
-            batchGrainClassName = new Dictionary<int, Dictionary<Guid, String>>();
-            lastBatchIDMap = new Dictionary<int, int>();
-            //actorLastBatch = new Dictionary<IDTransactionGrain, int>();
-            expectedAcksPerBatch = new Dictionary<int, int>();
-            batchStatusMap = new Dictionary<int, TaskCompletionSource<Boolean>>();
-            myPrimaryKey = this.GetPrimaryKey();
-
-            //Enable the following line for log
-            //log = new Simple2PCLoggingProtocol<String>(this.GetType().ToString(), myPrimaryKey, StorageWrapperType.DYNAMODB);
-            this.batchesWaitingForCommit = new SortedSet<int>();
             detEmitSeq = 0;
             nonDetEmitSeq = 0;
-            numTransactionIdsPreAllocated = 0;
-            numTransactionIdsReserved = 0;
             tidToAllocate = -1;
+            batchIntraCount = 0;
+            batchInterCount = 0;
+            tokenIntraCount = 0;
+            tokenInterCount = 0;
+            highestCommittedBatchID = -1;
+            numTransactionIdsReserved = 0;
+            numTransactionIdsPreAllocated = 0;
+            smoothingPreAllocationFactor = 0.5f;
+            myID = (int)this.GetPrimaryKeyLong();
+            nonDetEmitID = new Dictionary<int, int>();
+            lastBatchIDMap = new Dictionary<int, int>();
+            coordEmitLastBatch = new Dictionary<int, int>();
+            batchStartTime = new SortedList<int, DateTime>();
+            expectedAcksPerBatch = new Dictionary<int, int>();
+            nonDeterministicEmitSize = new Dictionary<int, int>();
+            coordList = new List<IGlobalTransactionCoordinatorGrain>();
             detEmitPromiseMap = new Dictionary<int, TaskCompletionSource<bool>>();
             nonDetEmitPromiseMap = new Dictionary<int, TaskCompletionSource<bool>>();
-            nonDeterministicEmitSize = new Dictionary<int, int>();
-            nonDetEmitID = new Dictionary<int, int>();
+            batchesWaitingForCommit = new Dictionary<int, TaskCompletionSource<bool>>();
             deterministicTransactionRequests = new Dictionary<int, List<TransactionContext>>();
-            Console.WriteLine($"Thread ID for coord {myPrimaryKey} is {Thread.CurrentThread.ManagedThreadId}");
+            batchSchedulePerGrain = new Dictionary<int, Dictionary<int, DeterministicBatchSchedule>>();
             return base.OnActivateAsync();
         }
 
-        public async Task<int> GetHighestCommittedBid()
+        public async Task PrintData()
         {
-            await Task.CompletedTask;
-            return highestCommittedBatchID;
+            if (batchStartTime.Count > 0) Console.WriteLine($"coord {myID} batchStartTime {batchStartTime.Count}");
+            if (expectedAcksPerBatch.Count > 0) Console.WriteLine($"coord {myID} expectedAcksPerBatch {expectedAcksPerBatch.Count}");
+            if (detEmitPromiseMap.Count > 0) Console.WriteLine($"coord {myID} detEmitPromiseMap {detEmitPromiseMap.Count}");
+            if (deterministicTransactionRequests.Count > 0) Console.WriteLine($"coord {myID} deterministicTransactionRequests {deterministicTransactionRequests.Count}");
+            if (batchSchedulePerGrain.Count > 0) Console.WriteLine($"coord {myID} batchSchedulePerGrain {batchSchedulePerGrain.Count}");
+            if (batchesWaitingForCommit.Count > 0) Console.WriteLine($"coord {myID} batchesWaitingForCommit {batchesWaitingForCommit.Count}");
+            if (lastBatchIDMap.Count > 0) Console.WriteLine($"coord {myID} lastBatchIDMap {lastBatchIDMap.Count}");
+            if (nonDetEmitPromiseMap.Count > 0) Console.WriteLine($"coord {myID} nonDetEmitPromiseMap {nonDetEmitPromiseMap.Count}");
+            if (nonDetEmitID.Count > 0) Console.WriteLine($"coord {myID} nonDetEmitID {nonDetEmitID.Count}");
+            if (nonDeterministicEmitSize.Count > 0) Console.WriteLine($"coord {myID} nonDeterministicEmitSize {nonDeterministicEmitSize.Count}");
         }
 
-        /**
-         *Client calls this function to submit deterministic transaction
-         */
-        public async Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<string, int>> grainAccessInformation)
+        public async Task<Tuple<int, int, int, int>> GetSetCount()
         {
-            int myEmitSeq = this.detEmitSeq;
+            var res = new Tuple<int, int, int, int>(batchIntraCount, batchInterCount, tokenIntraCount, tokenInterCount);
+            batchIntraCount = 0;
+            batchInterCount = 0;
+            tokenIntraCount = 0;
+            tokenInterCount = 0;
+            return res;
+        }
+
+        // for PACT
+        public async Task<TransactionContext> NewTransaction(Dictionary<int, int> grainAccessInformation)
+        {
+            var myEmitSeq = detEmitSeq;
+            var context = new TransactionContext(grainAccessInformation);
             if (deterministicTransactionRequests.ContainsKey(myEmitSeq) == false)
+            {
                 deterministicTransactionRequests.Add(myEmitSeq, new List<TransactionContext>());
-
-            TransactionContext context = new TransactionContext(grainAccessInformation);
+                detEmitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
+                batchStartTime.Add(myEmitSeq, DateTime.Now);
+            }
             deterministicTransactionRequests[myEmitSeq].Add(context);
-
-            TaskCompletionSource<bool> emitting;
-            if (!detEmitPromiseMap.ContainsKey(myEmitSeq)) detEmitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
-            emitting = detEmitPromiseMap[myEmitSeq];
-            if (emitting.Task.IsCompleted != true) await emitting.Task;
-            context.highestBatchIdCommitted = this.highestCommittedBatchID;
+            var emitting = detEmitPromiseMap[myEmitSeq].Task;
+            if (emitting.IsCompleted != true) await emitting;
+            context.highestBatchIdCommitted = highestCommittedBatchID;
             return context;
         }
 
-        /**
-         *Client calls this function to submit non-deterministic transaction
-         */
-
+        // for ACT
         public async Task<TransactionContext> NewTransaction()
         {
-            //Console.WriteLine($"Coordinator {myId}: received non-det transaction");
             if (numTransactionIdsReserved-- > 0)
             {
                 Debug.Assert(tidToAllocate != 0);
-                //Console.WriteLine($"Coordinator {myId}: emitted non-det transaction with pre-allocated tid {tidToAllocate}");
                 var ctx = new TransactionContext(tidToAllocate++);
-                ctx.highestBatchIdCommitted = this.highestCommittedBatchID;
+                ctx.highestBatchIdCommitted = highestCommittedBatchID;
                 return ctx;
             }
             TransactionContext context = null;
             try
             {
                 TaskCompletionSource<bool> emitting;
-                int myEmitSeq = this.nonDetEmitSeq;
+                var myEmitSeq = nonDetEmitSeq;
                 if (!nonDetEmitPromiseMap.ContainsKey(myEmitSeq))
                 {
                     nonDetEmitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
@@ -148,11 +139,9 @@ namespace Concurrency.Implementation
                 nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] + 1;
 
                 if (emitting.Task.IsCompleted != true) await emitting.Task;
-                int tid = nonDetEmitID[myEmitSeq]++;
+                var tid = nonDetEmitID[myEmitSeq]++;
                 context = new TransactionContext(tid);
 
-                //Check if the emitting of the current non-deterministic batch is completed, if so, 
-                //set the token promise and increment the curNondeterministicBatchID.
                 nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] - 1;
                 if (nonDeterministicEmitSize[myEmitSeq] == 0)
                 {
@@ -162,9 +151,9 @@ namespace Concurrency.Implementation
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Exception :: Coordinator {myId}: receives new non deterministic transaction {e.Message}");
+                Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
             }
-            context.highestBatchIdCommitted = this.highestCommittedBatchID;
+            context.highestBatchIdCommitted = highestCommittedBatchID;
             return context;
         }
 
@@ -172,78 +161,62 @@ namespace Concurrency.Implementation
         {
             if (detEmitPromiseMap.Count == 0 && nonDetEmitPromiseMap.Count == 0)
             {
-                //The coordinator has no transaction request
-                if (token.backoff) await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / (coordinatorList.Count + 1)));
+                if (token.backoff)
+                {
+                    Console.WriteLine($"coord {myID} delay");
+                    await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / coordList.Count));
+                }
                 else if (!token.idleToken)
                 {
                     token.idleToken = true;
-                    token.markedIdleByCoordinator = myPrimaryKey;
+                    token.markedIdleByCoordinator = myID;
                     var curTime = DateTime.Now;
                     token.backOffProbeStartTime = curTime.Hour * 3600 + curTime.Minute * 60 + curTime.Second;
                 }
-                else if (token.markedIdleByCoordinator == myPrimaryKey)
+                else if (token.markedIdleByCoordinator == myID)
                 {
                     var curTime = DateTime.Now;
                     var curTimeInSecs = curTime.Hour * 3600 + curTime.Minute * 60 + curTime.Second;
-                    if (curTimeInSecs - token.backOffProbeStartTime > this.idleIntervalTillBackOffSecs)
+                    if (curTimeInSecs - token.backOffProbeStartTime > idleIntervalTillBackOffSecs)
                     {
-                        //Token traverses full round being idle, enable backoff
-                        token.backoff = true;
-                        await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / (coordinatorList.Count + 1)));
+                        token.backoff = true;   // Token traverses full round being idle, enable backoff
+                        Console.WriteLine($"coord {myID} delay");
+                        await Task.Delay(TimeSpan.FromMilliseconds(backoffTimeIntervalMSecs / coordList.Count));
                     }
                 }
             }
-            else   //The coordinator has  transaction requests
+            else
             {
                 if (token.backoff) token.backoff = false;
                 else if (token.idleToken) token.idleToken = false;
             }
         }
 
-        /**
-         *Coordinator calls this function to pass token
-         */
         public async Task PassToken(BatchToken token)
         {
-            //Console.WriteLine($"Coordinator {myId}: receives new token at {DateTime.Now.TimeOfDay.ToString()}");
-            numTransactionIdsReserved = 0; //Reset the range of pre-allocation
+            if (token.highestCommittedBatchID > highestCommittedBatchID) highestCommittedBatchID = token.highestCommittedBatchID;
+            numTransactionIdsReserved = 0;    // Reset the range of pre-allocation
             await CheckBackoff(token);
-            await EmitTransaction(token);
+            var curBatchID = await EmitDeterministicTransactions(token);
+            EmitNonDeterministicTransactions(token);
             tidToAllocate = token.lastTransactionID + 1;
             token.lastTransactionID += numTransactionIdsPreAllocated;
-            neighbour.PassToken(token);
-        }
-
-        /**
-         *This functions is called when a new token is received or the timer is set
-         */
-        async Task EmitTransaction(Object obj)
-        {
-            BatchToken token;
-            if (obj == null)   //The timer expires
+            if (token.highestCommittedBatchID < highestCommittedBatchID) token.highestCommittedBatchID = highestCommittedBatchID;
+            _ = coordList[neighborID].PassToken(token);
+            if (curBatchID > -1) await EmitBatch(curBatchID);
+            
+            if (Constants.multiSilo)
             {
-                this.isEmitTimerOn = true;
-                return;
+                var intraSilo = Helper.intraSilo(coordList.Count, myID, true, neighborID, true);
+                if (intraSilo) tokenIntraCount++;
+                else tokenInterCount++;
             }
-
-            //The token arrives, but the timer is not expired yet
-            if (!this.isEmitTimerOn)
-            {
-                //Emit non-det transactions and release token
-                token = (BatchToken)obj;
-                EmitNonDeterministicTransactions(token);
-                return;
-            }
-
-            token = (BatchToken)obj;
-            await EmitDeterministicTransactions(token);
-            EmitNonDeterministicTransactions(token);
-            this.isEmitTimerOn = false;
+            else tokenIntraCount++;
         }
 
         private void EmitNonDeterministicTransactions(BatchToken token)
         {
-            int myEmitSequence = this.nonDetEmitSeq;
+            int myEmitSequence = nonDetEmitSeq;
             if (nonDeterministicEmitSize.ContainsKey(myEmitSequence))
             {
                 //Estimate a pre-allocation size based on moving average
@@ -253,7 +226,7 @@ namespace Concurrency.Implementation
                 Debug.Assert(nonDetEmitID.ContainsKey(myEmitSequence) == false);
                 nonDetEmitID.Add(myEmitSequence, token.lastTransactionID + 1);
                 token.lastTransactionID += nonDeterministicEmitSize[myEmitSequence];
-                this.nonDetEmitSeq++;
+                nonDetEmitSeq++;
                 nonDetEmitPromiseMap[myEmitSequence].SetResult(true);
                 nonDetEmitPromiseMap.Remove(myEmitSequence);
             }
@@ -264,201 +237,201 @@ namespace Concurrency.Implementation
             }
         }
 
-        /**
-         *This functions is called to emit batch of deterministic transactions
-         */
-        async Task EmitDeterministicTransactions(BatchToken token)
+        private async Task<int> EmitDeterministicTransactions(BatchToken token)
         {
-            int myEmitSequence = this.detEmitSeq;
-            List<TransactionContext> transactionList;
-            Boolean shouldEmit = deterministicTransactionRequests.TryGetValue(myEmitSequence, out transactionList);
-            //Return if there is no deterministic transactions waiting for emit
-            if (shouldEmit == false) return;
-            this.detEmitSeq++;
-            int curBatchID = token.lastTransactionID + 1;
-            foreach (TransactionContext context in transactionList)
+            var myEmitSequence = detEmitSeq;
+            if (deterministicTransactionRequests.ContainsKey(myEmitSequence) == false) return -1;
+            var transactionList = deterministicTransactionRequests[myEmitSequence];
+            Debug.Assert(transactionList.Count > 0);
+            detEmitSeq++;
+            var curBatchID = token.lastTransactionID + 1;
+            foreach (var context in transactionList)
             {
                 context.batchID = curBatchID;
                 context.transactionID = ++token.lastTransactionID;
-                //update batch schedule
                 if (batchSchedulePerGrain.ContainsKey(context.batchID) == false)
-                {
-                    batchSchedulePerGrain.Add(context.batchID, new Dictionary<Guid, DeterministicBatchSchedule>());
-                    batchGrainClassName.Add(context.batchID, new Dictionary<Guid, String>());
-                }
-                //update the schedule for each grain accessed by this transaction
-                Dictionary<Guid, DeterministicBatchSchedule> grainSchedule = batchSchedulePerGrain[context.batchID];
+                    batchSchedulePerGrain.Add(context.batchID, new Dictionary<int, DeterministicBatchSchedule>());
+                // update the schedule for each grain accessed by this transaction
+                var grainSchedule = batchSchedulePerGrain[context.batchID];
                 foreach (var item in context.grainAccessInformation)
                 {
-                    batchGrainClassName[context.batchID][item.Key] = item.Value.Item1;
                     if (grainSchedule.ContainsKey(item.Key) == false)
                         grainSchedule.Add(item.Key, new DeterministicBatchSchedule(context.batchID));
-                    grainSchedule[item.Key].AddNewTransaction(context.transactionID, item.Value.Item2);
+                    grainSchedule[item.Key].AddNewTransaction(context.transactionID, item.Value);
                 }
                 context.grainAccessInformation.Clear();
             }
 
-            Dictionary<Guid, DeterministicBatchSchedule> curScheduleMap = batchSchedulePerGrain[curBatchID];
+            var curScheduleMap = batchSchedulePerGrain[curBatchID];
             expectedAcksPerBatch.Add(curBatchID, curScheduleMap.Count);
 
-            //update the last batch ID for each grain accessed by this batch
+            // update the last batch ID for each grain accessed by this batch
             foreach (var item in curScheduleMap)
             {
-                Guid grain = item.Key;
-                DeterministicBatchSchedule schedule = item.Value;
+                var grain = item.Key;
+                var schedule = item.Value;
                 if (token.lastBatchPerGrain.ContainsKey(grain)) schedule.lastBatchID = token.lastBatchPerGrain[grain];
                 else schedule.lastBatchID = -1;
-                schedule.globalCoordinator = this.myPrimaryKey;
                 Debug.Assert(schedule.batchID > schedule.lastBatchID);
                 token.lastBatchPerGrain[grain] = schedule.batchID;
             }
-            this.lastBatchIDMap.Add(curBatchID, token.lastBatchID);
+            lastBatchIDMap.Add(curBatchID, token.lastBatchID);
+            if (token.lastBatchID > -1) coordEmitLastBatch.Add(curBatchID, token.lastCoordID);
             token.lastBatchID = curBatchID;
-            //garbage collection
-            if (this.highestCommittedBatchID > token.highestCommittedBatchID)
+            token.lastCoordID = myID;
+
+            // garbage collection
+            if (highestCommittedBatchID > token.highestCommittedBatchID)
             {
-                List<Guid> expiredGrains = new List<Guid>();
-                foreach (var item in token.lastBatchPerGrain)
-                {
-                    // only when last batch is already committed, the next emmitted batch can have its lastBid = -1 again
-                    if (item.Value <= this.highestCommittedBatchID) expiredGrains.Add(item.Key);
-                }
+                var expiredGrains = new List<int>();
+                foreach (var item in token.lastBatchPerGrain)  // only when last batch is already committed, the next emmitted batch can have its lastBid = -1 again
+                    if (item.Value <= highestCommittedBatchID) expiredGrains.Add(item.Key);
                 foreach (var item in expiredGrains) token.lastBatchPerGrain.Remove(item);
-                token.highestCommittedBatchID = this.highestCommittedBatchID;
             }
 
-            if (!batchStatusMap.ContainsKey(curBatchID))
-                batchStatusMap.Add(curBatchID, new TaskCompletionSource<Boolean>());
+            detEmitPromiseMap[myEmitSequence].SetResult(true);
+            deterministicTransactionRequests.Remove(myEmitSequence);
+            detEmitPromiseMap.Remove(myEmitSequence);
+            batchStartTime.Remove(myEmitSequence);
+            //Console.WriteLine($"emit batch {curBatchID}, touches {curScheduleMap.Count} grains, includes {transactionList.Count} txn");
+            return curBatchID;
+        }
+
+        private async Task EmitBatch(int curBatchID)
+        {
+            var curScheduleMap = batchSchedulePerGrain[curBatchID];
 
             if (log != null)
             {
-                HashSet<Guid> participants = new HashSet<Guid>();
+                var participants = new HashSet<int>();
                 participants.UnionWith(curScheduleMap.Keys);
                 await log.HandleOnPrepareInDeterministicProtocol(curBatchID, participants);
             }
 
-            foreach (KeyValuePair<Guid, DeterministicBatchSchedule> item in curScheduleMap)
+            foreach (var item in curScheduleMap)
             {
-                var dest = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, batchGrainClassName[curBatchID][item.Key]);
-                DeterministicBatchSchedule schedule = item.Value;
-                schedule.globalCoordinator = this.myPrimaryKey;
-                schedule.highestCommittedBatchId = this.highestCommittedBatchID;
-                Task emit = dest.ReceiveBatchSchedule(schedule);
+                var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, grainClassName);
+                var schedule = item.Value;
+                schedule.globalCoordinator = myID;
+                schedule.highestCommittedBatchId = highestCommittedBatchID;
+                _ = dest.ReceiveBatchSchedule(schedule);
+                
+                if (Constants.multiSilo)
+                {
+                    var intraSilo = Helper.intraSilo(coordList.Count, myID, true, item.Key, false);
+                    if (intraSilo) batchIntraCount += 3;
+                    else batchInterCount += 3;
+                }
+                else batchIntraCount += 3;
             }
-            batchGrainClassName.Remove(curBatchID);
-            this.detEmitPromiseMap[myEmitSequence].SetResult(true);
-            this.deterministicTransactionRequests.Remove(myEmitSequence);
-            this.detEmitPromiseMap.Remove(myEmitSequence);
         }
 
         /*
          * Grain calls this function to ack its completion of a batch execution
         */
-        public async Task AckBatchCompletion(int bid, Guid executor_id)
+        public async Task AckBatchCompletion(int bid)
         {
-            Debug.Assert(expectedAcksPerBatch.ContainsKey(bid) && batchSchedulePerGrain[bid].ContainsKey(executor_id));
             expectedAcksPerBatch[bid]--;
             if (expectedAcksPerBatch[bid] == 0)
             {
-                Debug.Assert(lastBatchIDMap.ContainsKey(bid));
-                if (lastBatchIDMap[bid] == highestCommittedBatchID)
+                var lastBid = lastBatchIDMap[bid];
+                if (highestCommittedBatchID < lastBid)
                 {
-                    this.highestCommittedBatchID = bid;
-                    CleanUp(bid);
-                    if (log != null) await log.HandleOnCommitInDeterministicProtocol(bid);
-                    await BroadcastCommit();
+                    var coord = coordEmitLastBatch[bid];
+                    if (coord == myID) await WaitBatchCommit(lastBid);
+                    else
+                    {
+                        var lastCoord = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(coord);
+                        await lastCoord.WaitBatchCommit(lastBid);
+                        
+                        if (Constants.multiSilo)
+                        {
+                            var intraSilo = Helper.intraSilo(coordList.Count, myID, true, coord, true);
+                            if (intraSilo) batchIntraCount++;
+                            else batchInterCount++;
+                        }
+                        else batchIntraCount++;
+                    }
                 }
-                else
-                {
-                    //Put this batch into a list waiting for commit
-                    this.batchesWaitingForCommit.Add(bid);
-                }
-
+                else Debug.Assert(highestCommittedBatchID == lastBid);
+                highestCommittedBatchID = bid;
+                if (batchesWaitingForCommit.ContainsKey(bid)) batchesWaitingForCommit[bid].SetResult(true);
+                _ = NotifyGrains(bid);
+                CleanUp(bid);
+                if (log != null) await log.HandleOnCommitInDeterministicProtocol(bid);
             }
+        }
+
+        public async Task WaitBatchCommit(int bid)
+        {
+            if (highestCommittedBatchID == bid) return;
+            if (batchesWaitingForCommit.ContainsKey(bid) == false) batchesWaitingForCommit.Add(bid, new TaskCompletionSource<bool>());
+            await batchesWaitingForCommit[bid].Task;
+        }
+
+        private async Task NotifyGrains(int bid)
+        {
+            foreach (var grain in batchSchedulePerGrain[bid])
+            {
+                var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(grain.Key, grainClassName);
+                _ = dest.AckBatchCommit(bid);
+            }
+            await Task.CompletedTask;
         }
 
         public void CleanUp(int bid)
         {
             expectedAcksPerBatch.Remove(bid);
             batchSchedulePerGrain.Remove(bid);
-            batchGrainClassName.Remove(bid);
+            coordEmitLastBatch.Remove(bid);
             lastBatchIDMap.Remove(bid);
-            batchStatusMap[bid].SetResult(true);
+            if (batchesWaitingForCommit.ContainsKey(bid)) batchesWaitingForCommit.Remove(bid);
         }
 
-        public async Task<bool> checkBatchCompletion(int bid)
+        public Task SpawnCoordinator(string grainClassName, int numofCoordinators, int batchInterval, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs, dataFormatType dataFormat, StorageWrapperType logStorage)
         {
-            if (bid <= this.highestCommittedBatchID) return true;
-            if (batchStatusMap.ContainsKey(bid) == false) batchStatusMap.Add(bid, new TaskCompletionSource<bool>());
-            if (batchStatusMap[bid].Task.IsCompleted == false) await batchStatusMap[bid].Task;
-            batchStatusMap.Remove(bid);
-            return true;
-        }
-
-        private async Task BroadcastCommit()
-        {
-            List<Task> tasks = new List<Task>();
-            foreach (var coordinator in this.coordinatorList) tasks.Add(coordinator.NotifyCommit(this.highestCommittedBatchID));
-            await Task.WhenAll(tasks);
-        }
-
-        public async Task NotifyCommit(int bid)
-        {
-            if (bid > this.highestCommittedBatchID)
-                this.highestCommittedBatchID = bid;
-            Boolean commitOccur = false;
-
-            while (this.batchesWaitingForCommit.Count != 0 && lastBatchIDMap[batchesWaitingForCommit.Min] == highestCommittedBatchID)
-            {
-                var commitBid = batchesWaitingForCommit.Min;
-                this.highestCommittedBatchID = commitBid;
-                CleanUp(commitBid);
-                batchesWaitingForCommit.Remove(commitBid);
-                commitOccur = true;
-            }
-
-            if (commitOccur == true)
-            {
-                if (log != null) await log.HandleOnCommitInDeterministicProtocol(this.highestCommittedBatchID);
-                await BroadcastCommit();
-            }
-        }
-
-        public Task<HashSet<int>> GetCompleteAfterSet(Dictionary<Guid, int> grains, Dictionary<Guid, String> names)
-        {
-            return null;
-        }
-
-        public async Task SpawnCoordinator(uint myId, uint numofCoordinators, int batchIntervalMSecs, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs)
-        {
-            if (this.spawned)
+            /*
+            if (spawned)
             {
                 //No updated configuration for now so just ignore repeated spawn calls
                 Console.WriteLine($"Coordinator {myId} receives spawn request but has already been spawned");
                 return;
             }
-            else this.spawned = true;
+            else spawned = true;*/
 
-            waitingTime = TimeSpan.FromMilliseconds(1);
-            this.batchIntervalMSecs = batchIntervalMSecs;
-            if (idleIntervalTillBackOffSecs > 3600) throw new Exception("Too high value for back off probing -> cannot exceed an 1 hour");
+            Debug.Assert(deterministicTransactionRequests.Count == 0);
+
+            detEmitSeq = 0;
+            nonDetEmitSeq = 0;
+            tidToAllocate = -1;
+            batchIntraCount = 0;
+            batchInterCount = 0;
+            tokenIntraCount = 0;
+            tokenInterCount = 0;
+            highestCommittedBatchID = -1;
+            numTransactionIdsReserved = 0;
+            numTransactionIdsPreAllocated = 0;
+            smoothingPreAllocationFactor = 0.5f;
+            this.grainClassName = grainClassName;
+            backoffTimeIntervalMSecs = backoffIntervalMSecs;
             this.idleIntervalTillBackOffSecs = idleIntervalTillBackOffSecs;
-            batchInterval = TimeSpan.FromMilliseconds(batchIntervalMSecs);
-            this.backoffTimeIntervalMSecs = backoffIntervalMSecs;
 
-
-            uint neighbourId = (myId + 1) % numofCoordinators;
-            neighbour = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(neighbourId));
-            coordinatorList = new List<IGlobalTransactionCoordinatorGrain>();
-            for (uint i = 0; i < numofCoordinators; i++)
+            neighborID = (myID + 1) % numofCoordinators;
+            for (int i = 0; i < numofCoordinators; i++)
             {
-                if (i != myId) coordinatorList.Add(this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(i)));
+                var coord = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(i);
+                coordList.Add(coord);
             }
-            this.myId = myId;
-            this.neighbourId = neighbourId;
-            disposable = RegisterTimer(EmitTransaction, null, waitingTime, batchInterval);
-            Console.WriteLine($"\n Coordinator {myId}: is initialized, my next neighbour is coordinator {neighbourId}");
-            await Task.CompletedTask;
+
+            Console.WriteLine($"coord {myID}: batchInterval = {batchInterval}");
+            if (idleIntervalTillBackOffSecs > 3600) throw new Exception("Too high value for back off probing -> cannot exceed an 1 hour");
+
+            if (logStorage != StorageWrapperType.NOSTORAGE)
+            {
+                log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, dataFormat, logStorage);
+                Console.WriteLine($"Coord {myID} initialize logging {logStorage}.");
+            } 
+            return Task.CompletedTask;
         }
     }
 }

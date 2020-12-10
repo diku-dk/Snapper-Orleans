@@ -1,24 +1,36 @@
 ﻿using System;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Orleans;
-using Orleans.Hosting;
-using Orleans.Configuration;
-using System.Net;
 using Utilities;
-using Microsoft.Extensions.DependencyInjection;
+using System.Net;
+using Orleans.Hosting;
 using Orleans.Runtime;
+using Orleans.Configuration;
+using System.Threading.Tasks;
 using Orleans.Runtime.Placement;
 using Concurrency.Implementation;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace OrleansSiloHost
 {
     public class Program
     {
-        static readonly bool localCluster = false;
-        static readonly bool enableOrleansTxn = false;
+        static private int siloPort;
+        static private int gatewayPort;
+        static readonly bool enableOrleansTxn = true;
+
         public static int Main(string[] args)
         {
+            if (Constants.multiSilo)
+            {
+                siloPort = int.Parse(args[0]);
+                gatewayPort = int.Parse(args[1]);
+            }
+            else
+            {
+                siloPort = 11111;
+                gatewayPort = 30000;
+            }
             return RunMainAsync().Result;
         }
 
@@ -27,7 +39,7 @@ namespace OrleansSiloHost
             try
             {
                 ISiloHost host;
-                if (localCluster) host = await StartSilo();
+                if (Constants.localCluster) host = await StartSilo();
                 else host = await StartClusterSilo();
                 Console.WriteLine("Press Enter to terminate...");
                 Console.ReadLine();
@@ -50,8 +62,8 @@ namespace OrleansSiloHost
                 .UseLocalhostClustering()
                 .Configure<ClusterOptions>(options =>
                 {
-                    options.ClusterId = "dev";
-                    options.ServiceId = "Snapper";
+                    options.ClusterId = Constants.LocalSilo;
+                    options.ServiceId = Constants.ServiceID;
                 })
                 .Configure<GrainCollectionOptions>(options =>
                 {
@@ -62,11 +74,10 @@ namespace OrleansSiloHost
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
                 //.Configure<SchedulingOptions>(o => o.MaxActiveThreads = 1)
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
-                .ConfigureServices(ConfigureServices);
+                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                //.ConfigureServices(ConfigureServices);
 
-            if (enableOrleansTxn)
-                builder.AddMemoryGrainStorageAsDefault().UseTransactions();
+            if (enableOrleansTxn) builder.AddMemoryGrainStorageAsDefault().UseTransactions();
             
             var host = builder.Build();
             await host.StartAsync();
@@ -75,12 +86,11 @@ namespace OrleansSiloHost
 
         private static async Task<ISiloHost> StartClusterSilo()
         {
-
             Action<DynamoDBClusteringOptions> dynamoDBOptions = options => {
-                options.AccessKey = "AKIAJILO2SVPTNUZB55Q";
-                options.SecretKey = "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";
-                options.TableName = "SnapperMembershipTable";
-                options.Service = "eu-west-1";
+                options.AccessKey = Constants.AccessKey;
+                options.SecretKey = Constants.SecretKey;
+                options.TableName = Constants.SiloMembershipTable;
+                options.Service = Constants.ServiceRegion;
                 options.WriteCapacityUnits = 10;
                 options.ReadCapacityUnits = 10;
             };
@@ -88,8 +98,8 @@ namespace OrleansSiloHost
             var builder = new SiloHostBuilder()
                 .Configure<ClusterOptions>(options =>
                 {
-                    options.ClusterId = "ec2";
-                    options.ServiceId = "Snapper";
+                    options.ClusterId = Constants.ClusterSilo;
+                    options.ServiceId = Constants.ServiceID;
                 })
                 .Configure<GrainCollectionOptions>(options =>
                 {
@@ -98,13 +108,24 @@ namespace OrleansSiloHost
                     // Override the value of CollectionAge to 5 minutes for MyGrainImplementation
                     //options.ClassSpecificCollectionAge[typeof(MyGrainImplementation).FullName] = TimeSpan.FromMinutes(5);
                 })
+                .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .UseDynamoDBClustering(dynamoDBOptions)
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
+                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
+                //.AddMemoryGrainStorageAsDefault();
                 .ConfigureServices(ConfigureServices);
 
             if (enableOrleansTxn)
-                builder.AddMemoryGrainStorageAsDefault().UseTransactions();
+                builder.AddDynamoDBGrainStorage(
+                    name: Constants.GrainStateTable,
+                    configureOptions: options =>
+                    {
+                        options.UseJson = true;
+                        options.AccessKey = Constants.AccessKey;
+                        options.SecretKey = Constants.SecretKey;
+                        options.Service = Constants.ServiceRegion;
+                    })
+                    .UseTransactions();
 
             var host = builder.Build();            
             await host.StartAsync();
@@ -115,6 +136,8 @@ namespace OrleansSiloHost
         {
             services.AddSingletonNamedService<PlacementStrategy, CoordPlacementStrategy>(nameof(CoordPlacementStrategy));
             services.AddSingletonKeyedService<Type, IPlacementDirector, CoordPlacement>(typeof(CoordPlacementStrategy));
+            services.AddSingletonNamedService<PlacementStrategy, GrainPlacementStrategy>(nameof(GrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, GrainPlacement>(typeof(GrainPlacementStrategy));
         }
     }
 }

@@ -1,95 +1,70 @@
 ﻿using System;
-using System.Collections.Generic;
 using Orleans;
+using Utilities;
 using Concurrency.Interface;
 using System.Threading.Tasks;
-using Utilities;
+using System.Collections.Generic;
+using Concurrency.Interface.Logging;
 
 namespace Concurrency.Implementation
 {
     public class ConfigurationManagerGrain : Grain, IConfigurationManagerGrain
     {
-        Dictionary<Tuple<String, Guid>, ITransactionExecutionGrain> grainIndex;
-        Dictionary<Tuple<String, Guid>, ExecutionGrainConfiguration> executionGrainSpecificConfigs;
-        ExecutionGrainConfiguration executionGrainGlobalConfig;
-        CoordinatorGrainConfiguration coordinatorGrainGlobalConfig;
-        uint nextCoordinatorId = 0;
+        private int numCoord;
+        private bool tokenEnabled;
+        private string grainClassName;
+        private dataFormatType dataFormat;
+        private StorageWrapperType logStorage;
+        private ExecutionGrainConfiguration executionGrainGlobalConfig;
 
         public override Task OnActivateAsync()
         {
+            numCoord = 0;
+            tokenEnabled = false;
             executionGrainGlobalConfig = null;
-            coordinatorGrainGlobalConfig = null;
-            grainIndex = new Dictionary<Tuple<string, Guid>, ITransactionExecutionGrain>();
-            executionGrainSpecificConfigs = new Dictionary<Tuple<string, Guid>, ExecutionGrainConfiguration>();
             return base.OnActivateAsync();
         }
 
-        async Task<Tuple<ExecutionGrainConfiguration, uint>> IConfigurationManagerGrain.GetConfiguration(string grainClassName, Guid grainId)
+        async Task<Tuple<ExecutionGrainConfiguration, int, int>> IConfigurationManagerGrain.GetConfiguration(int grainID)
         {
-            var tuple = new Tuple<string, Guid>(grainClassName, grainId);
-            if (!grainIndex.ContainsKey(tuple))
-            {
-                var grain = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grainId, grainClassName);
-                grainIndex.Add(tuple, grain);
-            }
-            // must initialize coordinator first
-            if (coordinatorGrainGlobalConfig == null)
-            {
-                throw new Exception("No information about coordinators has been registered");
-            }
-            nextCoordinatorId = (nextCoordinatorId + 1) % coordinatorGrainGlobalConfig.numCoordinators;
+            if (numCoord == 0) throw new ArgumentException(nameof(numCoord));
+            if (executionGrainGlobalConfig == null) throw new ArgumentNullException(nameof(executionGrainGlobalConfig));
+            var coord = grainID % numCoord;
             await Task.CompletedTask;
-            return (executionGrainSpecificConfigs.ContainsKey(tuple)) ? new Tuple<ExecutionGrainConfiguration, uint>(executionGrainSpecificConfigs[tuple], nextCoordinatorId) : new Tuple<ExecutionGrainConfiguration, uint>(executionGrainGlobalConfig, nextCoordinatorId);
+            return new Tuple<ExecutionGrainConfiguration, int, int>(executionGrainGlobalConfig, coord, numCoord);
         }
 
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(CoordinatorGrainConfiguration config)
         {
-            if (config == null)
-                throw new ArgumentNullException(nameof(config));
+            if (config == null) throw new ArgumentNullException(nameof(config));
 
-            if (coordinatorGrainGlobalConfig == null)
+            numCoord = config.numCoordinators;
+            var tasks = new List<Task>();
+            for (int i = 0; i < numCoord; i++)
             {
-                coordinatorGrainGlobalConfig = config;
+                var grain = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(i);
+                tasks.Add(grain.SpawnCoordinator(grainClassName, numCoord, config.batchInterval, config.backoffIntervalMSecs, config.idleIntervalTillBackOffSecs, dataFormat, logStorage));
+            }
+            await Task.WhenAll(tasks);
 
-                //Only support one coordinator configuration injection for now
-                var tasks = new List<Task>();
-                for (uint i = 0; i < config.numCoordinators; i++)
-                {
-                    var grain = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(i));
-                    tasks.Add(grain.SpawnCoordinator(i, config.numCoordinators, config.batchIntervalMSecs, config.backoffIntervalMSecs, config.idleIntervalTillBackOffSecs));
-                }
-                await Task.WhenAll(tasks);
-
-                //Inject token to coordinator 0
-                var coord0 = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(0));
+            //Inject token to coordinator 0
+            if (tokenEnabled == false)
+            {
+                var coord0 = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(0);
                 BatchToken token = new BatchToken(-1, -1);
                 await coord0.PassToken(token);
-            }
-            else
-            {
-                //Only support one coordinator configuration injection for now
-                throw new NotImplementedException("Cannot support multiple global coordinator configuration injection");
+                tokenEnabled = true;
             }
         }
 
         // called directly by client
         async Task IConfigurationManagerGrain.UpdateNewConfiguration(ExecutionGrainConfiguration config)
         {
-            await Task.CompletedTask;
             if (config == null) throw new ArgumentNullException(nameof(config));
-            //Support only single config changes for now
-            if (this.executionGrainGlobalConfig == null) this.executionGrainGlobalConfig = config;
-            else throw new NotImplementedException("Cannot support multiple configuration updates for now");
-        }
-        
-        // used to give different grains different configurations
-        async Task IConfigurationManagerGrain.UpdateNewConfiguration(Dictionary<Tuple<string, Guid>, ExecutionGrainConfiguration> grainSpecificConfigs)
-        {
-            //Insert or update the existing configuration
-            foreach (var entry in grainSpecificConfigs)
-            {
-                executionGrainSpecificConfigs[entry.Key] = entry.Value;
-            }
+            executionGrainGlobalConfig = config;
+            grainClassName = config.grainClassName;
+            dataFormat = config.logConfiguration.dataFormat;
+            logStorage = config.logConfiguration.loggingStorageWrapper;
             await Task.CompletedTask;
         }
     }

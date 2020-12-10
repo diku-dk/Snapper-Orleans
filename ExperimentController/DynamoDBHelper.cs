@@ -1,23 +1,22 @@
-﻿using Amazon.DynamoDBv2;
-using Amazon.DynamoDBv2.Model;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System;
+using Amazon.DynamoDBv2;
 using System.Threading.Tasks;
+using Amazon.DynamoDBv2.Model;
+using System.Collections.Generic;
 
 namespace ExperimentConductor
 {
     class DynamoDBHelper
     {
         AmazonDynamoDBClient client;
-        String grainType;
+        string grainType;
         byte[] grainKey;
-        String logName;
+        string logName;
         const string ATT_KEY_1 = "EXPERIMENT";
         const string ATT_KEY_2 = "NUMBER";
         const string ATT_VALUE = "VALUE";
-        const String DYNAMODB_ACCESS_KEY_ID = "";
-        const String DYNAMODB_ACCESS_KEY_VALUE = "";
+        const string DYNAMODB_ACCESS_KEY_ID = "";
+        const string DYNAMODB_ACCESS_KEY_VALUE = "";
         const int READ_CAPACITY_UNITS = 10;
         const int WRITE_CAPACITY_UNITS = 10;
 
@@ -32,7 +31,7 @@ namespace ExperimentConductor
 
         }
 
-        async Task createTableIfNotExists(String experiment)
+        async Task createTableIfNotExists(string experiment)
         {
             var name = experiment;
             var describeTableRequest = new DescribeTableRequest()
@@ -102,9 +101,5 @@ namespace ExperimentConductor
                 }
             }
         }
-
-
-
-
     }
 }

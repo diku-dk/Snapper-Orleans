@@ -1,10 +1,7 @@
-﻿using Concurrency.Interface.Nondeterministic;
-using Concurrency.Interface.Deterministic;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System;
 using Utilities;
+using System.Threading.Tasks;
+using Concurrency.Interface.Deterministic;
 
 namespace Concurrency.Implementation.Deterministic
 {

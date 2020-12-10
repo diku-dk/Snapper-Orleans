@@ -1,13 +1,13 @@
 ﻿using System;
 using Orleans;
 using Utilities;
-using Orleans.Hosting;
 using Orleans.Runtime;
+using Orleans.Hosting;
 using System.Threading;
 using Orleans.Configuration;
 using System.Threading.Tasks;
 
-namespace ExperimentProcess
+namespace NewProcess
 {
     public class ClientConfiguration
     {

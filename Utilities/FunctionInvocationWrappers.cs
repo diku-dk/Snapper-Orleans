@@ -1,118 +1,127 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Utilities
 {
     [Serializable]
     public class FunctionInput
     {
-        public Object inputObject;
+        public object inputObject;
         public TransactionContext context;
 
-        public FunctionInput(FunctionInput input, Object data)
+        public FunctionInput(FunctionInput input, object data)
         {
             context = input.context;
             inputObject = data;
         }
-        public FunctionInput(Object data)
+
+        public FunctionInput(object data)
         {
             inputObject = data;
         }
     }
 
     [Serializable]
+    public class TransactionResult
+    {
+        public bool exception;
+        public object resultObject;
+        public bool Exp_Serializable;
+        public bool Exp_Deadlock;
+        public DateTime arriveTime;
+        public DateTime emitTime;
+        public DateTime finishTime;
+        public DateTime commitTime;
+        public DateTime batchTime;
+        public bool isDet = true;
+
+        public TransactionResult(object res = null)
+        {
+            resultObject = res;
+            exception = false;
+            Exp_Serializable = false;
+            Exp_Deadlock = false;
+        }
+
+        public TransactionResult(bool exp, object res)
+        {
+            resultObject = res;
+            exception = exp;
+            Exp_Serializable = false;
+            Exp_Deadlock = false;
+        }
+    }
+
+    [Serializable]
     public class FunctionResult
     {
-        public int tid;
-        public String txnType;
-        public Dictionary<Guid, Object> beforeState;
-        public Dictionary<Guid, Object> afterState;
-        public Object resultObject;
-        public Dictionary<Guid, String> grainsInNestedFunctions;
-        public Boolean exception = false;
-        public HashSet<int> beforeSet;
-        public HashSet<int> afterSet;
-        public int maxBeforeBid;
+        public bool exception;
         public int minAfterBid;
-        public Boolean isBeforeAfterConsecutive = false;
-        public Boolean readOnly = true;
-        public Tuple<Guid, String> grainWithHighestBeforeBid;
-        public Boolean isDet = true;
-        public Boolean Exp_RWConflict = false;
-        public Boolean Exp_NotSerializable = false;
-        public Boolean Exp_AppLogic = false;
-        public Boolean Exp_2PC = false;
-        public Boolean Exp_UnExpect = false;
-        public int highestCommittedBid = -1;
-
-        public FunctionResult(Object resultObject = null)
+        public int maxBeforeBid;
+        public bool Exp_Deadlock;
+        public object resultObject;
+        public HashSet<int> afterSet;
+        public HashSet<int> beforeSet;
+        public bool isBeforeAfterConsecutive;
+        public int grainWithHighestBeforeBid;
+        public HashSet<int> grainsInNestedFunctions;
+        
+        public FunctionResult(object resultObject = null)
         {
-            beforeState = new Dictionary<Guid, object>();
-            afterState = new Dictionary<Guid, object>();
-            this.resultObject = resultObject;
-            grainsInNestedFunctions = new Dictionary<Guid, String>();
-            beforeSet = new HashSet<int>();
-            afterSet = new HashSet<int>();
-            maxBeforeBid = int.MinValue;
+            exception = false;
+            Exp_Deadlock = false;
             minAfterBid = int.MaxValue;
+            maxBeforeBid = int.MinValue;
+            afterSet = new HashSet<int>();
+            beforeSet = new HashSet<int>();
+            grainWithHighestBeforeBid = -1;
+            isBeforeAfterConsecutive = false;
+            this.resultObject = resultObject;
+            grainsInNestedFunctions = new HashSet<int>();
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
         {
-            foreach (var item in r.beforeState)
-                // if the grain is accessed multiple times by a transaction
-                if (!beforeState.ContainsKey(item.Key)) beforeState.Add(item.Key, item.Value);
-            
-            readOnly &= r.readOnly;
-            if (this.highestCommittedBid < r.highestCommittedBid) this.highestCommittedBid = r.highestCommittedBid;
-            this.Exp_AppLogic |= r.Exp_AppLogic;
-            this.Exp_NotSerializable |= r.Exp_NotSerializable;
-            this.Exp_RWConflict |= r.Exp_RWConflict;
-            this.Exp_UnExpect |= r.Exp_UnExpect;
+            Exp_Deadlock |= r.Exp_Deadlock;
+            exception |= r.exception;
+            foreach (var grain in r.grainsInNestedFunctions)
+                if (grainsInNestedFunctions.Contains(grain) == false) grainsInNestedFunctions.Add(grain);
 
-            this.exception |= r.exception;
-            foreach (var entry in r.grainsInNestedFunctions)
-                if (this.grainsInNestedFunctions.ContainsKey(entry.Key) == false)
-                    this.grainsInNestedFunctions.Add(entry.Key, entry.Value);
-
-            if (this.beforeSet.Count == 0 && this.afterSet.Count == 0)
+            if (beforeSet.Count == 0 && afterSet.Count == 0)
             {
-                this.grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
-                this.maxBeforeBid = r.maxBeforeBid;
-                this.minAfterBid = r.minAfterBid;
-                this.beforeSet = r.beforeSet;
-                this.afterSet = r.afterSet;
+                grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
+                maxBeforeBid = r.maxBeforeBid;
+                minAfterBid = r.minAfterBid;
+                beforeSet = r.beforeSet;
+                afterSet = r.afterSet;
             }
             else
             {
-                this.beforeSet.UnionWith(r.beforeSet);
-                this.afterSet.UnionWith(r.afterSet);
-                if (this.maxBeforeBid < r.maxBeforeBid)
+                beforeSet.UnionWith(r.beforeSet);
+                afterSet.UnionWith(r.afterSet);
+                if (maxBeforeBid < r.maxBeforeBid)
                 {
-                    this.maxBeforeBid = r.maxBeforeBid;
+                    maxBeforeBid = r.maxBeforeBid;
                     grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
                 }
-                this.minAfterBid = (this.minAfterBid > r.minAfterBid) ? r.minAfterBid : this.minAfterBid;
+                minAfterBid = (minAfterBid > r.minAfterBid) ? r.minAfterBid : minAfterBid;
                 isBeforeAfterConsecutive &= r.isBeforeAfterConsecutive;
             }
         }
 
-        public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, Boolean consecutive, Tuple<Guid, string> tuple)
+        public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, bool consecutive, int coordID)
         {
-
             if (this.maxBeforeBid < maxBeforeBid)
             {
                 this.maxBeforeBid = maxBeforeBid;
-                grainWithHighestBeforeBid = tuple;
+                grainWithHighestBeforeBid = coordID;
             }
-            minAfterBid = (this.minAfterBid > minAfterBid) ? minAfterBid : this.minAfterBid;
+            this.minAfterBid = (this.minAfterBid > minAfterBid) ? minAfterBid : this.minAfterBid;
             isBeforeAfterConsecutive &= consecutive;
+
         }
 
-        public void setResult(Object result)
+        public void setResult(object result)
         {
             resultObject = result;
         }
@@ -122,7 +131,7 @@ namespace Utilities
             exception = true;
         }
 
-        public Boolean hasException()
+        public bool hasException()
         {
             return (exception == true);
         }
@@ -140,10 +149,10 @@ namespace Utilities
         public FunctionInput funcInput;
         public Type type;
         public string func;
-
-        public FunctionCall(Type t, String func, FunctionInput funcInput)
+        
+        public FunctionCall(Type t, string func, FunctionInput funcInput)
         {
-            this.type = t;
+            type = t;
             this.func = func;
             this.funcInput = funcInput;
         }

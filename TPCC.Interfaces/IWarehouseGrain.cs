@@ -1,19 +1,18 @@
-﻿using System;
+﻿using Orleans;
+using Utilities;
+using Concurrency.Interface;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Orleans;
-using Concurrency.Interface;
-using Utilities;
 
 namespace TPCC.Interfaces
 {
     public class StockItemUpdate
     {
-        public UInt32 warehouseId;
-        public UInt32 itemId;
-        public UInt16 itemQuantity;
+        public uint warehouseId;
+        public uint itemId;
+        public ushort itemQuantity;
         public float price;
-        public String districtInformation;
+        public string districtInformation;
 
         public StockItemUpdate(uint warehouseId, uint itemId, ushort itemQuantity, float price, string districtInformation)
         {
@@ -41,12 +40,12 @@ namespace TPCC.Interfaces
 
     public class PaymentInfo
     {
-        public UInt32 warehouseId;
-        public UInt32 districtId;
-        public UInt32 customerWarehouseId;
-        public UInt32 customerDistrictId;
-        public UInt32 customerId;
-        public String customerLastName;
+        public uint warehouseId;
+        public uint districtId;
+        public uint customerWarehouseId;
+        public uint customerDistrictId;
+        public uint customerId;
+        public string customerLastName;
         public float paymentAmount;
 
         public PaymentInfo(uint warehouseId, uint districtId, uint customerWarehouseId, uint customerDistrictId, uint customerId, string customerLastName, float paymentAmount)
@@ -63,10 +62,10 @@ namespace TPCC.Interfaces
 
     public class NewOrderInput
     {
-        public UInt32 warehouseId;
-        public UInt32 districtId;
-        public UInt32 customerId;
-        public Dictionary<UInt32, Dictionary<UInt32, UInt16>> ordersPerWarehousePerItem;
+        public uint warehouseId;
+        public uint districtId;
+        public uint customerId;
+        public Dictionary<uint, Dictionary<uint, ushort>> ordersPerWarehousePerItem;
 
         public NewOrderInput(uint warehouseId, uint districtId, uint customerId, Dictionary<uint, Dictionary<uint, ushort>> ordersPerWarehousePerItem)
         {
@@ -79,9 +78,9 @@ namespace TPCC.Interfaces
 
     public class StockUpdateInput
     {
-        public UInt32 warehouseId;
-        public UInt32 districtId;
-        public Dictionary<UInt32, UInt16> ordersPerItem;
+        public uint warehouseId;
+        public uint districtId;
+        public Dictionary<uint, ushort> ordersPerItem;
 
         public StockUpdateInput(uint warehouseId, uint districtId, Dictionary<uint, ushort> ordersPerItem)
         {
@@ -93,10 +92,10 @@ namespace TPCC.Interfaces
 
     public class FindCustomerIdInput
     {
-        public UInt32 districtId;
-        public String customerLastName;
+        public uint districtId;
+        public string customerLastName;
 
-        public FindCustomerIdInput(uint districtId, String customerLastName)
+        public FindCustomerIdInput(uint districtId, string customerLastName)
         {
             this.districtId = districtId;
             this.customerLastName = customerLastName;

@@ -1,17 +1,14 @@
 ﻿using Orleans;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
 using Utilities;
+using System.Threading.Tasks;
 
 namespace ExperimentProcess
 {
     public interface IBenchmark
     {
-        void generateBenchmark(WorkloadConfiguration workloadConfig);
-        Task<FunctionResult> newTransaction(IClusterClient client);
-        Task<FunctionResult> newTransaction(IClusterClient client, int global_tid);
-        Task<FunctionResult> newTransaction(IClusterClient client, int global_tid, TxnType type);
+        void generateBenchmark(WorkloadConfiguration workloadConfig, double skew, double hotGrainRatio);
+        Task<TransactionResult> newTransaction(IClusterClient client, int eIndex);
+        void generateGrainIDs(int threadIndex, int epoch);
+        void setIndex(int num);
     }
 }

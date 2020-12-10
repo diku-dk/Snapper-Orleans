@@ -1,10 +1,10 @@
-﻿using Concurrency.Interface.Nondeterministic;
-using Concurrency.Interface;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading.Tasks;
+﻿using System;
 using Utilities;
+using System.Diagnostics;
+using Concurrency.Interface;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Concurrency.Interface.Nondeterministic;
 
 namespace Concurrency.Implementation.Nondeterministic
 {
@@ -217,7 +217,7 @@ namespace Concurrency.Implementation.Nondeterministic
 
             public int depTid { get; set; }
 
-            public TaskCompletionSource<Boolean> ExecutionPromise { get; set; }
+            public TaskCompletionSource<bool> ExecutionPromise { get; set; }
 
             public TransactionStateInfo(int tid, int depTid, int rts, Status status, TState copy)
             {
@@ -226,14 +226,14 @@ namespace Concurrency.Implementation.Nondeterministic
                 this.status = status;
                 this.state = copy;
                 this.rts = rts;
-                ExecutionPromise = new TaskCompletionSource<Boolean>();
+                ExecutionPromise = new TaskCompletionSource<bool>();
             }
 
             public TransactionStateInfo(int tid, Status status)
             {
                 this.tid = tid;
                 this.status = status;
-                ExecutionPromise = new TaskCompletionSource<Boolean>();
+                ExecutionPromise = new TaskCompletionSource<bool>();
             }
         }
     }

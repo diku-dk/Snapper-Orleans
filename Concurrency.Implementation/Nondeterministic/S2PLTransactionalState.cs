@@ -1,11 +1,11 @@
-﻿using Concurrency.Interface.Nondeterministic;
-using Concurrency.Interface;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading.Tasks;
+﻿using System;
 using Utilities;
 using System.Linq;
+using System.Diagnostics;
+using Concurrency.Interface;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Concurrency.Interface.Nondeterministic;
 
 namespace Concurrency.Implementation.Nondeterministic
 {

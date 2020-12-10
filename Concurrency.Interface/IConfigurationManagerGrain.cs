@@ -1,26 +1,22 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using Orleans;
+using System.Threading.Tasks;
 using Concurrency.Interface.Logging;
 using Concurrency.Interface.Nondeterministic;
-using System.Threading.Tasks;
-using Orleans;
 
 namespace Concurrency.Interface
 {
     public class LoggingConfiguration
     {
-        public Boolean isLoggingEnabled;
+        public bool isLoggingEnabled;
+        public dataFormatType dataFormat;
         public StorageWrapperType loggingStorageWrapper;
 
-        public LoggingConfiguration()
+        public LoggingConfiguration(dataFormatType dataFormat, StorageWrapperType loggingStorageWrapper)
         {
-            this.isLoggingEnabled = false;
-        }
-
-        public LoggingConfiguration(StorageWrapperType loggingStorageWrapper)
-        {
-            this.isLoggingEnabled = true;
+            if (loggingStorageWrapper == StorageWrapperType.NOSTORAGE) isLoggingEnabled = false;
+            else isLoggingEnabled = true;
+            this.dataFormat = dataFormat;
             this.loggingStorageWrapper = loggingStorageWrapper;
         }
     }
@@ -37,38 +33,37 @@ namespace Concurrency.Interface
 
     public class ExecutionGrainConfiguration
     {
+        public string grainClassName;
         public LoggingConfiguration logConfiguration;
         public ConcurrencyConfiguration nonDetCCConfiguration;
-        public int maxNonDetWaitingLatencyInMs;
 
-        public ExecutionGrainConfiguration(LoggingConfiguration logConfiguration, ConcurrencyConfiguration nonDetCCConfiguration, int latency)
+        public ExecutionGrainConfiguration(string grainClassName, LoggingConfiguration logConfiguration, ConcurrencyConfiguration nonDetCCConfiguration)
         {
+            this.grainClassName = grainClassName;
             this.logConfiguration = logConfiguration;
             this.nonDetCCConfiguration = nonDetCCConfiguration;
-            maxNonDetWaitingLatencyInMs = latency;
         }
     }
 
     public class CoordinatorGrainConfiguration
     {
-        public int batchIntervalMSecs;
+        public int batchInterval;
         public int backoffIntervalMSecs;
         public int idleIntervalTillBackOffSecs;
-        public uint numCoordinators;
+        public int numCoordinators;
 
-        public CoordinatorGrainConfiguration(int batchIntervalMSecs, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs, uint numCoordinators)
+        public CoordinatorGrainConfiguration(int batchInterval, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs, int numCoordinators)
         {
-            this.batchIntervalMSecs = batchIntervalMSecs;
+            this.batchInterval = batchInterval;
             this.backoffIntervalMSecs = backoffIntervalMSecs;
             this.idleIntervalTillBackOffSecs = idleIntervalTillBackOffSecs;
             this.numCoordinators = numCoordinators;
         }
     }
-    public interface IConfigurationManagerGrain : IGrainWithGuidKey
+    public interface IConfigurationManagerGrain : IGrainWithIntegerKey
     {
-        Task<Tuple<ExecutionGrainConfiguration, uint>> GetConfiguration(String grainClassName, Guid grainId);        
+        Task<Tuple<ExecutionGrainConfiguration, int, int>> GetConfiguration(int grainID);        
         Task UpdateNewConfiguration(CoordinatorGrainConfiguration config);
         Task UpdateNewConfiguration(ExecutionGrainConfiguration config);
-        Task UpdateNewConfiguration(Dictionary<Tuple<String, Guid>, ExecutionGrainConfiguration> grainSpecificConfigs);
     }
 }

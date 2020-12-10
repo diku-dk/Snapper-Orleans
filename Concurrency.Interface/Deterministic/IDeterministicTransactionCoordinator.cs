@@ -1,9 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Utilities;
 using Orleans;
+using Utilities;
 using Orleans.Concurrency;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace Concurrency.Interface
 {
@@ -28,7 +28,7 @@ namespace Concurrency.Interface
         /// </summary>
         /// 
         [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation);
+        Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<string,int>> grainAccessInformation);
 
         /// <summary>
         /// Return contetx for a non-determinictic transaction
@@ -44,7 +44,7 @@ namespace Concurrency.Interface
         Task AckBatchCompletion(int bid, Guid executor_id);
 
         [AlwaysInterleave]
-        Task<Boolean> checkBatchCompletion(TransactionContext context);
+        Task<bool> checkBatchCompletion(TransactionContext context);
 
         Task resetTimer(int batchInterval);
 

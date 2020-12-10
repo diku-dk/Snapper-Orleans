@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Utilities;
 using Concurrency.Interface;
 using System.Threading.Tasks;
-using Utilities;
 
 namespace SmallBank.Interfaces
 {

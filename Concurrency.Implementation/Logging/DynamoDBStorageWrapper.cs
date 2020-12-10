@@ -1,27 +1,26 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
-using Concurrency.Interface.Logging;
-using Amazon.DynamoDBv2;
-using Amazon.DynamoDBv2.Model;
-using Amazon.DynamoDBv2.DocumentModel;
 using System.IO;
-
+using Utilities;
+using Amazon.DynamoDBv2;
+using System.Threading.Tasks;
+using Amazon.DynamoDBv2.Model;
+using System.Collections.Generic;
+using Concurrency.Interface.Logging;
+using Amazon.DynamoDBv2.DocumentModel;
 
 namespace Concurrency.Implementation.Logging
 {
     class DynamoDBStorageWrapper : IKeyValueStorageWrapper
     {
         AmazonDynamoDBClient client;        
-        String grainType;
+        string grainType;
         byte[] grainKey;
-        String logName;
+        string logName;
         const string ATT_KEY_1 = "GRAIN_REFERENCE";
         const string ATT_KEY_2 = "SEQUENCE_NUMBER";
         const string ATT_VALUE = "VALUE";
-        const String DYNAMODB_ACCESS_KEY_ID = "AKIAJILO2SVPTNUZB55Q";
-        const String DYNAMODB_ACCESS_KEY_VALUE = "5htrwZJMn7JGjyqXP9MsqZ4rRAJjqZt+LAiT9w5I";
+        const string DYNAMODB_ACCESS_KEY_ID = Constants.AccessKey;
+        const string DYNAMODB_ACCESS_KEY_VALUE = Constants.SecretKey;
         const int READ_CAPACITY_UNITS = 10;
         const int WRITE_CAPACITY_UNITS = 10;
         
@@ -29,13 +28,13 @@ namespace Concurrency.Implementation.Logging
         bool tableExists = false;
 
 
-        public DynamoDBStorageWrapper(String grainType, Guid grainKey)
+        public DynamoDBStorageWrapper(string grainType, int grainID)
         {
-            client = new AmazonDynamoDBClient(DYNAMODB_ACCESS_KEY_ID, DYNAMODB_ACCESS_KEY_VALUE, Amazon.RegionEndpoint.USEast1);
-            Console.WriteLine("Initialized dynamodb client");
+            client = new AmazonDynamoDBClient(DYNAMODB_ACCESS_KEY_ID, DYNAMODB_ACCESS_KEY_VALUE, Amazon.RegionEndpoint.USEast2);
+            //Console.WriteLine("Initialized dynamodb client");
             this.grainType = grainType;
-            this.grainKey = grainKey.ToByteArray();
-            if (singleTable) logName = "XLibLog"; 
+            this.grainKey = BitConverter.GetBytes(grainID);
+            if (singleTable) logName = Constants.ServiceID;
             else logName = grainType + grainKey;
         }
                 
@@ -51,7 +50,7 @@ namespace Concurrency.Implementation.Logging
                 do
                 {
                     response = await client.DescribeTableAsync(describeTableRequest);
-                    Console.WriteLine($"Current table status = {response.Table.TableStatus}");
+                    //Console.WriteLine($"Current table status = {response.Table.TableStatus}");
                     await Task.Delay(TimeSpan.FromSeconds(5));
                 } while (response.Table.TableStatus != TableStatus.ACTIVE);
                 tableExists = true;
@@ -106,6 +105,7 @@ namespace Concurrency.Implementation.Logging
                 }                    
             }
         }
+
         Task<byte[]> IKeyValueStorageWrapper.Read(byte[] key)
         {
             throw new NotImplementedException();

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.Core" Version="3.5.1.47" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.5.4.6" />
+    <PackageReference Include="MathNet.Numerics" Version="4.12.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.3.0" />
+    <PackageReference Include="Microsoft.Orleans.Core" Version="3.3.0" />
+    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.3.0" />
+    <PackageReference Include="Microsoft.Orleans.OrleansAWSUtils" Version="2.4.5" />
+    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="3.3.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="NetMQ" Version="4.0.1.6" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="5.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AccountTransfer.Grains\AccountTransfer.Grains.csproj" />
+    <ProjectReference Include="..\AccountTransfer.Interfaces\AccountTransfer.Interfaces.csproj" />
+    <ProjectReference Include="..\Concurrency.Implementation\Concurrency.Implementation.csproj" />
+    <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
+    <ProjectReference Include="..\SmallBank.Grains\SmallBank.Grains.csproj" />
+    <ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj" />
+    <ProjectReference Include="..\TPCC.Grains\TPCC.Grains.csproj" />
+    <ProjectReference Include="..\TPCC.Interfaces\TPCC.Interfaces.csproj" />
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
+    <ProjectReference Include="..\ExperimentProcess\ExperimentProcess.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,26 +1,24 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Utilities;
 using Orleans;
+using Utilities;
 using Orleans.Concurrency;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Concurrency.Interface.Logging;
 
 namespace Concurrency.Interface
 {
     struct Message<T>
     {
     }
-    public interface IGlobalTransactionCoordinatorGrain : IGrainWithGuidKey
+    public interface IGlobalTransactionCoordinatorGrain : IGrainWithIntegerKey
     {
         /// <summary>
         /// Client calls this function to submit a new deterministic transaction
         /// </summary>
         /// 
         [AlwaysInterleave]
-        Task<int> GetHighestCommittedBid();
-
-        [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<String, int>> grainAccessInformation);
+        Task<TransactionContext> NewTransaction(Dictionary<int, int> grainAccessInformation);
 
         /// <summary>
         /// Client calls this function to submit a new non-deterministic transaction
@@ -42,23 +40,19 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task PassToken(BatchToken token);
 
-        Task SpawnCoordinator(uint myId, uint numOfCoordinators, int batchIntervalMSecs, int backOffIntervalMSecs, int idleIntervalTillBackOffSecs);
-
-        [AlwaysInterleave]
-        Task NotifyCommit(int bid);
-
-        [AlwaysInterleave]
-        Task<bool> checkBatchCompletion(int bid);
+        Task SpawnCoordinator(string grainClassName, int numOfCoordinators, int batchInterval, int backOffIntervalMSecs, int idleIntervalTillBackOffSecs, dataFormatType dataForamt, StorageWrapperType logStorage);
 
         /// <summary>
         /// Actors call this function to notify coordinator that a transaction has been completed locally. 
         /// </summary>
         [AlwaysInterleave]
-        Task AckBatchCompletion(int bid, Guid executor_id);
+        Task AckBatchCompletion(int bid);
 
         [AlwaysInterleave]
-        Task<HashSet<int>> GetCompleteAfterSet(Dictionary<Guid, int> grains, Dictionary<Guid, String> names);
-       
+        Task WaitBatchCommit(int bid);
 
+        Task<Tuple<int, int, int, int>> GetSetCount();
+
+        Task PrintData();
     }
 }

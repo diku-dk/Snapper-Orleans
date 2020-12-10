@@ -1,58 +1,60 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Utilities;
 using System.Diagnostics;
-using System.Text;
 using System.Threading.Tasks;
-using Utilities;
+using System.Collections.Generic;
 
 namespace Concurrency.Implementation
 {
     public class ScheduleInfo
     {
+        private int myID;
         public Dictionary<int, ScheduleNode> nodes;
-        public ScheduleNode tail; //Points to the last node in the doubly-linked list
         public Dictionary<int, NonDeterministicBatchSchedule> nonDetBatchScheduleMap;
-        public Dictionary<int, int> nonDetTxnToScheduleMap;        
-        
-        public ScheduleInfo()
+        public Dictionary<int, int> nonDetTxnToScheduleMap;
+
+        public ScheduleInfo(int myID)
         {
+            this.myID = myID;
             nodes = new Dictionary<int, ScheduleNode>();
-            ScheduleNode node = new ScheduleNode(-1, true);
+            var node = new ScheduleNode(-1, true);
             nonDetBatchScheduleMap = new Dictionary<int, NonDeterministicBatchSchedule>();
             nonDetTxnToScheduleMap = new Dictionary<int, int>();
             node.executionPromise.SetResult(true);
-            tail = node;
             nodes.Add(-1, node);
         }
 
-        public ScheduleNode InsertNonDetTransaction(int tid)
+        private ScheduleNode findTail()
         {
-            if(nonDetTxnToScheduleMap.ContainsKey(tid)) return nodes[nonDetTxnToScheduleMap[tid]].prev;
-            
-            if (tail.isDet == true)
+            var node = nodes[-1];
+            while (node.next != null) node = node.next;
+            return node;
+        }
+
+        public ScheduleNode insertNonDetTransaction(int tid)
+        {
+            // if tid has accessed this grain before
+            if (nonDetTxnToScheduleMap.ContainsKey(tid)) return nodes[nonDetTxnToScheduleMap[tid]].prev;
+            var tail = findTail();
+            if (tail.isDet)
             {
-                ScheduleNode node = new ScheduleNode(tid, false);
-                NonDeterministicBatchSchedule schedule = new NonDeterministicBatchSchedule(tid);                
-                nonDetBatchScheduleMap.Add(tid, schedule);                
-                nodes.Add(tid, node);                
+                var node = new ScheduleNode(tid, false);
+                var schedule = new NonDeterministicBatchSchedule(tid);
+                nonDetBatchScheduleMap.Add(tid, schedule);
+                nodes.Add(tid, node);
                 tail.next = node;
                 node.prev = tail;
-                tail = node;                
-            } 
+                tail = node;
+            }
             else
             {
                 //Join the non-det tail, replace the promise
-                if(tail.executionPromise.Task.IsCompleted)
-                {
-                    tail.executionPromise = new TaskCompletionSource<bool>();
-                }
+                if (tail.executionPromise.Task.IsCompleted) tail.executionPromise = new TaskCompletionSource<bool>();
             }
             nonDetBatchScheduleMap[tail.id].AddTransaction(tid);
             nonDetTxnToScheduleMap.Add(tid, tail.id);
             return tail.prev;
         }
 
-        // Yijian's version
         public void insertDetBatch(DeterministicBatchSchedule schedule)
         {
             ScheduleNode node;
@@ -60,9 +62,9 @@ namespace Concurrency.Implementation
             {
                 node = new ScheduleNode(schedule.batchID, true);
                 nodes.Add(schedule.batchID, node);
-            } 
+            }
             else node = nodes[schedule.batchID];
-            
+
             if (nodes.ContainsKey(schedule.lastBatchID))
             {
                 var prevNode = nodes[schedule.lastBatchID];
@@ -102,17 +104,15 @@ namespace Concurrency.Implementation
                     nodes.Add(schedule.lastBatchID, prevNode);
                     prevNode.next = node;
                     node.prev = prevNode;
-                    // at this time, prevNode.prev == null (Yijian)
+                    Debug.Assert(prevNode.prev == null);
                 }
             }
-
-            if (node.id > tail.id) tail = node;
         }
 
-        public TaskCompletionSource<Boolean> getDependingPromise(int id)
+        public ScheduleNode getDependingNode(int id, bool isDet)
         {
-            Debug.Assert(nodes[id].prev != null);
-            return nodes[id].prev.executionPromise;
+            if (isDet) return nodes[id].prev;
+            else return nodes[nonDetTxnToScheduleMap[id]].prev;
         }
 
         public HashSet<int> getBeforeSet(int tid, out int maxBeforeBid)
@@ -120,16 +120,15 @@ namespace Concurrency.Implementation
             var result = new HashSet<int>();
             var node = nodes[nonDetTxnToScheduleMap[tid]].prev;
             maxBeforeBid = node.id == -1 ? int.MinValue : node.id;
-            while(node.id != -1 && !node.commitmentPromise.Task.IsCompleted)
-            {   
+            while (node.id > -1)
+            {
                 if (node.isDet) result.Add(node.id);
                 node = node.prev;
             }
             return result;
         }
 
-        // TODO: changed by Yijian
-        public HashSet<int> getAfterSet(int tid, int maxBeforeBid, out int minAfterBid)
+        public HashSet<int> getAfterSet(int maxBeforeBid, out int minAfterBid)
         {
             minAfterBid = int.MaxValue;
             var result = new HashSet<int>();
@@ -146,37 +145,21 @@ namespace Concurrency.Implementation
 
         public void completeDeterministicBatch(int id)
         {
-            nodes[id].executionPromise.SetResult(true);            
+            nodes[id].executionPromise.SetResult(true);
         }
 
-        public void removePreviousNodes(int scheduleId)
+        public void completeTransaction(int tid)   // when commit/abort a non-det txn
         {
-            var node = nodes[scheduleId];
-            var endOfChainToBeRemoved = node.prev;            
-
-            while(endOfChainToBeRemoved.id != -1)
-            {
-                nodes.Remove(endOfChainToBeRemoved.id);
-                if(!endOfChainToBeRemoved.isDet)
-                {
-                    nonDetBatchScheduleMap.Remove(endOfChainToBeRemoved.id);                    
-                }
-                endOfChainToBeRemoved = endOfChainToBeRemoved.prev;
-            }
-            node.prev = endOfChainToBeRemoved;
-            endOfChainToBeRemoved.next = node;
-        }
-
-        public void completeTransaction(int tid)
-        {
+            if (!nonDetTxnToScheduleMap.ContainsKey(tid)) return;
             var scheduleId = nonDetTxnToScheduleMap[tid];
             nonDetTxnToScheduleMap.Remove(tid);
             var schedule = nonDetBatchScheduleMap[scheduleId];
-            if(schedule.RemoveTransaction(tid))
+
+            // return true if transaction list is empty
+            if (schedule.RemoveTransaction(tid))
             {
-                //Schedule node is completed
                 nodes[scheduleId].executionPromise.SetResult(true);
-                //Only deterministic batches trigger garbage collection               
+                //Console.WriteLine($"grain {myPrimaryKey}: nondet {tid} set nondet node {scheduleId} promise true");
             }
         }
     }
@@ -185,9 +168,7 @@ namespace Concurrency.Implementation
     {
         public int id;
         public bool isDet = false;
-        public TaskCompletionSource<Boolean> commitmentPromise = new TaskCompletionSource<bool>(false);
-        public TaskCompletionSource<Boolean> executionPromise = new TaskCompletionSource<bool>(false);
-        //links
+        public TaskCompletionSource<bool> executionPromise = new TaskCompletionSource<bool>(false);
         public ScheduleNode prev;
         public ScheduleNode next;
 

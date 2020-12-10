@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Utilities
+﻿namespace Utilities
 {
     public class DLinkedList<T>
     {
@@ -51,9 +47,9 @@ namespace Utilities
             return true;
         }
 
-        public Boolean Contains(Node<T> node)
+        public bool Contains(Node<T> node)
         {
-            Boolean isFound = false;
+            bool isFound = false;
             if (head == null) return isFound;
             Node<T> next = head;
             while (next != null)
@@ -85,11 +81,11 @@ namespace Utilities
         public Node<T> InsertNext(T value)
         {
             var node = new Node<T>(value);
-            if (this.next == null)
+            if (next == null)
             {
                 // Easy to handle 
                 node.prev = this;
-                this.next = node;
+                next = node;
             }
             else
             {
@@ -97,7 +93,7 @@ namespace Utilities
                 Node<T> temp = this.next;
                 node.prev = this;
                 node.next = temp;
-                this.next = node;
+                next = node;
                 temp.prev = node;
                 // temp.next does not have to be changed 
             }

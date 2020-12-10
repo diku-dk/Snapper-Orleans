@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
 
@@ -10,50 +6,36 @@ namespace Utilities
 {
     public static class Helper
     {
-        public static Guid convertUInt32ToGuid(UInt32 value)
+        public static int GetSiloNumber(long coordID)
         {
-            var bytes = new byte[16];
-            //Copying into the first four bytes
-            BitConverter.GetBytes(value).CopyTo(bytes, 0);
-            return new Guid(bytes);
+            return (int)coordID / Constants.numCoordPerSilo;
         }
 
-        public static byte[] serializeToByteArray<T>(T obj)
+        public static int GetSiloNumber(long grainID, int siloLen)
         {
-            if(obj == null)
-            {
-                return null;
-            }
-
-            var formatter = new BinaryFormatter();
-            var stream = new MemoryStream();
-            formatter.Serialize(stream, obj);
-            return stream.ToArray();
+            var numCoord = siloLen * Constants.numCoordPerSilo;
+            var coordID = grainID % numCoord;
+            return (int)coordID / Constants.numCoordPerSilo;
         }
 
-        public static T deserializeFromByteArray<T>(byte[] obj)
+        public static bool intraSilo(int numCoord, int source, bool isSourceCoord, int dest, bool isDestCoord)
         {
-            var formatter = new BinaryFormatter();
-            var stream = new MemoryStream();
-            //Clean up 
-            stream.Write(obj, 0, obj.Length);
-            stream.Seek(0, SeekOrigin.Begin);
-            var result = (T) formatter.Deserialize(stream);
-            return result;
+            int sourceSilo;
+            int destSilo;
+            if (isSourceCoord) sourceSilo = source / Constants.numCoordPerSilo;
+            else sourceSilo = (source % numCoord) / Constants.numCoordPerSilo;
+
+            if (isDestCoord) destSilo = dest / Constants.numCoordPerSilo;
+            else destSilo = (dest % numCoord) / Constants.numCoordPerSilo;
+
+            return sourceSilo == destSilo;
         }
 
         public static string GetLocalIPAddress()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
-            foreach (var ip in host.AddressList)
-            {
-                if (ip.AddressFamily == AddressFamily.InterNetwork)
-                {
-                    return ip.ToString();
-                }
-            }
+            foreach (var ip in host.AddressList) if (ip.AddressFamily == AddressFamily.InterNetwork) return ip.ToString();
             throw new Exception("No network adapters with an IPv4 address in the system!");
         }
-
     }
 }

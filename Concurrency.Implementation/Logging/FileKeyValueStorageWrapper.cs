@@ -1,24 +1,22 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
-using Concurrency.Interface.Logging;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
+using Concurrency.Interface.Logging;
+using Utilities;
 
 namespace Concurrency.Implementation.Logging
 {
     class FileKeyValueStorageWrapper : IKeyValueStorageWrapper
     {
-        String basePath = "";
-        String logName = "";
+        string basePath = Constants.logPath;
+        string logName = "";
         int maxRetries = 10;
         private SemaphoreSlim instanceLock;
 
-        public FileKeyValueStorageWrapper(string basePath, String grainType, Guid grainKey)
+        public FileKeyValueStorageWrapper(string grainType, int grainID)
         {
-            this.basePath = basePath;
-            this.logName = grainType + grainKey.ToString();
+            logName = grainType + grainID;
             instanceLock = new SemaphoreSlim(1);
         }
 
@@ -52,9 +50,10 @@ namespace Concurrency.Implementation.Logging
                     tries++;
                     Console.WriteLine("Exception caught while writing: {0}", ex);
                     file.SetLength(fileLength);
-                } finally
+                }
+                finally
                 {
-                    file.Close();                    
+                    file.Close();
                 }
             }
             instanceLock.Release();

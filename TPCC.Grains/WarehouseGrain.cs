@@ -1,10 +1,10 @@
 ﻿using System;
+using Utilities;
 using TPCC.Interfaces;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Orleans.CodeGeneration;
+using System.Collections.Generic;
 using Concurrency.Implementation;
-using Utilities;
 
 [assembly: GenerateSerializer(typeof(TPCC.Grains.WarehouseData))]
 
@@ -37,7 +37,7 @@ namespace TPCC.Grains
             {
                 var myState = await state.ReadWrite(functionInput.context);
                 //Get customer information
-                var customerKey = new Tuple<UInt32, UInt32>(input.districtId, input.customerId);
+                var customerKey = new Tuple<uint, uint>(input.districtId, input.customerId);
                 var customer = myState.customerRecords[customerKey];
 
                 //Get district information
@@ -49,8 +49,8 @@ namespace TPCC.Grains
                 myState.newOrders.Add(new NewOrder(input.districtId, districtNextOrderId));
 
                 //Create entry in order
-                var orderKey = new Tuple<UInt32, UInt32>(input.districtId, districtNextOrderId);
-                myState.orderRecords.Add(orderKey, new Order(input.customerId, 0, (UInt16)orderLineCount, allLocal, 0));
+                var orderKey = new Tuple<uint, uint>(input.districtId, districtNextOrderId);
+                myState.orderRecords.Add(orderKey, new Order(input.customerId, 0, (ushort)orderLineCount, allLocal, 0));
 
                 //Consume the tasks as they arrive, add orderlines and compute total
                 float totalAmount = 0;
@@ -66,17 +66,16 @@ namespace TPCC.Grains
                             //Need to check permission from scheduler every time I context switch
                             myState = await state.ReadWrite(functionInput.context);
                             //Add order line entries
-                            UInt16 orderLineCounter = 1;
+                            ushort orderLineCounter = 1;
                             foreach (var aStockItemUpdateResult in ((StockUpdateResult)stockUpdateResult.resultObject).stockItemUpdates)
                             {
-                                var orderLineKey = new Tuple<UInt32, UInt32, UInt16>(input.districtId, districtNextOrderId, orderLineCounter++);
+                                var orderLineKey = new Tuple<uint, uint, ushort>(input.districtId, districtNextOrderId, orderLineCounter++);
                                 myState.orderLineRecords.Add(orderLineKey, new OrderLine(aStockItemUpdateResult.itemId, 0, aStockItemUpdateResult.price, aStockItemUpdateResult.warehouseId, aStockItemUpdateResult.itemQuantity, aStockItemUpdateResult.districtInformation));
                                 totalAmount += aStockItemUpdateResult.price;
                             }
                         }
                         catch (Exception)
                         {
-                            myResult.Exp_RWConflict = true;
                             myResult.setException();
                         }
                     }
@@ -89,7 +88,6 @@ namespace TPCC.Grains
             }
             catch (Exception)
             {
-                myResult.Exp_RWConflict = true;
                 myResult.setException();
             }
             return myResult;
@@ -114,7 +112,7 @@ namespace TPCC.Grains
                     }
                     else
                     {
-                        stock.quantity = (UInt16)(itemOrdered.Value + 91);
+                        stock.quantity = (ushort)(itemOrdered.Value + 91);
                     }
                     stock.ytd += itemOrdered.Value;
                     if (input.warehouseId == myState.warehouseRecord.wareHouseId)
@@ -123,7 +121,7 @@ namespace TPCC.Grains
                     }
 
                     //Construct district information for the result
-                    var districtInfo = default(String);
+                    var districtInfo = default(string);
                     switch (input.districtId)
                     {
                         case 1:
@@ -163,7 +161,6 @@ namespace TPCC.Grains
             }
             catch (Exception)
             {
-                myResult.Exp_RWConflict = true;
                 myResult.setException();
             }
             return myResult;
@@ -181,7 +178,7 @@ namespace TPCC.Grains
             myResult.mergeWithFunctionResult(fr);
             if (!fr.hasException())
             {
-                paymentInformation.customerId = (UInt32)fr.resultObject;
+                paymentInformation.customerId = (uint)fr.resultObject;
             }
             else
             {
@@ -196,12 +193,11 @@ namespace TPCC.Grains
                 //Update district payment
                 myState.districtRecords[paymentInformation.districtId].ytd += paymentInformation.paymentAmount;
                 total += myState.districtRecords[paymentInformation.districtId].ytd;
-                myState.historyRecords.Add(new History(paymentInformation.customerId, paymentInformation.customerDistrictId, paymentInformation.customerWarehouseId, paymentInformation.districtId, 0, paymentInformation.paymentAmount, String.Format("{0,10}     {0,10}", myState.warehouseRecord.name, myState.districtRecords[paymentInformation.districtId].name)));
+                myState.historyRecords.Add(new History(paymentInformation.customerId, paymentInformation.customerDistrictId, paymentInformation.customerWarehouseId, paymentInformation.districtId, 0, paymentInformation.paymentAmount, string.Format("{0,10}     {0,10}", myState.warehouseRecord.name, myState.districtRecords[paymentInformation.districtId].name)));
                 myResult.setResult(total);
             }
             catch (Exception)
             {
-                myResult.Exp_RWConflict = true;
                 myResult.setException();
             }
             return myResult;
@@ -211,14 +207,14 @@ namespace TPCC.Grains
         {
             var paymentInformation = (PaymentInfo)functionInput.inputObject;
             var myResult = new FunctionResult();
-            if (!String.IsNullOrEmpty(paymentInformation.customerLastName))
+            if (!string.IsNullOrEmpty(paymentInformation.customerLastName))
             {
                 FunctionCall fc = new FunctionCall(typeof(WarehouseGrain), "FindCustomerId", new FunctionInput(functionInput, new FindCustomerIdInput(paymentInformation.customerDistrictId, paymentInformation.customerLastName)));
                 var fr = await this.GrainFactory.GetGrain<IWarehouseGrain>(paymentInformation.customerWarehouseId).Execute(fc);
                 myResult.mergeWithFunctionResult(fr);
                 if (!fr.hasException())
                 {
-                    paymentInformation.customerId = (UInt32)fr.resultObject;
+                    paymentInformation.customerId = (uint)fr.resultObject;
                 }
                 else
                 {
@@ -228,21 +224,20 @@ namespace TPCC.Grains
             try
             {
                 var myState = await state.ReadWrite(functionInput.context);
-                var customer = myState.customerRecords[new Tuple<UInt32, UInt32>(paymentInformation.districtId, paymentInformation.customerId)];
+                var customer = myState.customerRecords[new Tuple<uint, uint>(paymentInformation.districtId, paymentInformation.customerId)];
                 customer.balance -= paymentInformation.paymentAmount;
                 customer.ytdPayment += paymentInformation.paymentAmount;
                 customer.paymentCount++;
                 if (customer.credit.Substring(0, 2).ToUpper().Equals("BC"))
                 {
                     //Append new credit line
-                    String data = "" + paymentInformation.customerId + paymentInformation.customerDistrictId + paymentInformation.customerWarehouseId + paymentInformation.districtId + paymentInformation.warehouseId + paymentInformation.paymentAmount + customer.data;
+                    var data = "" + paymentInformation.customerId + paymentInformation.customerDistrictId + paymentInformation.customerWarehouseId + paymentInformation.districtId + paymentInformation.warehouseId + paymentInformation.paymentAmount + customer.data;
                     customer.data = data;
                 }
                 myResult.setResult(paymentInformation.customerId);
             }
             catch (Exception)
             {
-                myResult.Exp_RWConflict = true;
                 myResult.setException();
             }
             return myResult;
@@ -256,12 +251,11 @@ namespace TPCC.Grains
             {
                 var myState = await state.ReadWrite(functionInput.context);
                 //Not strictly the same as the original since it requires the customer names to be sorted but will do for now
-                var customersWithSameLastName = myState.customerNameRecords[new Tuple<UInt32, String>(input.districtId, input.customerLastName)];
+                var customersWithSameLastName = myState.customerNameRecords[new Tuple<uint, string>(input.districtId, input.customerLastName)];
                 myResult.setResult(customersWithSameLastName[customersWithSameLastName.Count / 2].Item2);
             }
             catch (Exception)
             {
-                myResult.Exp_RWConflict = true;
                 myResult.setException();
             }
             return myResult;

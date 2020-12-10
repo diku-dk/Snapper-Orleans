@@ -14,11 +14,11 @@ namespace AccountTransfer.Grains
         public float value;
         public Balance(Balance balance)
         {
-            this.value = balance.value;
+            value = balance.value;
         }
         public Balance()
         {
-            this.value = 100000;
+            value = 100000;
         }
         object ICloneable.Clone()
         {
@@ -44,12 +44,9 @@ namespace AccountTransfer.Grains
                 Balance balance = await state.ReadWrite(context);
                 var amount = (float)input;
                 balance.value += amount;
-                //Console.WriteLine($"\n\n After deposit of Tx: {context.transactionID}, {this.myPrimaryKey} balance: {balance.value}.\n\n");
             }
             catch(Exception)
             {
-                //Console.WriteLine($"\n {e.Message}");
-                ret.Exp_RWConflict = true;
                 ret.setException();
             }
             
@@ -66,12 +63,9 @@ namespace AccountTransfer.Grains
                 Balance balance = await state.ReadWrite(context);
                 var amount = (float)input;
                 balance.value -= amount;
-                //Console.WriteLine($"\n\n After withdraw of Tx: {context.transactionID}, {this.myPrimaryKey} balance: {balance.value}.\n\n");
             }
             catch (Exception)
             {
-                //Console.WriteLine($"\n {e.Message}");
-                ret.Exp_RWConflict = true;
                 ret.setException();
             }
             return ret;
@@ -89,7 +83,6 @@ namespace AccountTransfer.Grains
             }
             catch (Exception)
             {
-                ret.Exp_RWConflict = true;
                 ret.setException();
             }
             ret.setResult(v);
@@ -101,7 +94,7 @@ namespace AccountTransfer.Grains
             TransactionContext context = fin.context;
             var input = (TransferInput)fin.inputObject;
             //Invoke the destination deposit
-            IAccountGrain toAccount = this.GrainFactory.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(input.destinationAccount));
+            IAccountGrain toAccount = GrainFactory.GetGrain<IAccountGrain>(input.destinationAccount);
             FunctionInput input_1 = new FunctionInput(fin, input.transferAmount);
 
             FunctionCall c = new FunctionCall(typeof(AccountGrain), "Deposit", input_1);
@@ -124,7 +117,7 @@ namespace AccountTransfer.Grains
             //Fire destination deposits
             foreach (var destinationAccount in input.destinationAccounts)
             {
-                resultTasks.Add(this.GrainFactory.GetGrain<IAccountGrain>(Helper.convertUInt32ToGuid(destinationAccount)).Execute(new FunctionCall(typeof(AccountGrain), "Deposit", new FunctionInput(functionInput, input.transferAmount))));
+                resultTasks.Add(GrainFactory.GetGrain<IAccountGrain>(destinationAccount).Execute(new FunctionCall(typeof(AccountGrain), "Deposit", new FunctionInput(functionInput, input.transferAmount))));
             }
 
             var withDrawInput = new FunctionInput(functionInput, input.transferAmount);            

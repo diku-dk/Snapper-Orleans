@@ -15,13 +15,14 @@
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="AWSSDK.Core" Version="3.3.107.22" />
-    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.3.106.30" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="3.1.5" />
-    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.2.1" />
+    <PackageReference Include="AWSSDK.Core" Version="3.5.1.47" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.5.4.6" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.3.0" />
     <PackageReference Include="Microsoft.Orleans.OrleansAWSUtils" Version="2.4.5" />
-    <PackageReference Include="Microsoft.Orleans.OrleansProviders" Version="3.2.1" />
-    <PackageReference Include="Microsoft.Orleans.OrleansRuntime" Version="3.2.1" />
+    <PackageReference Include="Microsoft.Orleans.OrleansProviders" Version="3.3.0" />
+    <PackageReference Include="Microsoft.Orleans.OrleansRuntime" Version="3.3.0" />
+    <PackageReference Include="Microsoft.Orleans.Persistence.DynamoDB" Version="3.3.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\AccountTransfer.Grains\AccountTransfer.Grains.csproj" />

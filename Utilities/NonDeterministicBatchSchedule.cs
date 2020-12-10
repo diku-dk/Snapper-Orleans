@@ -1,30 +1,25 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 
 namespace Utilities
-{    
+{
     public class NonDeterministicBatchSchedule
     {
-        public int id;
         public HashSet<int> transactions;
 
-        public NonDeterministicBatchSchedule(int transactionId)
+        public NonDeterministicBatchSchedule(int tid)
         {
-            int id = transactionId;
             transactions = new HashSet<int>();
-            transactions.Add(transactionId);
+            transactions.Add(tid);
         }
 
-        public void AddTransaction(int transactionId)
+        public void AddTransaction(int tid)
         {
-            transactions.Add(transactionId);            
-        } 
+            transactions.Add(tid);
+        }
 
-        public Boolean RemoveTransaction(int transactionId)
+        public bool RemoveTransaction(int tid)
         {
-            transactions.Remove(transactionId);
+            transactions.Remove(tid);
             return (transactions.Count == 0);
         }
     }
