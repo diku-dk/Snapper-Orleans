@@ -111,21 +111,10 @@ namespace OrleansSiloHost
                 .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .UseDynamoDBClustering(dynamoDBOptions)
-                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information))
-                //.AddMemoryGrainStorageAsDefault();
+                .AddMemoryGrainStorageAsDefault()
                 .ConfigureServices(ConfigureServices);
 
-            if (enableOrleansTxn)
-                builder.AddDynamoDBGrainStorage(
-                    name: Constants.GrainStateTable,
-                    configureOptions: options =>
-                    {
-                        options.UseJson = true;
-                        options.AccessKey = Constants.AccessKey;
-                        options.SecretKey = Constants.SecretKey;
-                        options.Service = Constants.ServiceRegion;
-                    })
-                    .UseTransactions();
+            if (enableOrleansTxn) builder.UseTransactions();
 
             var host = builder.Build();            
             await host.StartAsync();

@@ -72,17 +72,7 @@ namespace Utilities
         public long startTime;
         public long endTime;
         public List<double> latencies;
-        public List<double> networkTime;
-        public List<double> emitTime;
-        public List<double> executeTime;
-        public List<double> waitBatchCommitTime;
-
         public List<double> det_latencies;
-        public List<double> det_networkTime;
-        public List<double> det_emitTime;
-        public List<double> det_waitBatchScheduleTime;
-        public List<double> det_executeTime;
-        public List<double> det_waitBatchCommitTime;
 
         public WorkloadResults(int numDetTxn, int numNonDetTxn, int numDetCommitted, int numNonDetCommitted, long startTime, long endTime, int numNotSerializable, int numDeadlock)
         {
@@ -96,23 +86,10 @@ namespace Utilities
             this.numDeadlock = numDeadlock;
         }
 
-        public void setTime(List<double> latencies, List<double> networkTime, List<double> emitTime, List<double> executeTime, List<double> waitBatchCommitTime)
+        public void setLatency(List<double> latencies, List<double> det_latencies)
         {
             this.latencies = latencies;
-            this.networkTime = networkTime;
-            this.emitTime = emitTime;
-            this.executeTime = executeTime;
-            this.waitBatchCommitTime = waitBatchCommitTime;
-        }
-
-        public void setDetTime(List<double> latencies, List<double> networkTime, List<double> emitTime, List<double> waitBatchScheduleTime, List<double> executeTime, List<double> waitBatchCommitTime)
-        {
-            det_latencies = latencies;
-            det_networkTime = networkTime;
-            det_emitTime = emitTime;
-            det_waitBatchScheduleTime = waitBatchScheduleTime;
-            det_executeTime = executeTime;
-            det_waitBatchCommitTime = waitBatchCommitTime;
+            this.det_latencies = det_latencies;
         }
     }
 }

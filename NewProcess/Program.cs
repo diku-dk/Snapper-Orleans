@@ -46,8 +46,6 @@ namespace NewProcess
         // parameters for hot record
         static double skewness;
         static double hotGrainRatio;
-        static int numDetTxn;
-        static int numNonDetTxn;
 
         private static void ProducerThreadWork(object obj)
         {
@@ -119,8 +117,6 @@ namespace NewProcess
             var input = (Tuple<int, bool>)obj;
             int threadIndex = input.Item1;
             var isDet = input.Item2;
-            var producer = 0;
-            var numTxn = isDet ? numDetTxn : numNonDetTxn;
             var pipeSize = isDet ? detPipeSize : nonDetPipeSize;
             var globalWatch = new Stopwatch();
             var benchmark = benchmarks[threadIndex];
@@ -136,16 +132,7 @@ namespace NewProcess
                 int numDeadlock = 0;
                 int numNotSerializable = 0;
                 var latencies = new List<double>();
-                var networkTime = new List<double>();
-                var emitTime = new List<double>();
-                var executeTime = new List<double>();
-                var waitBatchCommitTime = new List<double>();
                 var det_latencies = new List<double>();
-                var det_networkTime = new List<double>();
-                var det_emitTime = new List<double>();
-                var det_waitBatchScheduleTime = new List<double>();
-                var det_executeTime = new List<double>();
-                var det_waitBatchCommitTime = new List<double>();
                 var tasks = new List<Task<TransactionResult>>();
                 var reqs = new Dictionary<Task<TransactionResult>, TimeSpan>();
                 var queue = thread_requests[eIndex][threadIndex];
@@ -166,7 +153,6 @@ namespace NewProcess
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);
                     }
-                    //Console.WriteLine($"thread {threadIndex} tasks.count = {tasks.Count}, queue.count = {queue.Count}");
                     if (tasks.Count != 0)
                     {
                         var task = await Task.WhenAny(tasks);
@@ -191,17 +177,6 @@ namespace NewProcess
                                 {
                                     numDetCommit++;
                                     det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
-                                    if (config.grainImplementationType == ImplementationType.SNAPPER)
-                                    {
-                                        det_emitTime.Add((task.Result.emitTime - task.Result.arriveTime).TotalMilliseconds);
-                                        det_waitBatchScheduleTime.Add((task.Result.batchTime - task.Result.arriveTime).TotalMilliseconds);
-                                        det_waitBatchCommitTime.Add((task.Result.commitTime - task.Result.finishTime).TotalMilliseconds);
-                                        det_networkTime.Add((task.Result.arriveTime - reqs[task] + asyncReqEndTime - task.Result.commitTime).TotalMilliseconds);
-                                        double exeTime;
-                                        if (task.Result.emitTime > task.Result.batchTime) exeTime = (task.Result.finishTime - task.Result.emitTime).TotalMilliseconds;
-                                        else exeTime = (task.Result.finishTime - task.Result.batchTime).TotalMilliseconds;
-                                        det_executeTime.Add(exeTime);
-                                    }
                                 }
                             }
                             else    // for non-det 
@@ -211,10 +186,6 @@ namespace NewProcess
                                 {
                                     numNonDetCommit++;
                                     latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
-                                    emitTime.Add((task.Result.emitTime - task.Result.arriveTime).TotalMilliseconds);
-                                    executeTime.Add((task.Result.finishTime - task.Result.emitTime).TotalMilliseconds);
-                                    waitBatchCommitTime.Add((task.Result.commitTime - task.Result.finishTime).TotalMilliseconds);
-                                    networkTime.Add((task.Result.arriveTime - reqs[task] + asyncReqEndTime - task.Result.commitTime).TotalMilliseconds);
                                 }
                                 else if (task.Result.Exp_Serializable) numNotSerializable++;
                                 else if (task.Result.Exp_Deadlock) numDeadlock++;
@@ -223,15 +194,12 @@ namespace NewProcess
                         tasks.Remove(task);
                         reqs.Remove(task);
                     }
-                    //else Console.WriteLine($"thread {threadIndex} isDet = {isDet}, tasks.Count = 0");
                 }
                 //while (numEmit < numTxn);
                 while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs && (queue.Count != 0 || !isProducerFinish[eIndex]));
                 isEpochFinish[eIndex] = true;   // which means producer doesn't need to produce more requests
-                Console.WriteLine($"time = {globalWatch.ElapsedMilliseconds}ms, queue = {queue.Count}, isProducerFinish = {isProducerFinish[eIndex]}");
-                //Wait for the tasks exceeding epoch time and also count them into results
-                //Console.WriteLine($"There are isDet = {isDet} {tasks.Count} tasks remaining. ");
 
+                //Wait for the tasks exceeding epoch time and also count them into results
                 while (tasks.Count != 0)
                 {
                     var task = await Task.WhenAny(tasks);
@@ -255,17 +223,6 @@ namespace NewProcess
                             {
                                 numDetCommit++;
                                 det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
-                                if (config.grainImplementationType == ImplementationType.SNAPPER)
-                                {
-                                    det_emitTime.Add((task.Result.emitTime - task.Result.arriveTime).TotalMilliseconds);
-                                    det_waitBatchScheduleTime.Add((task.Result.batchTime - task.Result.arriveTime).TotalMilliseconds);
-                                    det_waitBatchCommitTime.Add((task.Result.commitTime - task.Result.finishTime).TotalMilliseconds);
-                                    det_networkTime.Add((task.Result.arriveTime - reqs[task] + asyncReqEndTime - task.Result.commitTime).TotalMilliseconds);
-                                    double exeTime;
-                                    if (task.Result.emitTime > task.Result.batchTime) exeTime = (task.Result.finishTime - task.Result.emitTime).TotalMilliseconds;
-                                    else exeTime = (task.Result.finishTime - task.Result.batchTime).TotalMilliseconds;
-                                    det_executeTime.Add(exeTime);
-                                }
                             }
                         }
                         else    // for non-det 
@@ -275,10 +232,6 @@ namespace NewProcess
                             {
                                 numNonDetCommit++;
                                 latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
-                                emitTime.Add((task.Result.emitTime - task.Result.arriveTime).TotalMilliseconds);
-                                executeTime.Add((task.Result.finishTime - task.Result.emitTime).TotalMilliseconds);
-                                waitBatchCommitTime.Add((task.Result.commitTime - task.Result.finishTime).TotalMilliseconds);
-                                networkTime.Add((task.Result.arriveTime - reqs[task] + asyncReqEndTime - task.Result.commitTime).TotalMilliseconds);
                             }
                             else if (task.Result.Exp_Serializable) numNotSerializable++;
                             else if (task.Result.Exp_Deadlock) numDeadlock++;
@@ -295,8 +248,7 @@ namespace NewProcess
                 else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}");
                 
                 var res = new WorkloadResults(numDetTransaction, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
-                res.setTime(latencies, networkTime, emitTime, executeTime, waitBatchCommitTime);
-                res.setDetTime(det_latencies, det_networkTime, det_emitTime, det_waitBatchScheduleTime, det_executeTime, det_waitBatchCommitTime);
+                res.setLatency(latencies, det_latencies);
                 results[threadIndex] = res;
                 threadAcks[eIndex].Signal();  //Signal the completion of epoch
             }
@@ -548,27 +500,9 @@ namespace NewProcess
             long aggStartTime = results[0].startTime;
             long aggEndTime = results[0].endTime;
             var aggLatencies = new List<double>();
-            var aggNetworkTime = new List<double>();
-            var aggEmitTime = new List<double>();
-            var aggExecuteTime = new List<double>();
-            var aggWaitBatchCommitTime = new List<double>();
             var aggDetLatencies = new List<double>();
-            var aggDetNetworkTime = new List<double>();
-            var aggDetEmitTime = new List<double>();
-            var aggDetWaitBatchScheduleTime = new List<double>();
-            var aggDetExecuteTime = new List<double>();
-            var aggDetWaitBatchCommitTime = new List<double>();
             aggLatencies.AddRange(results[0].latencies);
-            aggNetworkTime.AddRange(results[0].networkTime);
-            aggEmitTime.AddRange(results[0].emitTime);
-            aggExecuteTime.AddRange(results[0].executeTime);
-            aggWaitBatchCommitTime.AddRange(results[0].waitBatchCommitTime);
             aggDetLatencies.AddRange(results[0].det_latencies);
-            aggDetNetworkTime.AddRange(results[0].det_networkTime);
-            aggDetEmitTime.AddRange(results[0].det_emitTime);
-            aggDetWaitBatchScheduleTime.AddRange(results[0].det_waitBatchScheduleTime);
-            aggDetExecuteTime.AddRange(results[0].det_executeTime);
-            aggDetWaitBatchCommitTime.AddRange(results[0].det_waitBatchCommitTime);
             for (int i = 1; i < results.Length; i++)    // reach thread has a result
             {
                 aggNumDetCommitted += results[i].numDetCommitted;
@@ -580,20 +514,10 @@ namespace NewProcess
                 aggStartTime = (results[i].startTime < aggStartTime) ? results[i].startTime : aggStartTime;
                 aggEndTime = (results[i].endTime < aggEndTime) ? results[i].endTime : aggEndTime;
                 aggLatencies.AddRange(results[i].latencies);
-                aggNetworkTime.AddRange(results[i].networkTime);
-                aggEmitTime.AddRange(results[i].emitTime);
-                aggExecuteTime.AddRange(results[i].executeTime);
-                aggWaitBatchCommitTime.AddRange(results[i].waitBatchCommitTime);
                 aggDetLatencies.AddRange(results[i].det_latencies);
-                aggDetNetworkTime.AddRange(results[i].det_networkTime);
-                aggDetEmitTime.AddRange(results[i].det_emitTime);
-                aggDetWaitBatchScheduleTime.AddRange(results[i].det_waitBatchScheduleTime);
-                aggDetExecuteTime.AddRange(results[i].det_executeTime);
-                aggDetWaitBatchCommitTime.AddRange(results[i].det_waitBatchCommitTime);
             }
             var res = new WorkloadResults(aggNumDetTransactions, aggNumNonDetTransactions, aggNumDetCommitted, aggNumNonDetCommitted, aggStartTime, aggEndTime, aggNumNotSerializable, aggNumDeadlock);
-            res.setTime(aggLatencies, aggNetworkTime, aggEmitTime, aggExecuteTime, aggWaitBatchCommitTime);
-            res.setDetTime(aggDetLatencies, aggDetNetworkTime, aggDetEmitTime, aggDetWaitBatchScheduleTime, aggDetExecuteTime, aggDetWaitBatchCommitTime);
+            res.setLatency(aggLatencies, aggDetLatencies);
             return res;
         }
 

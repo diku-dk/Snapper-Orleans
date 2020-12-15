@@ -13,9 +13,6 @@ namespace Concurrency.Implementation
     [GrainPlacementStrategy]
     public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain where TState : ICloneable, new()
     {
-        public int intraCount = 0;
-        public int interCount = 0;
-
         public int myID;
         private int coordID;
         public int numCoord;
@@ -25,7 +22,6 @@ namespace Concurrency.Implementation
         protected ITransactionalState<TState> state;
         private Dictionary<int, int> coordinatorMap;    // <act tid, grainID who starts the act>
         protected ILoggingProtocol<TState> log = null;
-        private SortedDictionary<int, DateTime> receiveBatchTime;
         private IGlobalTransactionCoordinatorGrain myCoordinator;
         private Dictionary<int, TaskCompletionSource<bool>> batchCommit;
         private TimeSpan deadlockTimeout = TimeSpan.FromMilliseconds(20);
@@ -51,37 +47,11 @@ namespace Concurrency.Implementation
 
             highestCommittedBid = -1;
             coordinatorMap = new Dictionary<int, int>();
-            receiveBatchTime = new SortedDictionary<int, DateTime>();
             batchScheduleMap = new Dictionary<int, DeterministicBatchSchedule>();
             myScheduler = new TransactionScheduler(batchScheduleMap, myID);
             batchCommit = new Dictionary<int, TaskCompletionSource<bool>>();
             coordList = new Dictionary<int, IGlobalTransactionCoordinatorGrain>();
             coordList.Add(coordID, myCoordinator);
-        }
-
-        public async Task PrintData()
-        {
-            if (batchCommit.Count > 0) Console.WriteLine($"grain {myID} batchCommit {batchCommit.Count}");
-            if (receiveBatchTime.Count > 0) Console.WriteLine($"grain {myID} receiveBatchTime {receiveBatchTime.Count}");
-            if (batchScheduleMap.Count > 0) Console.WriteLine($"grain {myID} batchScheduleMap {batchScheduleMap.Count}");
-            if (coordinatorMap.Count > 0) Console.WriteLine($"grain {myID} coordinatorMap {coordinatorMap.Count}");
-
-            var map = myScheduler.inBatchTransactionCompletionMap;
-            if (map.Count > 0) Console.WriteLine($"grain {myID} myScheduler.inBatchTransactionCompletionMap {map.Count}");
-
-            var info = myScheduler.scheduleInfo;
-            if (info.nodes.Count > 0) Console.WriteLine($"grain {myID} scheduleInfo.nodes {info.nodes.Count}");
-            if (info.nonDetTxnToScheduleMap.Count > 0) Console.WriteLine($"grain {myID} scheduleInfo.nonDetTxnToScheduleMap {info.nonDetTxnToScheduleMap.Count}");
-            if (info.nonDetBatchScheduleMap.Count > 0) Console.WriteLine($"grain {myID} scheduleInfo.nonDetBatchScheduleMap {info.nonDetBatchScheduleMap.Count}");
-        }
-
-        public async Task<Tuple<int, int>> GetSetCount()
-        {
-            var res = new Tuple<int, int>(intraCount, interCount);
-            intraCount = 0;
-            interCount = 0;
-            await Task.CompletedTask;
-            return res;
         }
 
         /**
@@ -91,61 +61,30 @@ namespace Concurrency.Implementation
          */
         public async Task<TransactionResult> StartTransaction(Dictionary<int, int> grainAccessInformation, string startFunction, FunctionInput inputs)
         {
-            if (Constants.multiSilo)
-            {
-                var intraSilo = Helper.intraSilo(numCoord, myID, false, coordID, true);
-                if (intraSilo) intraCount++;
-                else interCount++;
-            }
-            else intraCount++;
-
-            var arrive = DateTime.Now;
             var context = await myCoordinator.NewTransaction(grainAccessInformation);
-            var emit = DateTime.Now;
             if (highestCommittedBid < context.highestBatchIdCommitted) highestCommittedBid = context.highestBatchIdCommitted;
             inputs.context = context;
             var c1 = new FunctionCall(GetType(), startFunction, inputs);
             var t1 = Execute(c1);
             await t1;
-            var finish = DateTime.Now;
-            var getBatch = receiveBatchTime[context.batchID];
             if (highestCommittedBid < context.batchID)
             {
                 Debug.Assert(batchCommit.ContainsKey(context.batchID));
                 await batchCommit[context.batchID].Task;
             }
-            var commit = DateTime.Now;
             var res = new TransactionResult(false, t1.Result.resultObject);  // PACT never abort
-            res.arriveTime = arrive;
-            res.emitTime = emit;
-            res.finishTime = finish;
-            res.commitTime = commit;
-            res.batchTime = getBatch;
             return res;
         }
 
         public async Task<TransactionResult> StartTransaction(string startFunction, FunctionInput functionCallInput)
         {
-            var arrive = DateTime.Now;
-            var emit = DateTime.Now;
-            DateTime finish;
-            DateTime commit;
             TransactionContext context = null;
             Task<FunctionResult> t1 = null;
             var canCommit = true;
             var res = new TransactionResult();
             try
             {
-                if (Constants.multiSilo)
-                {
-                    var intraSilo = Helper.intraSilo(numCoord, myID, false, coordID, true);
-                    if (intraSilo) intraCount++;
-                    else interCount++;
-                }
-                else intraCount++;
-
                 context = await myCoordinator.NewTransaction();
-                emit = DateTime.Now;
                 if (highestCommittedBid < context.highestBatchIdCommitted) highestCommittedBid = context.highestBatchIdCommitted;
                 functionCallInput.context = context;
                 context.coordinatorKey = myID;
@@ -173,7 +112,6 @@ namespace Concurrency.Implementation
             {
                 Console.WriteLine($"\n Exception(StartTransaction)::{myID}: transaction {startFunction} {context.transactionID} exception {e.Message}, {e.StackTrace}");
             }
-            finish = DateTime.Now;
             if (canCommit && t1.Result.beforeSet.Count != 0 && highestCommittedBid < t1.Result.maxBeforeBid)
             {
                 var grainID = t1.Result.grainWithHighestBeforeBid;
@@ -183,21 +121,8 @@ namespace Concurrency.Implementation
                     var grain = GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, grainClassName);
                     var new_bid = await grain.WaitForBatchCommit(t1.Result.maxBeforeBid);
                     if (highestCommittedBid < new_bid) highestCommittedBid = new_bid;
-
-                    if (Constants.multiSilo)
-                    {
-                        var intraSilo = Helper.intraSilo(numCoord, myID, false, grainID, false);
-                        if (intraSilo) intraCount++;
-                        else interCount++;
-                    }
-                    else intraCount++;
                 }
             }
-            commit = DateTime.Now;
-            res.arriveTime = arrive;
-            res.emitTime = emit;
-            res.finishTime = finish;
-            res.commitTime = commit;
             res.isDet = false;
             return res;
         }
@@ -209,7 +134,6 @@ namespace Concurrency.Implementation
          */
         public Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule)
         {
-            receiveBatchTime.Add(schedule.batchID, DateTime.Now);
             if (highestCommittedBid < schedule.highestCommittedBatchId) highestCommittedBid = schedule.highestCommittedBatchId;
             else schedule.highestCommittedBatchId = highestCommittedBid;
             batchCommit.Add(schedule.batchID, new TaskCompletionSource<bool>());
@@ -231,13 +155,6 @@ namespace Concurrency.Implementation
             if (highestCommittedBid < bid) highestCommittedBid = bid;
             batchCommit[bid].SetResult(true);
             batchCommit.Remove(bid);
-
-            var removeList = new List<int>();
-            foreach (var batch in receiveBatchTime)
-            {
-                if (batch.Key < bid) removeList.Add(batch.Key);
-            }
-            foreach (var batch in removeList) receiveBatchTime.Remove(batch);
             return Task.CompletedTask;
         }
 
@@ -360,17 +277,7 @@ namespace Concurrency.Implementation
                 foreach (var grain in grainIDsInTransaction)
                 {
                     if (grain == myID) prepareResult.Add(Prepare(tid));
-                    else
-                    {
-                        prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grain, grainClassName).Prepare(tid));
-                        if (Constants.multiSilo)
-                        {
-                            var intraSilo = Helper.intraSilo(numCoord, myID, false, grain, false);
-                            if (intraSilo) intraCount += 2;
-                            else interCount += 2;
-                        }
-                        else intraCount += 2;
-                    }
+                    else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grain, grainClassName).Prepare(tid));
                 }
 
                 await Task.WhenAll(logTask, Task.WhenAll(prepareResult));

@@ -28,11 +28,6 @@ namespace Utilities
         public object resultObject;
         public bool Exp_Serializable;
         public bool Exp_Deadlock;
-        public DateTime arriveTime;
-        public DateTime emitTime;
-        public DateTime finishTime;
-        public DateTime commitTime;
-        public DateTime batchTime;
         public bool isDet = true;
 
         public TransactionResult(object res = null)

@@ -50,9 +50,5 @@ namespace Concurrency.Interface
 
         [AlwaysInterleave]
         Task WaitBatchCommit(int bid);
-
-        Task<Tuple<int, int, int, int>> GetSetCount();
-
-        Task PrintData();
     }
 }

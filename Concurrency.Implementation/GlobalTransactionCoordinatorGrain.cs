@@ -15,10 +15,6 @@ namespace Concurrency.Implementation
     {
         private int myID;
         private int neighborID;
-        private int batchIntraCount;
-        private int batchInterCount;
-        private int tokenIntraCount;
-        private int tokenInterCount;
         private string grainClassName;
         private int highestCommittedBatchID;
         private ILoggingProtocol<string> log;
@@ -49,10 +45,6 @@ namespace Concurrency.Implementation
             detEmitSeq = 0;
             nonDetEmitSeq = 0;
             tidToAllocate = -1;
-            batchIntraCount = 0;
-            batchInterCount = 0;
-            tokenIntraCount = 0;
-            tokenInterCount = 0;
             highestCommittedBatchID = -1;
             numTransactionIdsReserved = 0;
             numTransactionIdsPreAllocated = 0;
@@ -71,30 +63,6 @@ namespace Concurrency.Implementation
             deterministicTransactionRequests = new Dictionary<int, List<TransactionContext>>();
             batchSchedulePerGrain = new Dictionary<int, Dictionary<int, DeterministicBatchSchedule>>();
             return base.OnActivateAsync();
-        }
-
-        public async Task PrintData()
-        {
-            if (batchStartTime.Count > 0) Console.WriteLine($"coord {myID} batchStartTime {batchStartTime.Count}");
-            if (expectedAcksPerBatch.Count > 0) Console.WriteLine($"coord {myID} expectedAcksPerBatch {expectedAcksPerBatch.Count}");
-            if (detEmitPromiseMap.Count > 0) Console.WriteLine($"coord {myID} detEmitPromiseMap {detEmitPromiseMap.Count}");
-            if (deterministicTransactionRequests.Count > 0) Console.WriteLine($"coord {myID} deterministicTransactionRequests {deterministicTransactionRequests.Count}");
-            if (batchSchedulePerGrain.Count > 0) Console.WriteLine($"coord {myID} batchSchedulePerGrain {batchSchedulePerGrain.Count}");
-            if (batchesWaitingForCommit.Count > 0) Console.WriteLine($"coord {myID} batchesWaitingForCommit {batchesWaitingForCommit.Count}");
-            if (lastBatchIDMap.Count > 0) Console.WriteLine($"coord {myID} lastBatchIDMap {lastBatchIDMap.Count}");
-            if (nonDetEmitPromiseMap.Count > 0) Console.WriteLine($"coord {myID} nonDetEmitPromiseMap {nonDetEmitPromiseMap.Count}");
-            if (nonDetEmitID.Count > 0) Console.WriteLine($"coord {myID} nonDetEmitID {nonDetEmitID.Count}");
-            if (nonDeterministicEmitSize.Count > 0) Console.WriteLine($"coord {myID} nonDeterministicEmitSize {nonDeterministicEmitSize.Count}");
-        }
-
-        public async Task<Tuple<int, int, int, int>> GetSetCount()
-        {
-            var res = new Tuple<int, int, int, int>(batchIntraCount, batchInterCount, tokenIntraCount, tokenInterCount);
-            batchIntraCount = 0;
-            batchInterCount = 0;
-            tokenIntraCount = 0;
-            tokenInterCount = 0;
-            return res;
         }
 
         // for PACT
@@ -204,14 +172,6 @@ namespace Concurrency.Implementation
             if (token.highestCommittedBatchID < highestCommittedBatchID) token.highestCommittedBatchID = highestCommittedBatchID;
             _ = coordList[neighborID].PassToken(token);
             if (curBatchID > -1) await EmitBatch(curBatchID);
-            
-            if (Constants.multiSilo)
-            {
-                var intraSilo = Helper.intraSilo(coordList.Count, myID, true, neighborID, true);
-                if (intraSilo) tokenIntraCount++;
-                else tokenInterCount++;
-            }
-            else tokenIntraCount++;
         }
 
         private void EmitNonDeterministicTransactions(BatchToken token)
@@ -315,14 +275,6 @@ namespace Concurrency.Implementation
                 schedule.globalCoordinator = myID;
                 schedule.highestCommittedBatchId = highestCommittedBatchID;
                 _ = dest.ReceiveBatchSchedule(schedule);
-                
-                if (Constants.multiSilo)
-                {
-                    var intraSilo = Helper.intraSilo(coordList.Count, myID, true, item.Key, false);
-                    if (intraSilo) batchIntraCount += 3;
-                    else batchInterCount += 3;
-                }
-                else batchIntraCount += 3;
             }
         }
 
@@ -343,14 +295,6 @@ namespace Concurrency.Implementation
                     {
                         var lastCoord = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(coord);
                         await lastCoord.WaitBatchCommit(lastBid);
-                        
-                        if (Constants.multiSilo)
-                        {
-                            var intraSilo = Helper.intraSilo(coordList.Count, myID, true, coord, true);
-                            if (intraSilo) batchIntraCount++;
-                            else batchInterCount++;
-                        }
-                        else batchIntraCount++;
                     }
                 }
                 else Debug.Assert(highestCommittedBatchID == lastBid);
@@ -390,24 +334,11 @@ namespace Concurrency.Implementation
 
         public Task SpawnCoordinator(string grainClassName, int numofCoordinators, int batchInterval, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs, dataFormatType dataFormat, StorageWrapperType logStorage)
         {
-            /*
-            if (spawned)
-            {
-                //No updated configuration for now so just ignore repeated spawn calls
-                Console.WriteLine($"Coordinator {myId} receives spawn request but has already been spawned");
-                return;
-            }
-            else spawned = true;*/
-
             Debug.Assert(deterministicTransactionRequests.Count == 0);
 
             detEmitSeq = 0;
             nonDetEmitSeq = 0;
             tidToAllocate = -1;
-            batchIntraCount = 0;
-            batchInterCount = 0;
-            tokenIntraCount = 0;
-            tokenInterCount = 0;
             highestCommittedBatchID = -1;
             numTransactionIdsReserved = 0;
             numTransactionIdsPreAllocated = 0;
@@ -426,11 +357,9 @@ namespace Concurrency.Implementation
             Console.WriteLine($"coord {myID}: batchInterval = {batchInterval}");
             if (idleIntervalTillBackOffSecs > 3600) throw new Exception("Too high value for back off probing -> cannot exceed an 1 hour");
 
-            if (logStorage != StorageWrapperType.NOSTORAGE)
-            {
-                log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, dataFormat, logStorage);
-                Console.WriteLine($"Coord {myID} initialize logging {logStorage}.");
-            } 
+            if (logStorage != StorageWrapperType.NOSTORAGE) log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, dataFormat, logStorage);
+            Console.WriteLine($"Coord {myID} initialize logging {logStorage}.");
+
             return Task.CompletedTask;
         }
     }

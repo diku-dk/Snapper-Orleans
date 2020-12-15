@@ -175,13 +175,6 @@ namespace SmallBank.Grains
                             var destination = GrainFactory.GetGrain<ICustomerAccountGroupGrain>(gID);
                             var funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
                             tasks.Add(destination.Execute(funcCall));
-                            if (Constants.multiSilo)
-                            {
-                                var intraSilo = Helper.intraSilo(numCoord, myID, false, gID, false);
-                                if (intraSilo) intraCount++;
-                                else interCount++;
-                            }
-                            else intraCount++;
                         }
                     }
                     if (!context.isDeterministic)
@@ -256,14 +249,6 @@ namespace SmallBank.Grains
                     var destination = GrainFactory.GetGrain<ICustomerAccountGroupGrain>(gID);
                     var funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
                     task = destination.Execute(funcCall);
-
-                    if (Constants.multiSilo)
-                    {
-                        var intraSilo = Helper.intraSilo(numCoord, myID, false, gID, false);
-                        if (intraSilo) intraCount++;
-                        else interCount++;
-                    }
-                    else intraCount++;
                 }
 
                 if (!context.isDeterministic)

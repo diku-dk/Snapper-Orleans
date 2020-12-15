@@ -2,7 +2,6 @@
 using System;
 using Orleans;
 using Utilities;
-using System.Linq;
 using NetMQ.Sockets;
 using System.Threading;
 using ExperimentProcess;
@@ -39,20 +38,6 @@ namespace ExperimentController
         static ConcurrencyType nonDetCCType;
         static int numCoordinators;
         static ISerializer serializer;
-
-        // to count num_rpc
-        static bool taskDone = false;
-        static long[] txnIntraCount;
-        static long[] txnInterCount;
-        static long[] batchIntraCount;
-        static long[] batchInterCount;
-        static long[] tokenIntraCount;
-        static long[] tokenInterCount;
-        static IGlobalTransactionCoordinatorGrain[] coords;
-
-        // to print grain data
-        static bool finishPrint = false;
-        static bool enableCounter = true;
 
         static int vCPU;
 
@@ -111,22 +96,7 @@ namespace ExperimentController
             Trace.Assert(workload.numEpochs >= 1);
             Trace.Assert(numWorkerNodes >= 1);
             var aggLatencies = new List<double>();
-            var aggNetworkTime = new List<double>();
-            var aggEmitTime = new List<double>();
-            var aggExecuteTime = new List<double>();
-            var aggWaitBatchCommitTime = new List<double>();
             var aggDetLatencies = new List<double>();
-            var aggDetNetworkTime = new List<double>();
-            var aggDetEmitTime = new List<double>();
-            var aggDetWaitBatchScheduleTime = new List<double>();
-            var aggDetExecuteTime = new List<double>();
-            var aggDetWaitBatchCommitTime = new List<double>();
-            var txnIntraRPCThroughputAccumulator = new List<float>();
-            var txnInterRPCThroughputAccumulator = new List<float>();
-            var batchIntraRPCThroughputAccumulator = new List<float>();
-            var batchInterRPCThroughputAccumulator = new List<float>();
-            var tokenIntraRPCThroughputAccumulator = new List<float>();
-            var tokenInterRPCThroughputAccumulator = new List<float>();
             var detThroughPutAccumulator = new List<float>();
             var nonDetThroughPutAccumulator = new List<float>();
             var abortRateAccumulator = new List<double>();
@@ -144,16 +114,7 @@ namespace ExperimentController
                 long aggStartTime = results[epochNumber, 0].startTime;
                 long aggEndTime = results[epochNumber, 0].endTime;
                 aggLatencies.AddRange(results[epochNumber, 0].latencies);
-                aggNetworkTime.AddRange(results[epochNumber, 0].networkTime);
-                aggEmitTime.AddRange(results[epochNumber, 0].emitTime);
-                aggExecuteTime.AddRange(results[epochNumber, 0].executeTime);
-                aggWaitBatchCommitTime.AddRange(results[epochNumber, 0].waitBatchCommitTime);
                 aggDetLatencies.AddRange(results[epochNumber, 0].det_latencies);
-                aggDetNetworkTime.AddRange(results[epochNumber, 0].det_networkTime);
-                aggDetEmitTime.AddRange(results[epochNumber, 0].det_emitTime);
-                aggDetWaitBatchScheduleTime.AddRange(results[epochNumber, 0].det_waitBatchScheduleTime);
-                aggDetExecuteTime.AddRange(results[epochNumber, 0].det_executeTime);
-                aggDetWaitBatchCommitTime.AddRange(results[epochNumber, 0].det_waitBatchCommitTime);
                 for (int workerNode = 1; workerNode < numWorkerNodes; workerNode++)
                 {
                     aggNumDetCommitted += results[epochNumber, workerNode].numDetCommitted;
@@ -165,24 +126,9 @@ namespace ExperimentController
                     aggStartTime = (results[epochNumber, workerNode].startTime < aggStartTime) ? results[epochNumber, workerNode].startTime : aggStartTime;
                     aggEndTime = (results[epochNumber, workerNode].endTime < aggEndTime) ? results[epochNumber, workerNode].endTime : aggEndTime;
                     aggLatencies.AddRange(results[epochNumber, workerNode].latencies);
-                    aggNetworkTime.AddRange(results[epochNumber, workerNode].networkTime);
-                    aggEmitTime.AddRange(results[epochNumber, workerNode].emitTime);
-                    aggExecuteTime.AddRange(results[epochNumber, workerNode].executeTime);
-                    aggWaitBatchCommitTime.AddRange(results[epochNumber, workerNode].waitBatchCommitTime);
                     aggDetLatencies.AddRange(results[epochNumber, workerNode].det_latencies);
-                    aggDetNetworkTime.AddRange(results[epochNumber, workerNode].det_networkTime);
-                    aggDetEmitTime.AddRange(results[epochNumber, workerNode].det_emitTime);
-                    aggDetWaitBatchScheduleTime.AddRange(results[epochNumber, workerNode].det_waitBatchScheduleTime);
-                    aggDetExecuteTime.AddRange(results[epochNumber, workerNode].det_executeTime);
-                    aggDetWaitBatchCommitTime.AddRange(results[epochNumber, workerNode].det_waitBatchCommitTime);
                 }
                 var time = aggEndTime - aggStartTime;
-                float txnIntraRPCThroughput = txnIntraCount[epochNumber] * 1000 / time;
-                float txnInterRPCThroughput = txnInterCount[epochNumber] * 1000 / time;
-                float batchIntraRPCThroughput = batchIntraCount[epochNumber] * 1000 / time;
-                float batchInterRPCThroughput = batchInterCount[epochNumber] * 1000 / time;
-                float tokenIntraRPCThroughput = tokenIntraCount[epochNumber] * 1000 / time;
-                float tokenInterRPCThroughput = tokenInterCount[epochNumber] * 1000 / time;
                 float detCommittedTxnThroughput = (float)aggNumDetCommitted * 1000 / time;  // the throughput only include committed transactions
                 float nonDetCommittedTxnThroughput = (float)aggNumNonDetCommitted * 1000 / time;
                 double abortRate = 0;
@@ -198,32 +144,11 @@ namespace ExperimentController
                         deadlockRateAccumulator.Add((float)deadlock);
                     }
                 }
-                txnIntraRPCThroughputAccumulator.Add(txnIntraRPCThroughput);
-                txnInterRPCThroughputAccumulator.Add(txnInterRPCThroughput);
-                batchIntraRPCThroughputAccumulator.Add(batchIntraRPCThroughput);
-                batchInterRPCThroughputAccumulator.Add(batchInterRPCThroughput);
-                tokenIntraRPCThroughputAccumulator.Add(tokenIntraRPCThroughput);
-                tokenInterRPCThroughputAccumulator.Add(tokenInterRPCThroughput);
                 detThroughPutAccumulator.Add(detCommittedTxnThroughput);
                 nonDetThroughPutAccumulator.Add(nonDetCommittedTxnThroughput);
                 abortRateAccumulator.Add(abortRate);
             }
             //Compute statistics on the accumulators, maybe a better way is to maintain a sorted list
-            var networkTime = aggNetworkTime.Count > 0 ? aggNetworkTime.Average() : 0;
-            var emitTime = aggEmitTime.Count > 0 ? aggEmitTime.Average() : 0;
-            var executeTime = aggExecuteTime.Count > 0 ? aggExecuteTime.Average() : 0;
-            var waitBatchCommitTime = aggWaitBatchCommitTime.Count > 0 ? aggWaitBatchCommitTime.Average() : 0;
-            var det_networkTime = aggDetNetworkTime.Count > 0 ? aggDetNetworkTime.Average() : 0;
-            var det_emitTime = aggDetEmitTime.Count > 0 ? aggDetEmitTime.Average() : 0;
-            var det_waitBatchScheduleTime = aggDetWaitBatchScheduleTime.Count > 0 ? aggDetWaitBatchScheduleTime.Average() : 0;
-            var det_executeTime = aggDetExecuteTime.Count > 0 ? aggDetExecuteTime.Average() : 0;
-            var det_waitBatchCommitTime = aggDetWaitBatchCommitTime.Count > 0 ? aggDetWaitBatchCommitTime.Average() : 0;
-            var txnIntraRPCThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(txnIntraRPCThroughputAccumulator.ToArray());
-            var txnInterRPCThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(txnInterRPCThroughputAccumulator.ToArray());
-            var batchIntraRPCThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(batchIntraRPCThroughputAccumulator.ToArray());
-            var batchInterRPCThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(batchInterRPCThroughputAccumulator.ToArray());
-            var tokenIntraRPCThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(tokenIntraRPCThroughputAccumulator.ToArray());
-            var tokenInterRPCThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(tokenInterRPCThroughputAccumulator.ToArray());
             var detThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(detThroughPutAccumulator.ToArray());
             var nonDetThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(nonDetThroughPutAccumulator.ToArray());
             var abortRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(abortRateAccumulator.ToArray());
@@ -231,7 +156,7 @@ namespace ExperimentController
             var deadlockRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(deadlockRateAccumulator.ToArray());
             using (file = new System.IO.StreamWriter(filePath, true))
             {
-                file.Write($"{workload.asyncMsgLengthPerThread} {workload.numAccounts / workload.numAccountsPerGroup} {workload.zipfianConstant} {workload.deterministicTxnPercent}% ");
+                file.Write($"{workload.numAccounts / workload.numAccountsPerGroup} {workload.asyncMsgLengthPerThread} {workload.zipfianConstant} {workload.deterministicTxnPercent}% ");
                 if (workload.deterministicTxnPercent > 0) file.Write($"{detThroughputMeanAndSd.Item1} {detThroughputMeanAndSd.Item2} ");
                 if (workload.deterministicTxnPercent < 100)
                 {
@@ -243,21 +168,6 @@ namespace ExperimentController
                         file.Write($"{abortRWConflict}% {deadlockRateMeanAndSd.Item1}% {notSerializableRateMeanAndSd.Item1}% ");
                     } 
                 } 
-                if (Constants.multiSilo)
-                {
-                    file.Write($"{txnIntraRPCThroughputMeanAndSd.Item1} ");
-                    file.Write($"{txnInterRPCThroughputMeanAndSd.Item1} ");
-                    file.Write($"{batchIntraRPCThroughputMeanAndSd.Item1} ");
-                    file.Write($"{batchInterRPCThroughputMeanAndSd.Item1} ");
-                    file.Write($"{tokenIntraRPCThroughputMeanAndSd.Item1} ");
-                    file.Write($"{tokenInterRPCThroughputMeanAndSd.Item1} ");
-                }
-                else
-                {
-                    file.Write($"{txnIntraRPCThroughputMeanAndSd.Item1} ");
-                    file.Write($"{batchIntraRPCThroughputMeanAndSd.Item1} ");
-                    file.Write($"{tokenIntraRPCThroughputMeanAndSd.Item1} ");
-                }
                 if (workload.deterministicTxnPercent > 0)
                 {
                     foreach (var percentile in workload.percentilesToCalculate)
@@ -265,7 +175,6 @@ namespace ExperimentController
                         var lat = ArrayStatistics.PercentileInplace(aggDetLatencies.ToArray(), percentile);
                         file.Write($" {lat}");
                     }
-                    file.Write($" {det_networkTime} {det_emitTime} {det_waitBatchScheduleTime} {det_executeTime} {det_waitBatchCommitTime}");
                 }
                 if (workload.deterministicTxnPercent < 100)
                 {
@@ -274,29 +183,9 @@ namespace ExperimentController
                         var lat = ArrayStatistics.PercentileInplace(aggLatencies.ToArray(), percentile);
                         file.Write($" {lat}");
                     }
-                    file.Write($" {networkTime} {emitTime} {executeTime} {waitBatchCommitTime}");
                 }
                 file.WriteLine();
             }
-            /*
-            if (workload.deterministicTxnPercent > 0)
-            {
-                var pact_path = Constants.dataPath + "pact_latency.txt";
-                using (var file = new System.IO.StreamWriter(pact_path, true))
-                {
-                    foreach (var lat in aggDetLatencies) file.Write($"{lat} ");
-                    file.WriteLine();
-                }
-            }
-            if (workload.deterministicTxnPercent < 100)
-            {
-                var act_path = Constants.dataPath + "act_latency.txt";
-                using (var file = new System.IO.StreamWriter(act_path, true))
-                {
-                    foreach (var lat in aggLatencies) file.Write($"{lat} ");
-                    file.WriteLine();
-                }
-            }*/
         }
 
         private static void WaitForWorkerAcksAndReset()
@@ -331,65 +220,12 @@ namespace ExperimentController
                 {
                     //Send the command to run an epoch
                     Console.WriteLine($"Running Epoch {i} on {numWorkerNodes} worker nodes");
-
-                    if (enableCounter)
-                    {
-                        if (i > 0)
-                        {
-                            taskDone = false;
-                            GetSetCount(i - 1);
-                            while (!taskDone) Thread.Sleep(100);
-                        }
-                    }
-
                     msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH);
                     workers.SendMoreFrame("RUN_EPOCH").SendFrame(serializer.serialize(msg));
                     WaitForWorkerAcksAndReset();
                     Console.WriteLine($"Finished running epoch {i} on {numWorkerNodes} worker nodes");
                 }
-
-                if (enableCounter)
-                {
-                    taskDone = false;
-                    GetSetCount(workload.numEpochs - 1);
-                    while (!taskDone) Thread.Sleep(100);
-                }
             }
-        }
-
-        private static async void GetSetCount(int epoch)
-        {
-            var coordTask = new List<Task<Tuple<int, int, int, int>>>();
-            for (int i = 0; i < numCoordinators; i++) coordTask.Add(coords[i].GetSetCount());
-
-            var grainTask = new List<Task<Tuple<int, int>>>();
-            for (int i = 0; i < workload.numAccounts / workload.numAccountsPerGroup; i++)
-            {
-                var grain = client.GetGrain<ICustomerAccountGroupGrain>(i);
-                grainTask.Add(grain.GetSetCount());
-            }
-            await Task.WhenAll(grainTask);
-            await Task.WhenAll(coordTask);
-
-            txnIntraCount[epoch] = 0;
-            txnInterCount[epoch] = 0;
-            batchIntraCount[epoch] = 0;
-            batchInterCount[epoch] = 0;
-            tokenIntraCount[epoch] = 0;
-            tokenInterCount[epoch] = 0;
-            for (int i = 0; i < numCoordinators; i++)
-            {
-                batchIntraCount[epoch] += coordTask[i].Result.Item1;
-                batchInterCount[epoch] += coordTask[i].Result.Item2;
-                tokenIntraCount[epoch] += coordTask[i].Result.Item3;
-                tokenInterCount[epoch] += coordTask[i].Result.Item4;
-            }
-            for (int i = 0; i < workload.numAccounts / workload.numAccountsPerGroup; i++)
-            {
-                txnIntraCount[epoch] += grainTask[i].Result.Item1;
-                txnInterCount[epoch] += grainTask[i].Result.Item2;
-            }
-            taskDone = true;
         }
 
         static void PullFromWorkers()
@@ -497,24 +333,6 @@ namespace ExperimentController
             GenerateWorkLoadFromSettingsFile();
         }
 
-        private static async void PrintGrainData()
-        {
-            var tasks = new List<Task>();
-
-            // print coord data
-            for (int i = 0; i < numCoordinators; i++) tasks.Add(coords[i].PrintData());
-
-            // print grain data
-            for (int i = 0; i < workload.numAccounts / workload.numAccountsPerGroup; i++)
-            {
-                var grain = client.GetGrain<ICustomerAccountGroupGrain>(i);
-                tasks.Add(grain.PrintData());
-            }
-
-            await Task.WhenAll(tasks);
-            finishPrint = true;
-        }
-
         static void Main(string[] args)
         {
             if (Constants.multiWorker)
@@ -557,19 +375,6 @@ namespace ExperimentController
             LoadGrains();
             while (!loadingDone) Thread.Sleep(100);
 
-            txnIntraCount = new long[workload.numEpochs];
-            txnInterCount = new long[workload.numEpochs];
-            batchIntraCount = new long[workload.numEpochs];
-            batchInterCount = new long[workload.numEpochs];
-            tokenIntraCount = new long[workload.numEpochs];
-            tokenInterCount = new long[workload.numEpochs];
-            coords = new IGlobalTransactionCoordinatorGrain[numCoordinators];
-            if (enableCounter)
-            {
-                for (int i = 0; i < numCoordinators; i++)
-                    coords[i] = client.GetGrain<IGlobalTransactionCoordinatorGrain>(i);
-            }
-
             //Start the controller thread
             Thread conducterThread = new Thread(PushToWorkers);
             conducterThread.Start();
@@ -582,20 +387,6 @@ namespace ExperimentController
             sinkThread.Join();
             conducterThread.Join();
 
-            /*
-            PrintGrainData();
-            while (!finishPrint) Thread.Sleep(100);*/
-            if (enableCounter)
-            {
-                for (int i = 0; i < workload.numEpochs; i++)
-                {
-                    Console.WriteLine($"epoch {i}: ");
-                    Console.WriteLine($"txnIntraCount[{i}] = {txnIntraCount[i]}, txnInterCount[{i}] = {txnInterCount[i]}");
-                    Console.WriteLine($"batchIntraCount[{i}] = {batchIntraCount[i]}, batchInterCount[{i}] = {batchInterCount[i]}");
-                    Console.WriteLine($"tokenIntraCount[{i}] = {tokenIntraCount[i]}, tokenInterCount[{i}] = {tokenInterCount[i]}");
-                }
-            }
-             
             Console.WriteLine("Aggregating results and printing"); 
             filePath = Constants.dataPath + "result.txt";
             AggregateResultsAndPrint();
