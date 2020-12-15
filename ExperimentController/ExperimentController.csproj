@@ -24,7 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ExperimentProcess\ExperimentProcess.csproj" />
+    <ProjectReference Include="..\NewProcess\NewProcess.csproj" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
 

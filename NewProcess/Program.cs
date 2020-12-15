@@ -542,10 +542,10 @@ namespace NewProcess
             siloCPU = int.Parse(args[0]);
             detPipeSize = int.Parse(args[1]);
             nonDetPipeSize = int.Parse(args[2]);
-            skewness = double.Parse(args[3]);
-            hotGrainRatio = double.Parse(args[4]);
+            //skewness = double.Parse(args[3]);
+            //hotGrainRatio = double.Parse(args[4]);
             Console.WriteLine($"detPipe per thread = {detPipeSize}, nonDetPipe per thread = {nonDetPipeSize}");
-            Console.WriteLine($"skewness = {skewness}, hotGrainRatio = {hotGrainRatio}");
+            //Console.WriteLine($"skewness = {skewness}, hotGrainRatio = {hotGrainRatio}");
 
             ProcessWork();
             //Console.ReadLine();

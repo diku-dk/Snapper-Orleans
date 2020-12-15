@@ -2,9 +2,9 @@
 using System;
 using Orleans;
 using Utilities;
+using NewProcess;
 using NetMQ.Sockets;
 using System.Threading;
-using ExperimentProcess;
 using System.Diagnostics;
 using System.Configuration;
 using SmallBank.Interfaces;
@@ -331,6 +331,7 @@ namespace ExperimentController
         {
             workload = new WorkloadConfiguration();
             GenerateWorkLoadFromSettingsFile();
+            ackedWorkers = new CountdownEvent(numWorkerNodes);
         }
 
         static void Main(string[] args)
@@ -355,16 +356,10 @@ namespace ExperimentController
             workload.zipfianConstant = float.Parse(args[0]);
             workload.deterministicTxnPercent = float.Parse(args[1]);
             vCPU = int.Parse(args[2]);
-            /*
-            workload.numWorkerNodes = vCPU / 4;
-            numWorkerNodes = workload.numWorkerNodes;*/
-            ackedWorkers = new CountdownEvent(numWorkerNodes);
-            workload.numConnToClusterPerWorkerNode = vCPU;
-            workload.numThreadsPerWorkerNode = vCPU;
             workload.numAccounts = 5000 * vCPU;
             coordConfig.numCoordinators = vCPU * 2;
             numCoordinators = coordConfig.numCoordinators;
-            Console.WriteLine($"zipf = {workload.zipfianConstant}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_thread = {workload.numThreadsPerWorkerNode}, num_coord = {numCoordinators}");
+            Console.WriteLine($"zipf = {workload.zipfianConstant}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}");
 
             //Initialize the client to silo cluster, create configurator grain
             InitiateClientAndSpawnConfigurationCoordinator();

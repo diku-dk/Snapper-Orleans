@@ -31,6 +31,5 @@
     <ProjectReference Include="..\TPCC.Grains\TPCC.Grains.csproj" />
     <ProjectReference Include="..\TPCC.Interfaces\TPCC.Interfaces.csproj" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
-    <ProjectReference Include="..\ExperimentProcess\ExperimentProcess.csproj" />
   </ItemGroup>
 </Project>
