@@ -97,7 +97,6 @@ namespace OrleansSiloHost
             };
 
             Action<AzureStorageClusteringOptions> azureOptions = azureOptions => {
-                azureOptions.TableName = Constants.SiloMembershipTable;
                 azureOptions.ConnectionString = Constants.connectionString;
             };
 
@@ -116,10 +115,18 @@ namespace OrleansSiloHost
                 })
                 .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
-                .AddMemoryGrainStorageAsDefault()
-                .ConfigureServices(ConfigureServices);
+                .ConfigureServices(ConfigureServices)
+                .ConfigureLogging(logging => logging.AddConsole());
 
-            if (enableOrleansTxn) builder.UseTransactions();
+            if (enableOrleansTxn && Constants.enableAzureClustering) 
+                builder
+                .AddAzureTableTransactionalStateStorage("TransactionStore", options => 
+                {
+                    options.ConnectionString = Constants.connectionString;
+                })
+                .UseTransactions();
+            else builder.AddMemoryGrainStorageAsDefault();
+
             if (Constants.enableAzureClustering) builder.UseAzureStorageClustering(azureOptions);
             else builder.UseDynamoDBClustering(dynamoDBOptions);
 
