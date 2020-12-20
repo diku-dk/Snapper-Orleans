@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Orleans.Runtime.Placement;
 using Concurrency.Implementation;
 using Microsoft.Extensions.Logging;
+using Orleans.Clustering.AzureStorage;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace OrleansSiloHost
@@ -95,6 +96,11 @@ namespace OrleansSiloHost
                 options.ReadCapacityUnits = 10;
             };
 
+            Action<AzureStorageClusteringOptions> azureOptions = azureOptions => {
+                azureOptions.TableName = Constants.SiloMembershipTable;
+                azureOptions.ConnectionString = Constants.connectionString;
+            };
+
             var builder = new SiloHostBuilder()
                 .Configure<ClusterOptions>(options =>
                 {
@@ -110,11 +116,12 @@ namespace OrleansSiloHost
                 })
                 .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
-                .UseDynamoDBClustering(dynamoDBOptions)
                 .AddMemoryGrainStorageAsDefault()
                 .ConfigureServices(ConfigureServices);
 
             if (enableOrleansTxn) builder.UseTransactions();
+            if (Constants.enableAzureClustering) builder.UseAzureStorageClustering(azureOptions);
+            else builder.UseDynamoDBClustering(dynamoDBOptions);
 
             var host = builder.Build();            
             await host.StartAsync();

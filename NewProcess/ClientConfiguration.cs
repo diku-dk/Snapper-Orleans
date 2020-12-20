@@ -6,6 +6,7 @@ using Orleans.Hosting;
 using System.Threading;
 using Orleans.Configuration;
 using System.Threading.Tasks;
+using Orleans.Clustering.AzureStorage;
 
 namespace NewProcess
 {
@@ -32,16 +33,21 @@ namespace NewProcess
 
                     };
 
-                    client = new ClientBuilder()
+                    Action<AzureStorageGatewayOptions> azureOptions = azureOptions => {
+                        azureOptions.ConnectionString = Constants.connectionString;
+                    };
+
+                    var clientBuilder = new ClientBuilder()
                         .Configure<ClusterOptions>(options =>
                         {
                             options.ClusterId = Constants.ClusterSilo;
                             options.ServiceId = Constants.ServiceID;
-                        })
-                        .UseDynamoDBClustering(dynamoDBOptions)
-                        //.ConfigureLogging(logging => logging.AddConsole())
-                        .Build();
+                        });
 
+                    if (Constants.enableAzureClustering) clientBuilder.UseAzureStorageClustering(azureOptions);
+                    else clientBuilder.UseDynamoDBClustering(dynamoDBOptions);
+
+                    client = clientBuilder.Build();
                     await client.Connect();
                     Console.WriteLine("Client successfully connect to silo host");
                     break;

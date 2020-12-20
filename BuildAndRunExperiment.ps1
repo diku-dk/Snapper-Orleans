@@ -21,15 +21,15 @@ $detPipe = 2048
 $nonDetPipe = 4
 $cpu = 4
 
-for ($j = 0; $j -le 3; $j++)
+for ($j = 1; $j -le 1; $j++)
 {
     $zipf = $zipF[$j]
     for ($i = 0; $i -le 0; $i++)
     {
         $detPercent = $percent[$i]
-        for ($pipe = 2; $pipe -le 1024; $pipe *= 2)
+        for ($pipe = 1; $pipe -le 1; $pipe *= 2)
         {
-            $detPipe = $pipe
+            #$detPipe = $pipe
             #$nonDetPipe = $pipe
             Start-Process "dotnet" -ArgumentList "run --project ExperimentController --no-build -- $zipF $detPercent $cpu"
             Start-Sleep 8
