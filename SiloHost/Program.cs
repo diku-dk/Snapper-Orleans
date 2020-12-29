@@ -70,16 +70,13 @@ namespace OrleansSiloHost
                 {
                     // Set the value of CollectionAge to 10 minutes for all grain
                     options.CollectionAge = TimeSpan.FromMinutes(1000);
-                    // Override the value of CollectionAge to 5 minutes for MyGrainImplementation
-                    //options.ClassSpecificCollectionAge[typeof(MyGrainImplementation).FullName] = TimeSpan.FromMinutes(5);
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
-                //.Configure<SchedulingOptions>(o => o.MaxActiveThreads = 1)
                 .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
-                //.ConfigureServices(ConfigureServices);
 
-            if (enableOrleansTxn) builder.AddMemoryGrainStorageAsDefault().UseTransactions();
-            
+            if (enableOrleansTxn) builder.AddMemoryTransactionalStateStorage("MemoryTransactionalStateStorage").UseTransactions();
+            else builder.AddMemoryGrainStorageAsDefault();
+
             var host = builder.Build();
             await host.StartAsync();
             return host;
@@ -110,21 +107,25 @@ namespace OrleansSiloHost
                 {
                     // Set the value of CollectionAge to 1000 minutes for all grain
                     options.CollectionAge = TimeSpan.FromMinutes(1000);
-                    // Override the value of CollectionAge to 5 minutes for MyGrainImplementation
-                    //options.ClassSpecificCollectionAge[typeof(MyGrainImplementation).FullName] = TimeSpan.FromMinutes(5);
                 })
                 .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
-                .ConfigureServices(ConfigureServices)
-                .ConfigureLogging(logging => logging.AddConsole());
+                .ConfigureServices(ConfigureServices);
 
-            if (enableOrleansTxn && Constants.enableAzureClustering) 
-                builder
-                .AddAzureTableTransactionalStateStorage("TransactionStore", options => 
+            if (enableOrleansTxn)
+            {
+                if (Constants.enableAzureClustering)
                 {
-                    options.ConnectionString = Constants.connectionString;
-                })
-                .UseTransactions();
+                    builder
+                        .AddAzureTableTransactionalStateStorage("TransactionStore", options =>
+                        {
+                            options.ConnectionString = Constants.connectionString;
+                        });
+                }
+                else
+                    builder.AddMemoryTransactionalStateStorage("MemoryTransactionalStateStorage");
+                builder.UseTransactions();
+            }
             else builder.AddMemoryGrainStorageAsDefault();
 
             if (Constants.enableAzureClustering) builder.UseAzureStorageClustering(azureOptions);
