@@ -17,20 +17,20 @@ namespace OrleansSiloHost
 {
     public static class MemorySiloBuilderExtensions
     {
-        public static ISiloHostBuilder AddMemoryTransactionalStateStorage(this ISiloHostBuilder builder, string name, Action<OptionsBuilder<MemoryTransactionalStateOptions>> configureOptions = null)
+        public static ISiloHostBuilder AddMemoryTransactionalStateStorageAsDefault(this ISiloHostBuilder builder, Action<MemoryTransactionalStateOptions> configureOptions)
         {
-            return builder.ConfigureServices(services => services.AddMemoryTransactionalStateStorage(name, configureOptions));
+            return builder.AddMemoryTransactionalStateStorage(ProviderConstants.DEFAULT_STORAGE_PROVIDER_NAME, configureOptions);
         }
 
-        public static ISiloBuilder AddMemoryTransactionalStateStorage(this ISiloBuilder builder, string name, Action<OptionsBuilder<MemoryTransactionalStateOptions>> configureOptions = null)
+        public static ISiloHostBuilder AddMemoryTransactionalStateStorage(this ISiloHostBuilder builder, string name, Action<MemoryTransactionalStateOptions> configureOptions)
         {
-            return builder.ConfigureServices(services => services.AddMemoryTransactionalStateStorage(name, configureOptions));
+            return builder.ConfigureServices(services => services.AddMemoryTransactionalStateStorage(name, ob => ob.Configure(configureOptions)));
         }
 
         private static IServiceCollection AddMemoryTransactionalStateStorage(this IServiceCollection services, string name,
             Action<OptionsBuilder<MemoryTransactionalStateOptions>> configureOptions = null)
         {
-            configureOptions?.Invoke(services.AddOptions<MemoryTransactionalStateOptions>());
+            configureOptions?.Invoke(services.AddOptions<MemoryTransactionalStateOptions>(name));
 
             services.TryAddSingleton<ITransactionalStateStorageFactory>(sp => sp.GetServiceByName<ITransactionalStateStorageFactory>(ProviderConstants.DEFAULT_STORAGE_PROVIDER_NAME));
             services.AddSingletonNamedService<ITransactionalStateStorageFactory>(name, MemoryTransactionalStateStorageFactory.Create);
@@ -42,8 +42,7 @@ namespace OrleansSiloHost
 
     public class MemoryTransactionalStateOptions
     {
-        public int InitStage { get; set; } = DEFAULT_INIT_STAGE;
-        public const int DEFAULT_INIT_STAGE = ServiceLifecycleStage.ApplicationServices;
+        public int InitStage { get; set; }
     }
 
     public class MemoryTransactionalStateStorageFactory : ITransactionalStateStorageFactory, ILifecycleParticipant<ISiloLifecycle>
@@ -82,9 +81,9 @@ namespace OrleansSiloHost
     public class MemoryTransactionalStateStorage<TState> : ITransactionalStateStorage<TState>
         where TState : class, new()
     {
-        private string ETag;
-        private byte[] Metadata;
-        private long CommittedSequenceId;
+        private string ETag = "default";
+        private long CommittedSequenceId = 0;
+        private TransactionalStateMetaData Metadata;
         private List<KeyValuePair<long, StateEntity>> states;
         private ISerializer serializer;
 
@@ -92,11 +91,12 @@ namespace OrleansSiloHost
         {
             states = new List<KeyValuePair<long, StateEntity>>();
             serializer = new MsgPackSerializer();
+            Metadata = new TransactionalStateMetaData();
         }
 
         public async Task<TransactionalStorageLoadResponse<TState>> Load()
         {
-            Console.WriteLine("Loading from mem txnal storage!!!!!");
+            //var start = DateTime.Now;
             if (string.IsNullOrEmpty(ETag)) return new TransactionalStorageLoadResponse<TState>();
             TState committedState;
             if (CommittedSequenceId == 0) committedState = new TState();
@@ -134,12 +134,14 @@ namespace OrleansSiloHost
             }
             // clear the state strings... no longer needed, ok to GC now
             for (int i = 0; i < states.Count; i++) states[i].Value.state = null;
-            TransactionalStateMetaData metadata = serializer.deserialize<TransactionalStateMetaData>(Metadata);
-            return new TransactionalStorageLoadResponse<TState>(ETag, committedState, CommittedSequenceId, metadata, PrepareRecordsToRecover);
+            //var end = DateTime.Now;
+            //Console.WriteLine($"load: {(end - start).TotalMilliseconds}ms");
+            return new TransactionalStorageLoadResponse<TState>(ETag, committedState, CommittedSequenceId, Metadata, PrepareRecordsToRecover);
         }
 
         public async Task<string> Store(string expectedETag, TransactionalStateMetaData metadata, List<PendingTransactionState<TState>> statesToPrepare, long? commitUpTo, long? abortAfter)
         {
+            //var start = DateTime.Now;
             if (ETag != expectedETag) throw new ArgumentException(nameof(expectedETag), "Etag does not match");
 
             // first, clean up aborted records
@@ -176,7 +178,7 @@ namespace OrleansSiloHost
             }
 
             // third, persist metadata and commit position
-            Metadata = serializer.serialize(metadata);
+            Metadata = metadata;
             if (commitUpTo.HasValue && commitUpTo.Value > CommittedSequenceId) CommittedSequenceId = commitUpTo.Value;
 
             // fourth, remove obsolete records
@@ -185,6 +187,8 @@ namespace OrleansSiloHost
                 FindState(obsoleteBefore, out var pos);
                 states.RemoveRange(0, pos);
             }
+            //var end = DateTime.Now;
+            //Console.WriteLine($"store: {(end - start).TotalMilliseconds}ms");
             return ETag;
         }
 

@@ -71,10 +71,13 @@ namespace OrleansSiloHost
                     // Set the value of CollectionAge to 10 minutes for all grain
                     options.CollectionAge = TimeSpan.FromMinutes(1000);
                 })
-                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
-                .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback);
+                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
-            if (enableOrleansTxn) builder.AddMemoryTransactionalStateStorage("MemoryTransactionalStateStorage").UseTransactions();
+            if (enableOrleansTxn) 
+                builder
+                    .AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; })
+                    .UseTransactions();
             else builder.AddMemoryGrainStorageAsDefault();
 
             var host = builder.Build();
@@ -111,6 +114,7 @@ namespace OrleansSiloHost
                 .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .ConfigureServices(ConfigureServices);
+                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
             if (enableOrleansTxn)
             {
@@ -123,7 +127,7 @@ namespace OrleansSiloHost
                         });
                 }
                 else
-                    builder.AddMemoryTransactionalStateStorage("MemoryTransactionalStateStorage");
+                    builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
                 builder.UseTransactions();
             }
             else builder.AddMemoryGrainStorageAsDefault();
