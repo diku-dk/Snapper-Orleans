@@ -179,7 +179,7 @@ namespace NewProcess
                                     det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
                                 }
                             }
-                            else    // for non-det 
+                            else    // for non-det + eventual + orleans txn
                             {
                                 numNonDetTransaction++;
                                 if (!task.Result.exception)
@@ -246,8 +246,10 @@ namespace NewProcess
                 thread_requests[eIndex].Remove(threadIndex);
                 if (isDet) Console.WriteLine($"total_num_det = {numDetTransaction}, det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
                 else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}");
-                
-                var res = new WorkloadResults(numDetTransaction, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
+                WorkloadResults res;
+                if (config.grainImplementationType == ImplementationType.SNAPPER)
+                    res = new WorkloadResults(numDetTransaction, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
+                else res = new WorkloadResults(numDetTransaction, numEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
                 res.setLatency(latencies, det_latencies);
                 results[threadIndex] = res;
                 threadAcks[eIndex].Signal();  //Signal the completion of epoch

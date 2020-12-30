@@ -73,6 +73,7 @@ namespace Concurrency.Implementation
                 await batchCommit[context.batchID].Task;
             }
             var res = new TransactionResult(false, t1.Result.resultObject);  // PACT never abort
+            res.isDet = true;
             return res;
         }
 
@@ -123,7 +124,6 @@ namespace Concurrency.Implementation
                     if (highestCommittedBid < new_bid) highestCommittedBid = new_bid;
                 }
             }
-            res.isDet = false;
             return res;
         }
 

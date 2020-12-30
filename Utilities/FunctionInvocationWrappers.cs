@@ -28,7 +28,7 @@ namespace Utilities
         public object resultObject;
         public bool Exp_Serializable;
         public bool Exp_Deadlock;
-        public bool isDet = true;
+        public bool isDet = false;
 
         public TransactionResult(object res = null)
         {
