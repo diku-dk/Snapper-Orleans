@@ -1,5 +1,4 @@
 ﻿using System;
-using Orleans;
 using Utilities;
 using Concurrency.Interface;
 using System.Threading.Tasks;
@@ -44,7 +43,7 @@ namespace TPCC.Interfaces
         }
     }
 
-    public interface IWarehouseGrain : ITransactionExecutionGrain, IGrainWithIntegerKey
+    public interface IWarehouseGrain : ITransactionExecutionGrain
     {
         Task<FunctionResult> NewOrder(FunctionInput functionInput);
         Task<FunctionResult> StockUpdate(FunctionInput functionInput);

@@ -47,7 +47,7 @@ namespace NewProcess
         static double skewness = 0.1;
         static double hotGrainRatio;
         static int BASE_NUM_MULTITRANSFER = 15000;
-        static int BASE_NUM_NEWORDER = 10000;
+        static int BASE_NUM_NEWORDER = 100;
 
         private static void ProducerThreadWork(object obj)
         {
@@ -361,6 +361,7 @@ namespace NewProcess
                     {
                         for (int txn = 0; txn < numTxnPerEpoch; txn++)
                         {
+                            Console.WriteLine($"Epoch {epoch}, txn {txn}");
                             var W_ID = wh_dist_uni.Sample();
                             GenerateNewOrder(epoch, W_ID, wh_dist_uni);
                         }

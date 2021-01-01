@@ -15,6 +15,7 @@ using MathNet.Numerics.Statistics;
 using Concurrency.Interface.Logging;
 using System.Collections.Specialized;
 using Concurrency.Interface.Nondeterministic;
+using TPCC.Interfaces;
 
 namespace ExperimentController
 {
@@ -76,19 +77,14 @@ namespace ExperimentController
             workload.mixture = Array.ConvertAll(benchmarkConfigSection["mixture"].Split(","), x => int.Parse(x));
             workload.numWarehouse = int.Parse(benchmarkConfigSection["numWarehouse"]);
             numWarehouse = workload.numWarehouse;
-            switch (workload.benchmark)
-            {
-                case BenchmarkType.SMALLBANK:
-                    workload.numAccounts = int.Parse(benchmarkConfigSection["numAccounts"]);
-                    workload.numAccountsPerGroup = int.Parse(benchmarkConfigSection["numAccountsPerGroup"]);
-                    workload.numAccountsMultiTransfer = int.Parse(benchmarkConfigSection["numAccountsMultiTransfer"]);
-                    workload.numGrainsMultiTransfer = int.Parse(benchmarkConfigSection["numGrainsMultiTransfer"]);
-                    workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfigSection["grainImplementationType"]);
-                    exeConfig = new ExecutionGrainConfiguration("SmallBank.Grains.CustomerAccountGroupGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
-                    break;
-                default:
-                    throw new Exception("Unknown benchmark type");
-            }
+
+            workload.numAccounts = int.Parse(benchmarkConfigSection["numAccounts"]);
+            workload.numAccountsPerGroup = int.Parse(benchmarkConfigSection["numAccountsPerGroup"]);
+            workload.numAccountsMultiTransfer = int.Parse(benchmarkConfigSection["numAccountsMultiTransfer"]);
+            workload.numGrainsMultiTransfer = int.Parse(benchmarkConfigSection["numGrainsMultiTransfer"]);
+            workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfigSection["grainImplementationType"]);
+            exeConfig = new ExecutionGrainConfiguration("SmallBank.Grains.CustomerAccountGroupGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
+            
             coordConfig = new CoordinatorGrainConfiguration(batchInterval, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
             Console.WriteLine("Generated workload configuration");
 
@@ -301,7 +297,7 @@ namespace ExperimentController
             else throw new Exception("Exception: Unknown benchmark. ");
             Console.WriteLine($"Load grains, benchmark {workload.benchmark}, numGrains = {numGrain}");
             var tasks = new List<Task<TransactionResult>>();
-            var sequence = false;   // If you want to load the grains in sequence instead of all concurrent
+            var sequence = true;   // If you want to load the grains in sequence instead of all concurrent
             for (int i = 0; i < numGrain; i++)
             {
                 FunctionInput input;
@@ -323,13 +319,22 @@ namespace ExperimentController
                         tasks.Add(orltxnGrain.StartTransaction("Init", input));
                         break;
                     case ImplementationType.SNAPPER:
-                        var sntxnGrain = client.GetGrain<ICustomerAccountGroupGrain>(i);
-                        tasks.Add(sntxnGrain.StartTransaction("Init", input));
+                        if (workload.benchmark == BenchmarkType.SMALLBANK)
+                        {
+                            var sntxnGrain = client.GetGrain<ICustomerAccountGroupGrain>(i);
+                            tasks.Add(sntxnGrain.StartTransaction("Init", input));
+                        }
+                        else if (workload.benchmark == BenchmarkType.TPCC)
+                        {
+                            var sntxnGrain = client.GetGrain<IWarehouseGrain>(i);
+                            tasks.Add(sntxnGrain.StartTransaction("Init", input));
+                        }
+                        else throw new Exception("Exception: Unknown benchmark.");
                         break;
                     default:
                         throw new Exception("Unknown grain implementation type");
                 }
-                if (sequence)
+                if (sequence && tasks.Count == 20)
                 {
                     await Task.WhenAll(tasks);
                     tasks.Clear();

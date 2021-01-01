@@ -32,7 +32,7 @@ for ($j = 1; $j -le 1; $j++)
             #$detPipe = $pipe
             #$nonDetPipe = $pipe
             Start-Process "dotnet" -ArgumentList "run --project ExperimentController --no-build -- $zipF $detPercent $cpu"
-            Start-Sleep 8
+            Start-Sleep 15
             Start-Process "dotnet" -ArgumentList "run --project NewProcess --no-build -- $cpu $detPipe $nonDetPipe"
             #Start-Sleep 62
         }

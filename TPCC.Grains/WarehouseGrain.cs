@@ -14,11 +14,10 @@ namespace TPCC.Grains
     {
         public WarehouseGrain() : base("TPCC.Grains.WarehouseGrain")
         {
-            ;
         }
 
         private int order_local_count = 0;
-        
+
         public async Task<FunctionResult> Init(FunctionInput fin)
         {
             var context = fin.context;
@@ -28,6 +27,7 @@ namespace TPCC.Grains
             {
                 var myState = await state.ReadWrite(context);
                 InMemoryDataGenerator.GenerateData(input.Item1, input.Item2, myState);
+                Console.WriteLine($"Init W {input.Item1}, D {input.Item2}, w.stock.count = {myState.stock_table.Count}");
             }
             catch (Exception)
             {
@@ -160,7 +160,7 @@ namespace TPCC.Grains
                 {
                     var I_ID = item.Item1;
                     var quantity = item.Item2;
-                    
+
                     var the_stock = myState.stock_table[I_ID];
                     var S_QUANTITY = the_stock.S_QUANTITY;
                     if (S_QUANTITY - quantity >= 10) S_QUANTITY -= quantity;
