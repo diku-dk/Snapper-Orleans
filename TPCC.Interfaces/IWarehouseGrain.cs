@@ -1,4 +1,5 @@
-﻿using Orleans;
+﻿using System;
+using Orleans;
 using Utilities;
 using Concurrency.Interface;
 using System.Threading.Tasks;
@@ -6,112 +7,46 @@ using System.Collections.Generic;
 
 namespace TPCC.Interfaces
 {
-    public class StockItemUpdate
-    {
-        public uint warehouseId;
-        public uint itemId;
-        public ushort itemQuantity;
-        public float price;
-        public string districtInformation;
-
-        public StockItemUpdate(uint warehouseId, uint itemId, ushort itemQuantity, float price, string districtInformation)
-        {
-            this.warehouseId = warehouseId;
-            this.itemId = itemId;
-            this.itemQuantity = itemQuantity;
-            this.price = price;
-            this.districtInformation = districtInformation;
-        }
-    }
-    public class StockUpdateResult
-    {
-        public List<StockItemUpdate> stockItemUpdates;
-
-        public StockUpdateResult()
-        {
-            stockItemUpdates = new List<StockItemUpdate>();
-        }
-
-        public StockUpdateResult(List<StockItemUpdate> stockItemUpdates)
-        {
-            this.stockItemUpdates = stockItemUpdates;
-        }
-    }
-
-    public class PaymentInfo
-    {
-        public uint warehouseId;
-        public uint districtId;
-        public uint customerWarehouseId;
-        public uint customerDistrictId;
-        public uint customerId;
-        public string customerLastName;
-        public float paymentAmount;
-
-        public PaymentInfo(uint warehouseId, uint districtId, uint customerWarehouseId, uint customerDistrictId, uint customerId, string customerLastName, float paymentAmount)
-        {
-            this.warehouseId = warehouseId;
-            this.districtId = districtId;
-            this.customerWarehouseId = customerWarehouseId;
-            this.customerDistrictId = customerDistrictId;
-            this.customerId = customerId;
-            this.customerLastName = customerLastName;
-            this.paymentAmount = paymentAmount;
-        }
-    }
-
     public class NewOrderInput
     {
-        public uint warehouseId;
-        public uint districtId;
-        public uint customerId;
-        public Dictionary<uint, Dictionary<uint, ushort>> ordersPerWarehousePerItem;
+        public int C_ID;
+        public DateTime O_ENTRY_D;
+        public Dictionary<int, Tuple<int, int>> ItemsToBuy;  // <I_ID, <supply_warehouse, quantity>>
 
-        public NewOrderInput(uint warehouseId, uint districtId, uint customerId, Dictionary<uint, Dictionary<uint, ushort>> ordersPerWarehousePerItem)
+        public NewOrderInput(int C_ID, DateTime O_ENTRY_D, Dictionary<int, Tuple<int, int>> ItemsToBuy)
         {
-            this.warehouseId = warehouseId;
-            this.districtId = districtId;
-            this.customerId = customerId;
-            this.ordersPerWarehousePerItem = ordersPerWarehousePerItem;
+            this.C_ID = C_ID;
+            this.ItemsToBuy = ItemsToBuy;
         }
     }
 
     public class StockUpdateInput
     {
-        public uint warehouseId;
-        public uint districtId;
-        public Dictionary<uint, ushort> ordersPerItem;
+        public int W_ID;
+        public int D_ID;
+        public List<Tuple<int, int>> itemsToBuy;   // <I_ID, I_QUANTITY>
 
-        public StockUpdateInput(uint warehouseId, uint districtId, Dictionary<uint, ushort> ordersPerItem)
+        public StockUpdateInput(int W_ID, int D_ID, List<Tuple<int, int>> itemsToBuy)
         {
-            this.warehouseId = warehouseId;
-            this.districtId = districtId;
-            this.ordersPerItem = ordersPerItem;
+            this.W_ID = W_ID;
+            this.D_ID = D_ID;
+            this.itemsToBuy = itemsToBuy;
         }
     }
 
-    public class FindCustomerIdInput
+    public class StockUpdateResult
     {
-        public uint districtId;
-        public string customerLastName;
+        public List<Tuple<int, string>> items;   // <I_ID, D_info>
 
-        public FindCustomerIdInput(uint districtId, string customerLastName)
+        public StockUpdateResult(List<Tuple<int, string>> items)
         {
-            this.districtId = districtId;
-            this.customerLastName = customerLastName;
+            this.items = items;
         }
     }
 
     public interface IWarehouseGrain : ITransactionExecutionGrain, IGrainWithIntegerKey
     {
         Task<FunctionResult> NewOrder(FunctionInput functionInput);
-
         Task<FunctionResult> StockUpdate(FunctionInput functionInput);
-
-        Task<FunctionResult> Payment(FunctionInput functionInput);
-
-        Task<FunctionResult> CustomerPayment(FunctionInput functionInput);
-
-        Task<FunctionResult> FindCustomerId(FunctionInput functionInput);
     }
 }

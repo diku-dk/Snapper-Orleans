@@ -9,6 +9,11 @@ namespace Utilities
    
     public class Constants
     {
+        public const int NUM_D_PER_W = 10;
+        public const int NUM_C_PER_D = 3000;
+        public const int NUM_I = 100000;
+        public const string TPCC_dataPath = @"C:\Users\Administrator\Desktop\data\tpcc\";
+
         public const bool enableAzureClustering = false;
         public const string connectionString = "DefaultEndpointsProtocol=https;AccountName=silo-membership-table;AccountKey=cyNmVPVYxlTeepACZWayOBtK4yuN5N733nBcaolrVtDjQd8Y04e263oZt8nKWLHNLAVPsMvyU6gO7dHUawmy3A==;TableEndpoint=https://silo-membership-table.table.cosmos.azure.com:443/;";
 
@@ -51,16 +56,20 @@ namespace Utilities
         public int numEpochs;
         public int epochDurationMSecs;
         public Distribution distribution;
-        //SmallBank Specific configurations
+        public float zipfianConstant;
+        public float deterministicTxnPercent;
+        public ImplementationType grainImplementationType;
+        public int[] percentilesToCalculate;
+
+        // SmallBank specific configurations
         public int numAccounts;
         public int numAccountsPerGroup;
         public int[] mixture;//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
         public int numAccountsMultiTransfer;
         public int numGrainsMultiTransfer;
-        public float zipfianConstant;
-        public float deterministicTxnPercent;
-        public ImplementationType grainImplementationType;
-        public int[] percentilesToCalculate;
+
+        // TPCC specific configurations
+        public int numWarehouse;
     }
 
     [Serializable]

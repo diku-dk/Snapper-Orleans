@@ -57,7 +57,7 @@ namespace SmallBank.Grains
         {
         }
 
-        public async Task<FunctionResult> InitBankAccounts(FunctionInput fin)
+        public async Task<FunctionResult> Init(FunctionInput fin)
         {
             TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult();

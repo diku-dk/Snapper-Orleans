@@ -28,8 +28,8 @@ namespace NewProcess
         static WorkloadConfiguration config;
         static bool initializationDone = false;
         static IDiscreteDistribution detDistribution = new DiscreteUniform(0, 99, new Random());
-        static Dictionary<int, Queue<Tuple<bool, List<int>>>> shared_requests;  // <epoch, <isDet, grainIDs>>
-        static Dictionary<int, Dictionary<int, ConcurrentQueue<List<int>>>> thread_requests;     // <epoch, <consumerID, grainIDs>>
+        static Dictionary<int, Queue<Tuple<bool, RequestData>>> shared_requests;  // <epoch, <isDet, grainIDs>>
+        static Dictionary<int, Dictionary<int, ConcurrentQueue<RequestData>>> thread_requests;     // <epoch, <consumerID, grainIDs>>
 
         static int siloCPU;
         static int detPercent;
@@ -44,8 +44,10 @@ namespace NewProcess
         static int numProducer;
 
         // parameters for hot record
-        static double skewness;
+        static double skewness = 0.1;
         static double hotGrainRatio;
+        static int BASE_NUM_MULTITRANSFER = 15000;
+        static int BASE_NUM_NEWORDER = 10000;
 
         private static void ProducerThreadWork(object obj)
         {
@@ -136,7 +138,7 @@ namespace NewProcess
                 var tasks = new List<Task<TransactionResult>>();
                 var reqs = new Dictionary<Task<TransactionResult>, TimeSpan>();
                 var queue = thread_requests[eIndex][threadIndex];
-                List<int> txn = null;
+                RequestData txn;
                 await Task.Delay(TimeSpan.FromMilliseconds(100));   // give some time for producer to populate the buffer
                 //Wait for all threads to arrive at barrier point
                 barriers[eIndex].SignalAndWait();
@@ -265,43 +267,143 @@ namespace NewProcess
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 
-            if (config.benchmark != BenchmarkType.SMALLBANK) throw new Exception("Exception: NewProcess only support SmallBank benchmark");
-            benchmarks = new SmallBankBenchmark[numDetConsumer + numNonDetConsumer];
+            switch (config.benchmark)
+            {
+                case BenchmarkType.SMALLBANK:
+                    benchmarks = new SmallBankBenchmark[numDetConsumer + numNonDetConsumer];
+                    for (int i = 0; i < numDetConsumer + numNonDetConsumer; i++) benchmarks[i] = new SmallBankBenchmark();
+                    break;
+                case BenchmarkType.TPCC:
+                    benchmarks = new TPCCBenchmark[numDetConsumer + numNonDetConsumer];
+                    for (int i = 0; i < numDetConsumer + numNonDetConsumer; i++) benchmarks[i] = new TPCCBenchmark();
+                    break;
+                default:
+                    throw new Exception("Exception: NewProcess only support SmallBank and TPCC benchmarks");
+            }
             results = new WorkloadResults[numDetConsumer + numNonDetConsumer];
             for (int i = 0; i < numDetConsumer + numNonDetConsumer; i++)
             {
-                benchmarks[i] = new SmallBankBenchmark();
                 if (i < numDetConsumer) benchmarks[i].generateBenchmark(config, true);
                 else benchmarks[i].generateBenchmark(config, false);
             }
-            
-            InitializeWorkload();
+
+            // some initialization for generating workload
+            if (detBufferSize == 0 && nonDetBufferSize == 0)
+            {
+                if (numDetConsumer > 0) detBufferSize = detPercent * 100 * siloCPU / (4 * numDetConsumer);
+                if (numNonDetConsumer > 0) nonDetBufferSize = (100 - detPercent) * 100 * siloCPU / (4 * numNonDetConsumer);
+            }
+            Console.WriteLine($"detPercent = {detPercent}%, detBuffer = {detBufferSize}, nonDetBuffer = {nonDetBufferSize}");
+            shared_requests = new Dictionary<int, Queue<Tuple<bool, RequestData>>>();   // <epoch, <producerID, <isDet, grainIDs>>>
+            for (int epoch = 0; epoch < config.numEpochs; epoch++) shared_requests.Add(epoch, new Queue<Tuple<bool, RequestData>>());
+
+            if (config.benchmark == BenchmarkType.SMALLBANK) InitializeSmallBankWorkload();
+            else InitializeTPCCWorkload();
             InitializeProducerThread();
             await InitializeClients();
             InitializeConsumerThreads();
             initializationDone = true;
         }
 
-        private static void InitializeWorkload()
+        static Random C_rnd = new Random();
+        static IDiscreteDistribution district_dist_uni = new DiscreteUniform(0, Constants.NUM_D_PER_W, new Random());
+        static IDiscreteDistribution ol_cnt_dist_uni = new DiscreteUniform(5, 15, new Random());
+        static IDiscreteDistribution rbk_dist_uni = new DiscreteUniform(1, 101, new Random());
+        static IDiscreteDistribution local_dist_uni = new DiscreteUniform(1, 101, new Random());
+        static IDiscreteDistribution quantity_dist_uni = new DiscreteUniform(1, 11, new Random());
+
+        private static void GenerateNewOrder(int epoch, int W_ID, IDiscreteDistribution wh_dist)
         {
-            if (config.mixture.Sum() > 0) throw new Exception("Exception: NewProcess only support MultiTransfer");
-
-            if (detBufferSize == 0 && nonDetBufferSize == 0)
+            var grains = new List<int>();
+            var D_ID = district_dist_uni.Sample();
+            grains.Add(W_ID * Constants.NUM_D_PER_W + D_ID);  
+            var C_ID = Helper.NURand(1023, 1, Constants.NUM_C_PER_D, C_rnd.Next(0, 1024));
+            var ol_cnt = ol_cnt_dist_uni.Sample();
+            var rbk = rbk_dist_uni.Sample();
+            var itemsToBuy = new Dictionary<int, Tuple<int, int>>();  // <I_ID, <supply_warehouse, quantity>>
+            for (int i = 0; i < ol_cnt; i++)
             {
-                if (numDetConsumer > 0) detBufferSize = detPercent * 100 * siloCPU / (4 * numDetConsumer) ;
-                if (numNonDetConsumer > 0) nonDetBufferSize = (100 - detPercent) * 100 * siloCPU / (4 * numNonDetConsumer);
-            }
-            Console.WriteLine($"detPercent = {detPercent}%, detBuffer = {detBufferSize}, nonDetBuffer = {nonDetBufferSize}");
-            shared_requests = new Dictionary<int, Queue<Tuple<bool, List<int>>>>();   // <epoch, <producerID, <isDet, grainIDs>>>
-            for (int epoch = 0; epoch < config.numEpochs; epoch++) shared_requests.Add(epoch, new Queue<Tuple<bool, List<int>>>());
+                int I_ID;
+                if (i == ol_cnt - 1 && rbk == 1) I_ID = -1;   // generate 1% of error
+                else
+                {
+                    do I_ID = Helper.NURand(8191, 1, Constants.NUM_I, C_rnd.Next(0, 8192));
+                    while (!itemsToBuy.ContainsKey(I_ID));
+                }
+                var local = local_dist_uni.Sample() > 1;
+                int supply_wh;
+                if (local) supply_wh = W_ID;    // supply by home warehouse
+                else                            // supply by remote warehouse
+                {
+                    do supply_wh = wh_dist.Sample();
+                    while (supply_wh == W_ID);
+                }
+                var quantity = quantity_dist_uni.Sample();
+                itemsToBuy.Add(I_ID, new Tuple<int, int>(supply_wh, quantity));
 
-            var numTxnPerEpoch = 150000 * siloCPU / 4;
+                var grainID = Helper.GetGrainID(supply_wh, I_ID, false);
+                if (!grains.Contains(grainID)) grains.Add(grainID);
+            }
+            var req = new RequestData(W_ID, D_ID, C_ID, DateTime.Now, itemsToBuy);
+            req.grains = grains;
+            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), req));
+        }
+
+        private static void InitializeTPCCWorkload()
+        {
+            var numTxnPerEpoch = BASE_NUM_NEWORDER * siloCPU / 4;
+            switch (config.distribution)
+            {
+                case Distribution.UNIFORM:
+                    Console.WriteLine($"Generate UNIFORM data for TPCC..");
+                    var wh_dist_uni = new DiscreteUniform(0, config.numWarehouse - 1, new Random());
+                    for (int epoch = 0; epoch < config.numEpochs; epoch++)
+                    {
+                        for (int txn = 0; txn < numTxnPerEpoch; txn++)
+                        {
+                            var W_ID = wh_dist_uni.Sample();
+                            GenerateNewOrder(epoch, W_ID, wh_dist_uni);
+                        }
+                    }
+                    break;
+                case Distribution.HOTRECORD:
+                    Console.WriteLine($"Generate HOTRECORD data for TPCC..");
+                    throw new NotImplementedException();
+                    var wh_rnd = new Random();
+                    var num_hot_wh = (int)(skewness * config.numWarehouse);
+                    var wh_dist_normal = new DiscreteUniform(num_hot_wh, config.numWarehouse - 1, new Random());
+                    DiscreteUniform wh_dist_hot = null;
+                    if (num_hot_wh > 0) wh_dist_hot = new DiscreteUniform(0, num_hot_wh - 1, new Random());
+                    for (int epoch = 0; epoch < config.numEpochs; epoch++)
+                    {
+                        for (int txn = 0; txn < numTxnPerEpoch; txn++)
+                        {
+                            int W_ID;
+                            if (wh_rnd.Next(0, 100) < 90) W_ID = wh_dist_hot.Sample();   // 90% txn start from 10% hot grain
+                            else W_ID = wh_dist_normal.Sample();
+                            GenerateNewOrder(epoch, W_ID, wh_dist_hot);
+                        }
+                    }
+                    break;
+                case Distribution.ZIPFIAN:
+                    Console.WriteLine($"Read ZIPFIAN data for TPCC..");
+                    throw new NotImplementedException();
+                    break;
+                default:
+                    throw new Exception("Exception: Unknown distribution. ");
+            }
+        }
+
+        private static void InitializeSmallBankWorkload()
+        {
+            if (config.mixture.Sum() > 0) throw new Exception("Exception: NewProcess only support MultiTransfer for SmallBankBenchmark");
+            var numTxnPerEpoch = BASE_NUM_MULTITRANSFER * siloCPU / 4;
             var numGrain = config.numAccounts / config.numAccountsPerGroup;
             var numGrainPerTxn = config.numGrainsMultiTransfer;
             switch (config.distribution)
             {
                 case Distribution.UNIFORM:
-                    Console.WriteLine($"Generate UNIFORM data..");
+                    Console.WriteLine($"Generate UNIFORM data for SmallBank..");
                     var dist = new DiscreteUniform(0, numGrain - 1, new Random());
                     for (int epoch = 0; epoch < config.numEpochs; epoch++)
                     {
@@ -314,7 +416,7 @@ namespace NewProcess
                                 while (grainsPerTxn.Contains(grain)) grain = dist.Sample();
                                 grainsPerTxn.Add(grain);
                             }
-                            shared_requests[epoch].Enqueue(new Tuple<bool, List<int>>(isDet(), grainsPerTxn));
+                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
                         }
                     }
                     break;
@@ -327,7 +429,7 @@ namespace NewProcess
                     {
                         var normal_dist = new DiscreteUniform(numHotGrain, numGrain - 1, new Random());
                         DiscreteUniform hot_dist = null;
-                        if (skewness != 0) hot_dist = new DiscreteUniform(0, numHotGrain - 1, new Random());
+                        if (numHotGrain > 0) hot_dist = new DiscreteUniform(0, numHotGrain - 1, new Random());
                         for (int txn = 0; txn < numTxnPerEpoch; txn++)
                         {
                             var grainsPerTxn = new List<int>();
@@ -343,7 +445,7 @@ namespace NewProcess
                                 while (grainsPerTxn.Contains(hotGrain)) hotGrain = hot_dist.Sample();
                                 grainsPerTxn.Add(hotGrain);
                             }
-                            shared_requests[epoch].Enqueue(new Tuple<bool, List<int>>(isDet(), grainsPerTxn));
+                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
                         }
                     }
                     break;
@@ -367,7 +469,7 @@ namespace NewProcess
                                 var id = int.Parse(line);
                                 grainsPerTxn.Add(id);
                             }
-                            shared_requests[epoch].Enqueue(new Tuple<bool, List<int>>(isDet(), grainsPerTxn));
+                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
                         }
                         file.Close();
                     }
@@ -397,11 +499,11 @@ namespace NewProcess
                 threadAcks[i] = new CountdownEvent(numDetConsumer + numNonDetConsumer);
             }
 
-            thread_requests = new Dictionary<int, Dictionary<int, ConcurrentQueue<List<int>>>>();
+            thread_requests = new Dictionary<int, Dictionary<int, ConcurrentQueue<RequestData>>>();
             for (int epoch = 0; epoch < config.numEpochs; epoch++)
             {
-                thread_requests.Add(epoch, new Dictionary<int, ConcurrentQueue<List<int>>>());
-                for (int t = 0; t < numDetConsumer + numNonDetConsumer; t++) thread_requests[epoch].Add(t, new ConcurrentQueue<List<int>>());
+                thread_requests.Add(epoch, new Dictionary<int, ConcurrentQueue<RequestData>>());
+                for (int t = 0; t < numDetConsumer + numNonDetConsumer; t++) thread_requests[epoch].Add(t, new ConcurrentQueue<RequestData>());
             }
             for (int producer = 0; producer < numProducer; producer++)
             {

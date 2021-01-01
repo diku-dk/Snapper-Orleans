@@ -17,248 +17,167 @@ namespace TPCC.Grains
             ;
         }
 
-        async Task<FunctionResult> IWarehouseGrain.NewOrder(FunctionInput functionInput)
+        private int order_local_count = 0;
+        
+        public async Task<FunctionResult> Init(FunctionInput fin)
         {
-            var myResult = new FunctionResult();
-            var input = (NewOrderInput)functionInput.inputObject;
-            int orderLineCount = 0; bool allLocal = true;
-            var stockUpdates = new List<Task<FunctionResult>>();
-            foreach (var orderEntry in input.ordersPerWarehousePerItem)
-            {
-                orderLineCount += orderEntry.Value.Count;
-                if (orderEntry.Key != input.warehouseId)
-                {
-                    allLocal = false;
-                }
-                FunctionCall fc = new FunctionCall(typeof(WarehouseGrain), "StockUpdate", new FunctionInput(functionInput, new StockUpdateInput(input.warehouseId, input.districtId, orderEntry.Value)));
-                stockUpdates.Add(Task.Run(() => this.GrainFactory.GetGrain<IWarehouseGrain>(input.warehouseId).Execute(fc)));
-            }
+            var ret = new FunctionResult();
+            var myID = (int)fin.inputObject;
             try
             {
-                var myState = await state.ReadWrite(functionInput.context);
-                //Get customer information
-                var customerKey = new Tuple<uint, uint>(input.districtId, input.customerId);
-                var customer = myState.customerRecords[customerKey];
 
-                //Get district information
-                var district = myState.districtRecords[input.districtId];
-                var districtNextOrderId = district.nextOrderId;
-                district.nextOrderId++;
-
-                //Create entry in new order
-                myState.newOrders.Add(new NewOrder(input.districtId, districtNextOrderId));
-
-                //Create entry in order
-                var orderKey = new Tuple<uint, uint>(input.districtId, districtNextOrderId);
-                myState.orderRecords.Add(orderKey, new Order(input.customerId, 0, (ushort)orderLineCount, allLocal, 0));
-
-                //Consume the tasks as they arrive, add orderlines and compute total
-                float totalAmount = 0;
-                while (stockUpdates.Count != 0)
-                {
-                    var stockUpdateResultTask = await Task.WhenAny(stockUpdates);
-                    var stockUpdateResult = await stockUpdateResultTask;
-                    myResult.mergeWithFunctionResult(stockUpdateResult);
-                    if (!myResult.hasException())
-                    {
-                        try
-                        {
-                            //Need to check permission from scheduler every time I context switch
-                            myState = await state.ReadWrite(functionInput.context);
-                            //Add order line entries
-                            ushort orderLineCounter = 1;
-                            foreach (var aStockItemUpdateResult in ((StockUpdateResult)stockUpdateResult.resultObject).stockItemUpdates)
-                            {
-                                var orderLineKey = new Tuple<uint, uint, ushort>(input.districtId, districtNextOrderId, orderLineCounter++);
-                                myState.orderLineRecords.Add(orderLineKey, new OrderLine(aStockItemUpdateResult.itemId, 0, aStockItemUpdateResult.price, aStockItemUpdateResult.warehouseId, aStockItemUpdateResult.itemQuantity, aStockItemUpdateResult.districtInformation));
-                                totalAmount += aStockItemUpdateResult.price;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            myResult.setException();
-                        }
-                    }
-                    stockUpdates.Remove(stockUpdateResultTask);
-                }
-
-                //Compute total
-                totalAmount *= (1 + myState.warehouseRecord.tax + district.tax) * (1 - customer.discount);
-                myResult.setResult(totalAmount);
             }
             catch (Exception)
             {
-                myResult.setException();
+                ret.setException();
             }
-            return myResult;
+            return ret;
         }
 
-        async Task<FunctionResult> IWarehouseGrain.StockUpdate(FunctionInput functionInput)
+        public async Task<FunctionResult> NewOrder(FunctionInput fin)
         {
-            var myResult = new FunctionResult();
+            var context = fin.context;
+            var ret = new FunctionResult();
+            var input = (NewOrderInput)fin.inputObject;
             try
             {
-                var input = (StockUpdateInput)functionInput.inputObject;
-                var result = new StockUpdateResult();
-                var myState = await state.ReadWrite(functionInput.context);
-                foreach (var itemOrdered in input.ordersPerItem)
+                // STEP 0: validate item id
+                var abort = false;
+                var myState = await state.ReadWrite(context);
+                var items = myState.item_table;
+                foreach (var item in input.ItemsToBuy)
                 {
-                    var item = myState.itemRecords[itemOrdered.Key];
-                    var stock = myState.stockRecords[itemOrdered.Key];
-                    //Stock quantity update with auto replenishment
-                    if (stock.quantity - itemOrdered.Value >= 10)
+                    if (!items.ContainsKey(item.Key))
                     {
-                        stock.quantity -= itemOrdered.Value;
+                        if (context.isDeterministic) abort = true;
+                        else throw new Exception("Exception: invalid I_ID");
                     }
+                }
+
+                // STEP 1: check where to buy the item (local / remote grain)
+                var all_local = true;
+                var W_ID = myState.warehouse_info.W_ID;
+                var stockToUpdate = new Dictionary<int, List<Tuple<int, int>>>();  // <grainID, <I_ID, quantity>>
+                foreach (var item in input.ItemsToBuy)    // <I_ID, <supply_warehouse, quantity>>
+                {
+                    if (W_ID != item.Value.Item1) all_local = false;
+                    var dest = Helper.GetGrainID(item.Value.Item1, item.Key, false);
+                    if (!stockToUpdate.ContainsKey(dest)) stockToUpdate.Add(dest, new List<Tuple<int, int>>());
+                    if (!abort) stockToUpdate[dest].Add(new Tuple<int, int>(item.Key, item.Value.Item2));
+                }
+
+                // STEP 2: update stock
+                var tasks = new List<Task<FunctionResult>>();
+                var D_ID = myState.district_info.D_ID;
+                var myID = Helper.GetGrainID(W_ID, D_ID, true);
+                foreach (var grain in stockToUpdate)
+                {
+                    var func_input = new FunctionInput(fin, new StockUpdateInput(W_ID, D_ID, grain.Value));
+                    if (grain.Key == myID) tasks.Add(StockUpdate(func_input));
                     else
                     {
-                        stock.quantity = (ushort)(itemOrdered.Value + 91);
+                        var fc = new FunctionCall(typeof(WarehouseGrain), "StockUpdate", func_input);
+                        var dest = GrainFactory.GetGrain<IWarehouseGrain>(grain.Key);
+                        tasks.Add(dest.Execute(fc));
                     }
-                    stock.ytd += itemOrdered.Value;
-                    if (input.warehouseId == myState.warehouseRecord.wareHouseId)
+                }
+
+                // STEP 3: insert some records, compute total_amount
+                if (!abort)
+                {
+                    await Task.WhenAll(tasks);
+                    var hasExp = false;
+                    if (!context.isDeterministic)
                     {
-                        stock.remoteCount++;
+                        foreach (var t in tasks)
+                        {
+                            ret.mergeWithFunctionResult(t.Result);
+                            if (t.Result.hasException()) hasExp = true;
+                        }
                     }
 
-                    //Construct district information for the result
-                    var districtInfo = default(string);
-                    switch (input.districtId)
+                    if (!hasExp)
                     {
-                        case 1:
-                            districtInfo = stock.dist01;
-                            break;
-                        case 2:
-                            districtInfo = stock.dist02;
-                            break;
-                        case 3:
-                            districtInfo = stock.dist03;
-                            break;
-                        case 4:
-                            districtInfo = stock.dist04;
-                            break;
-                        case 5:
-                            districtInfo = stock.dist05;
-                            break;
-                        case 6:
-                            districtInfo = stock.dist06;
-                            break;
-                        case 7:
-                            districtInfo = stock.dist07;
-                            break;
-                        case 8:
-                            districtInfo = stock.dist08;
-                            break;
-                        case 9:
-                            districtInfo = stock.dist09;
-                            break;
-                        case 10:
-                            districtInfo = stock.dist10;
-                            break;
+                        myState.district_info.D_NEXT_O_ID++;
+                        var O_ID = order_local_count++;
+                        var neworder = new NewOrder(O_ID);
+                        var order = new Order(O_ID, input.C_ID, input.O_ENTRY_D, null, input.ItemsToBuy.Count, all_local);
+                        myState.neworder.Add(neworder);
+                        myState.order_table.Add(O_ID, order);
+
+                        var item_count = 0;
+                        float total_amount = 0;
+                        foreach (var t in tasks)
+                        {
+                            if (!context.isDeterministic) ret.mergeWithFunctionResult(t.Result);
+
+                            var item_info = ((StockUpdateResult)t.Result.resultObject).items;   // <I_ID, price, D_info>
+                            foreach (var i in item_info)
+                            {
+                                var I_ID = i.Item1;
+                                var D_INFO = i.Item2;
+                                var I_PRICE = items[I_ID].I_PRICE;
+                                var QUANTITY = input.ItemsToBuy[I_ID].Item2;
+                                var SUPPLY_W_ID = input.ItemsToBuy[I_ID].Item1;
+                                var AMOUNT = I_PRICE * QUANTITY;
+                                total_amount += AMOUNT;
+                                var num = item_count++;
+                                var orderline = new OrderLine(O_ID, num, I_ID, SUPPLY_W_ID, null, QUANTITY, AMOUNT, D_INFO);
+                                myState.orderline_table.Add(new Tuple<int, int>(O_ID, num), orderline);
+                            }
+                        }
+                        var C_DISCOUNT = myState.customer_table[input.C_ID].C_DISCOUNT;
+                        var W_TAX = myState.warehouse_info.W_TAX;
+                        var D_TAX = myState.district_info.D_TAX;
+                        total_amount *= (1 - C_DISCOUNT) * (1 + W_TAX + D_TAX);
+                        ret.setResult(total_amount);
                     }
-                    result.stockItemUpdates.Add(new StockItemUpdate(input.warehouseId, itemOrdered.Key, itemOrdered.Value, item.price, districtInfo));
                 }
-                myResult.setResult(result);
             }
             catch (Exception)
             {
-                myResult.setException();
+                ret.setException();
             }
-            return myResult;
+            return ret;
         }
 
-        async Task<FunctionResult> IWarehouseGrain.Payment(FunctionInput functionInput)
+        public async Task<FunctionResult> StockUpdate(FunctionInput fin)
         {
-            var paymentInformation = (PaymentInfo)functionInput.inputObject;
-            var myResult = new FunctionResult();
-            float total = 0;
-            //We need to lookup customer id from last name 
-            //TODO: This await can be pushed to the line before the history record addition
-            FunctionCall fc = new FunctionCall(typeof(WarehouseGrain), "CustomerPayment", new FunctionInput(functionInput, paymentInformation));
-            var fr = await this.GrainFactory.GetGrain<IWarehouseGrain>(paymentInformation.customerWarehouseId).Execute(fc);
-            myResult.mergeWithFunctionResult(fr);
-            if (!fr.hasException())
-            {
-                paymentInformation.customerId = (uint)fr.resultObject;
-            }
-            else
-            {
-                return myResult;
-            }
+            var context = fin.context;
+            var ret = new FunctionResult();
+            var input = (StockUpdateInput)fin.inputObject;
+            var result = new List<Tuple<int, string>>();
             try
             {
-                var myState = await state.ReadWrite(functionInput.context);
-                //Update warehouse payment
-                myState.warehouseRecord.ytd += paymentInformation.paymentAmount;
-                total += myState.warehouseRecord.ytd;
-                //Update district payment
-                myState.districtRecords[paymentInformation.districtId].ytd += paymentInformation.paymentAmount;
-                total += myState.districtRecords[paymentInformation.districtId].ytd;
-                myState.historyRecords.Add(new History(paymentInformation.customerId, paymentInformation.customerDistrictId, paymentInformation.customerWarehouseId, paymentInformation.districtId, 0, paymentInformation.paymentAmount, string.Format("{0,10}     {0,10}", myState.warehouseRecord.name, myState.districtRecords[paymentInformation.districtId].name)));
-                myResult.setResult(total);
-            }
-            catch (Exception)
-            {
-                myResult.setException();
-            }
-            return myResult;
-        }
+                if (input.itemsToBuy.Count == 0) throw new Exception("Exception: empty item set");
+                var myState = await state.ReadWrite(context);
+                var W_ID = myState.warehouse_info.W_ID;
+                var D_ID = myState.district_info.D_ID;
+                var remoteFlag = W_ID == input.W_ID ? 0 : 1;
+                foreach (var item in input.itemsToBuy)   // <I_ID, quantity>
+                {
+                    var I_ID = item.Item1;
+                    var quantity = item.Item2;
+                    
+                    var the_stock = myState.stock_table[I_ID];
+                    var S_QUANTITY = the_stock.S_QUANTITY;
+                    if (S_QUANTITY - quantity >= 10) S_QUANTITY -= quantity;
+                    else S_QUANTITY += 91 - quantity;
 
-        async Task<FunctionResult> IWarehouseGrain.CustomerPayment(FunctionInput functionInput)
-        {
-            var paymentInformation = (PaymentInfo)functionInput.inputObject;
-            var myResult = new FunctionResult();
-            if (!string.IsNullOrEmpty(paymentInformation.customerLastName))
-            {
-                FunctionCall fc = new FunctionCall(typeof(WarehouseGrain), "FindCustomerId", new FunctionInput(functionInput, new FindCustomerIdInput(paymentInformation.customerDistrictId, paymentInformation.customerLastName)));
-                var fr = await this.GrainFactory.GetGrain<IWarehouseGrain>(paymentInformation.customerWarehouseId).Execute(fc);
-                myResult.mergeWithFunctionResult(fr);
-                if (!fr.hasException())
-                {
-                    paymentInformation.customerId = (uint)fr.resultObject;
-                }
-                else
-                {
-                    return myResult;
-                }
-            }
-            try
-            {
-                var myState = await state.ReadWrite(functionInput.context);
-                var customer = myState.customerRecords[new Tuple<uint, uint>(paymentInformation.districtId, paymentInformation.customerId)];
-                customer.balance -= paymentInformation.paymentAmount;
-                customer.ytdPayment += paymentInformation.paymentAmount;
-                customer.paymentCount++;
-                if (customer.credit.Substring(0, 2).ToUpper().Equals("BC"))
-                {
-                    //Append new credit line
-                    var data = "" + paymentInformation.customerId + paymentInformation.customerDistrictId + paymentInformation.customerWarehouseId + paymentInformation.districtId + paymentInformation.warehouseId + paymentInformation.paymentAmount + customer.data;
-                    customer.data = data;
-                }
-                myResult.setResult(paymentInformation.customerId);
-            }
-            catch (Exception)
-            {
-                myResult.setException();
-            }
-            return myResult;
-        }
+                    the_stock.S_YTD += quantity;
+                    the_stock.S_ORDER_CNT++;
+                    the_stock.S_REMOTE_CNT += remoteFlag;
 
-        async Task<FunctionResult> IWarehouseGrain.FindCustomerId(FunctionInput functionInput)
-        {
-            var input = (FindCustomerIdInput)functionInput.inputObject;
-            var myResult = new FunctionResult();
-            try
-            {
-                var myState = await state.ReadWrite(functionInput.context);
-                //Not strictly the same as the original since it requires the customer names to be sorted but will do for now
-                var customersWithSameLastName = myState.customerNameRecords[new Tuple<uint, string>(input.districtId, input.customerLastName)];
-                myResult.setResult(customersWithSameLastName[customersWithSameLastName.Count / 2].Item2);
+                    var S_DIST = the_stock.S_DIST[D_ID];
+                    result.Add(new Tuple<int, string>(I_ID, S_DIST));
+                }
+                ret.setResult(new StockUpdateResult(result));
             }
             catch (Exception)
             {
-                myResult.setException();
+                ret.setException();
             }
-            return myResult;
+            return ret;
         }
     }
 }

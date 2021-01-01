@@ -15,7 +15,7 @@ namespace Utilities
             inputObject = data;
         }
 
-        public FunctionInput(object data)
+        public FunctionInput(object data = null)
         {
             inputObject = data;
         }

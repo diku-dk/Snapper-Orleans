@@ -40,6 +40,7 @@ namespace ExperimentController
         static ISerializer serializer;
 
         static int vCPU;
+        static int numWarehouse = 0;
 
         private static void GenerateWorkLoadFromSettingsFile()
         {
@@ -73,6 +74,8 @@ namespace ExperimentController
             workload.zipfianConstant = float.Parse(benchmarkConfigSection["zipfianConstant"]);
             workload.deterministicTxnPercent = float.Parse(benchmarkConfigSection["deterministicTxnPercent"]);
             workload.mixture = Array.ConvertAll(benchmarkConfigSection["mixture"].Split(","), x => int.Parse(x));
+            workload.numWarehouse = int.Parse(benchmarkConfigSection["numWarehouse"]);
+            numWarehouse = workload.numWarehouse;
             switch (workload.benchmark)
             {
                 case BenchmarkType.SMALLBANK:
@@ -156,6 +159,7 @@ namespace ExperimentController
             var deadlockRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(deadlockRateAccumulator.ToArray());
             using (file = new System.IO.StreamWriter(filePath, true))
             {
+                file.Write($"numWarehouse={numWarehouse} siloCPU={vCPU} ");
                 file.Write($"{workload.numAccounts / workload.numAccountsPerGroup} {workload.asyncMsgLengthPerThread} {workload.zipfianConstant} {workload.deterministicTxnPercent}% ");
                 if (workload.deterministicTxnPercent > 0) file.Write($"{detThroughputMeanAndSd.Item1} {detThroughputMeanAndSd.Item2} ");
                 if (workload.deterministicTxnPercent < 100)
@@ -291,27 +295,36 @@ namespace ExperimentController
 
         private static async void LoadGrains()
         {
-            Console.WriteLine($"Load grains, numGrains = {workload.numAccounts / workload.numAccountsPerGroup}, numAccountPerGroup = {workload.numAccountsPerGroup}. ");
+            int numGrain;
+            if (workload.benchmark == BenchmarkType.SMALLBANK) numGrain = workload.numAccounts / workload.numAccountsPerGroup;
+            else if (workload.benchmark == BenchmarkType.TPCC) numGrain = workload.numWarehouse * Constants.NUM_D_PER_W;
+            else throw new Exception("Exception: Unknown benchmark. ");
+            Console.WriteLine($"Load grains, benchmark {workload.benchmark}, numGrains = {numGrain}");
             var tasks = new List<Task<TransactionResult>>();
-            var sequence = false; //If you want to load the grains in sequence instead of all concurrent
-            for (int i = 0; i < workload.numAccounts / workload.numAccountsPerGroup; i++)
+            var sequence = false;   // If you want to load the grains in sequence instead of all concurrent
+            for (int i = 0; i < numGrain; i++)
             {
-                var args = new Tuple<int, int>(workload.numAccountsPerGroup, i);
-                var input = new FunctionInput(args);
+                FunctionInput input;
+                if (workload.benchmark == BenchmarkType.SMALLBANK)
+                {
+                    var args = new Tuple<int, int>(workload.numAccountsPerGroup, i);
+                    input = new FunctionInput(args);
+                } 
+                else input = new FunctionInput(i);
 
                 switch (workload.grainImplementationType)
                 {
                     case ImplementationType.ORLEANSEVENTUAL:
                         var etxnGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(i);
-                        tasks.Add(etxnGrain.StartTransaction("InitBankAccounts", input));
+                        tasks.Add(etxnGrain.StartTransaction("Init", input));
                         break;
                     case ImplementationType.ORLEANSTXN:
                         var orltxnGrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(i);
-                        tasks.Add(orltxnGrain.StartTransaction("InitBankAccounts", input));
+                        tasks.Add(orltxnGrain.StartTransaction("Init", input));
                         break;
                     case ImplementationType.SNAPPER:
                         var sntxnGrain = client.GetGrain<ICustomerAccountGroupGrain>(i);
-                        tasks.Add(sntxnGrain.StartTransaction("InitBankAccounts", input));
+                        tasks.Add(sntxnGrain.StartTransaction("Init", input));
                         break;
                     default:
                         throw new Exception("Unknown grain implementation type");
@@ -359,7 +372,7 @@ namespace ExperimentController
             workload.numAccounts = 5000 * vCPU;
             coordConfig.numCoordinators = vCPU * 2;
             numCoordinators = coordConfig.numCoordinators;
-            Console.WriteLine($"zipf = {workload.zipfianConstant}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}");
+            Console.WriteLine($"zipf = {workload.zipfianConstant}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}");
 
             //Initialize the client to silo cluster, create configurator grain
             InitiateClientAndSpawnConfigurationCoordinator();
