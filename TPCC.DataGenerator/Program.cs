@@ -1,10 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading;
-using TPCC.Grains;
 using Utilities;
+using System.Linq;
+using TPCC.Grains;
+using System.Threading;
+using System.Collections.Generic;
 
 namespace TPCC.DataGenerator
 {
