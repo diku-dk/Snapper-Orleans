@@ -17,8 +17,8 @@ if ($LastExitCode -ne 0) { return; }
 
 $zipF = 0.5, 1.0, 1.5, 2.0
 $percent = 100, 90, 75, 50, 25, 0
-$detPipe = 128
-$nonDetPipe = 4
+$detPipe = 32
+$nonDetPipe = 0
 $cpu = 4
 
 for ($j = 1; $j -le 1; $j++)

@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Orleans.CodeGeneration;
 using System.Collections.Generic;
 using Concurrency.Implementation;
-using System.IO;
 
 [assembly: GenerateSerializer(typeof(TPCC.Grains.WarehouseData))]
 
@@ -24,14 +23,11 @@ namespace TPCC.Grains
         {
             var context = fin.context;
             var ret = new FunctionResult();
-            var myID = (int)fin.inputObject;
-            var filePath = Constants.TPCC_dataPath + $"{myID}";
+            var input = (Tuple<int, int>)fin.inputObject;
             try
             {
-                var data = File.ReadAllBytes(filePath);
-                var serializer = new MsgPackSerializer();
                 var myState = await state.ReadWrite(context);
-                myState = serializer.deserialize<WarehouseData>(data);
+                InMemoryDataGenerator.GenerateData(input.Item1, input.Item2, myState);
             }
             catch (Exception)
             {

@@ -310,7 +310,7 @@ namespace ExperimentController
                     var args = new Tuple<int, int>(workload.numAccountsPerGroup, i);
                     input = new FunctionInput(args);
                 } 
-                else input = new FunctionInput(i);
+                else input = new FunctionInput(new Tuple<int, int>(i / Constants.NUM_D_PER_W, i % Constants.NUM_D_PER_W));
 
                 switch (workload.grainImplementationType)
                 {
