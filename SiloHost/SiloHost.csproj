@@ -33,5 +33,7 @@
     <ProjectReference Include="..\SmallBank.Grains\SmallBank.Grains.csproj" />
     <ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
+    <ProjectReference Include="..\TPCC.Grains\TPCC.Grains.csproj" />
+    <ProjectReference Include="..\TPCC.Interfaces\TPCC.Interfaces.csproj" />
   </ItemGroup>
 </Project>

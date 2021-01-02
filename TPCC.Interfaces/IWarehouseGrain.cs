@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 namespace TPCC.Interfaces
 {
+    [Serializable]
     public class NewOrderInput
     {
         public int C_ID;

@@ -9,10 +9,12 @@ namespace Utilities
    
     public class Constants
     {
+        public const double NUM_W_PER_4CORE = 4;
         public const int NUM_D_PER_W = 10;
         public const int NUM_C_PER_D = 3000;
         public const int NUM_I = 100000;
-        public const string TPCC_dataPath = @"C:\Users\Administrator\Desktop\data\tpcc\";
+        public const string TPCC_dataPath = @"C:\Users\Administrator\Desktop\data\tpcc\grainData\";
+        public const string TPCC_workloadPath = @"C:\Users\Administrator\Desktop\data\tpcc\workload\";
 
         public const bool enableAzureClustering = false;
         public const string connectionString = "DefaultEndpointsProtocol=https;AccountName=silo-membership-table;AccountKey=cyNmVPVYxlTeepACZWayOBtK4yuN5N733nBcaolrVtDjQd8Y04e263oZt8nKWLHNLAVPsMvyU6gO7dHUawmy3A==;TableEndpoint=https://silo-membership-table.table.cosmos.azure.com:443/;";

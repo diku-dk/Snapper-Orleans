@@ -26,7 +26,7 @@ namespace TPCC.Grains
             try
             {
                 var myState = await state.ReadWrite(context);
-                InMemoryDataGenerator.GenerateData(input.Item1, input.Item2, myState);
+                InMemoryDataGenerator.GenerateSimpleData(input.Item1, input.Item2, myState);
                 Console.WriteLine($"Init W {input.Item1}, D {input.Item2}, w.stock.count = {myState.stock_table.Count}");
             }
             catch (Exception)

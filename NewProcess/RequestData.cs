@@ -4,6 +4,7 @@ using System.Collections.Generic;
 
 namespace NewProcess
 {
+    [Serializable]
     public class RequestData
     {
         public List<int> grains;    // for SmallBank

@@ -75,9 +75,7 @@ namespace ExperimentController
             workload.zipfianConstant = float.Parse(benchmarkConfigSection["zipfianConstant"]);
             workload.deterministicTxnPercent = float.Parse(benchmarkConfigSection["deterministicTxnPercent"]);
             workload.mixture = Array.ConvertAll(benchmarkConfigSection["mixture"].Split(","), x => int.Parse(x));
-            workload.numWarehouse = int.Parse(benchmarkConfigSection["numWarehouse"]);
-            numWarehouse = workload.numWarehouse;
-
+            
             workload.numAccounts = int.Parse(benchmarkConfigSection["numAccounts"]);
             workload.numAccountsPerGroup = int.Parse(benchmarkConfigSection["numAccountsPerGroup"]);
             workload.numAccountsMultiTransfer = int.Parse(benchmarkConfigSection["numAccountsMultiTransfer"]);
@@ -377,6 +375,8 @@ namespace ExperimentController
             workload.numAccounts = 5000 * vCPU;
             coordConfig.numCoordinators = vCPU * 2;
             numCoordinators = coordConfig.numCoordinators;
+            workload.numWarehouse = (int)(vCPU * Constants.NUM_W_PER_4CORE / 4);
+            numWarehouse = workload.numWarehouse;
             Console.WriteLine($"zipf = {workload.zipfianConstant}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}");
 
             //Initialize the client to silo cluster, create configurator grain
