@@ -177,7 +177,7 @@ namespace TPCC.DataGenerator
                 var D_ID = district_dist_uni.Sample();
                 grains.Add(W_ID * Constants.NUM_D_PER_W + D_ID);
                 var C_C_ID = C_rnd.Next(0, 1024);
-                var C_ID = Helper.NURand(1023, 1, Constants.NUM_C_PER_D, C_C_ID);
+                var C_ID = Helper.NURand(1023, 1, Constants.NUM_C_PER_D, C_C_ID) - 1;
                 var ol_cnt = ol_cnt_dist_uni.Sample();
                 var rbk = rbk_dist_uni.Sample();
                 var itemsToBuy = new Dictionary<int, Tuple<int, int>>();  // <I_ID, <supply_warehouse, quantity>>
@@ -188,7 +188,7 @@ namespace TPCC.DataGenerator
                     if (i == ol_cnt - 1 && rbk == 1) I_ID = -1;   // generate 1% of error
                     else
                     {
-                        do I_ID = Helper.NURand(8191, 1, Constants.NUM_I, C_I_ID);
+                        do I_ID = Helper.NURand(8191, 1, Constants.NUM_I, C_I_ID) - 1;
                         while (itemsToBuy.ContainsKey(I_ID));
                     }
                     var local = local_dist_uni.Sample() > 1;

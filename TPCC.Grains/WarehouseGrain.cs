@@ -26,8 +26,8 @@ namespace TPCC.Grains
             try
             {
                 var myState = await state.ReadWrite(context);
-                InMemoryDataGenerator.GenerateSimpleData(input.Item1, input.Item2, myState);
-                Console.WriteLine($"Init W {input.Item1}, D {input.Item2}, w.stock.count = {myState.stock_table.Count}");
+                InMemoryDataGenerator.GenerateData(input.Item1, input.Item2, myState);
+                //Console.WriteLine($"Init W {input.Item1}, D {input.Item2}, w.stock.count = {myState.stock_table.Count}");
             }
             catch (Exception)
             {
@@ -136,9 +136,9 @@ namespace TPCC.Grains
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                ret.setException();
+                if (!e.Message.Contains("I_ID")) ret.setException();
             }
             return ret;
         }

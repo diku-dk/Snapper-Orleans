@@ -75,17 +75,18 @@ namespace ExperimentController
             workload.zipfianConstant = float.Parse(benchmarkConfigSection["zipfianConstant"]);
             workload.deterministicTxnPercent = float.Parse(benchmarkConfigSection["deterministicTxnPercent"]);
             workload.mixture = Array.ConvertAll(benchmarkConfigSection["mixture"].Split(","), x => int.Parse(x));
-            
+
             workload.numAccounts = int.Parse(benchmarkConfigSection["numAccounts"]);
             workload.numAccountsPerGroup = int.Parse(benchmarkConfigSection["numAccountsPerGroup"]);
             workload.numAccountsMultiTransfer = int.Parse(benchmarkConfigSection["numAccountsMultiTransfer"]);
             workload.numGrainsMultiTransfer = int.Parse(benchmarkConfigSection["numGrainsMultiTransfer"]);
             workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfigSection["grainImplementationType"]);
-            exeConfig = new ExecutionGrainConfiguration("SmallBank.Grains.CustomerAccountGroupGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
-            
+
+            if (workload.benchmark == BenchmarkType.SMALLBANK)
+                exeConfig = new ExecutionGrainConfiguration("SmallBank.Grains.CustomerAccountGroupGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
+            else exeConfig = new ExecutionGrainConfiguration("TPCC.Grains.WarehouseGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
             coordConfig = new CoordinatorGrainConfiguration(batchInterval, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
             Console.WriteLine("Generated workload configuration");
-
         }
 
         private static void AggregateResultsAndPrint()
@@ -153,8 +154,8 @@ namespace ExperimentController
             var deadlockRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(deadlockRateAccumulator.ToArray());
             using (file = new System.IO.StreamWriter(filePath, true))
             {
-                file.Write($"numWarehouse={numWarehouse} siloCPU={vCPU} ");
-                file.Write($"{workload.numAccounts / workload.numAccountsPerGroup} {workload.asyncMsgLengthPerThread} {workload.zipfianConstant} {workload.deterministicTxnPercent}% ");
+                file.Write($"numWarehouse={numWarehouse} siloCPU={vCPU} distribution={workload.distribution} benchmark={workload.benchmark} ");
+                file.Write($"{workload.deterministicTxnPercent}% ");
                 if (workload.deterministicTxnPercent > 0) file.Write($"{detThroughputMeanAndSd.Item1} {detThroughputMeanAndSd.Item2} ");
                 if (workload.deterministicTxnPercent < 100)
                 {
@@ -164,8 +165,8 @@ namespace ExperimentController
                     {
                         var abortRWConflict = 100 - deadlockRateMeanAndSd.Item1 - notSerializableRateMeanAndSd.Item1;
                         file.Write($"{abortRWConflict}% {deadlockRateMeanAndSd.Item1}% {notSerializableRateMeanAndSd.Item1}% ");
-                    } 
-                } 
+                    }
+                }
                 if (workload.deterministicTxnPercent > 0)
                 {
                     foreach (var percentile in workload.percentilesToCalculate)
@@ -303,7 +304,7 @@ namespace ExperimentController
                 {
                     var args = new Tuple<int, int>(workload.numAccountsPerGroup, i);
                     input = new FunctionInput(args);
-                } 
+                }
                 else input = new FunctionInput(new Tuple<int, int>(i / Constants.NUM_D_PER_W, i % Constants.NUM_D_PER_W));
 
                 switch (workload.grainImplementationType)
@@ -332,7 +333,7 @@ namespace ExperimentController
                     default:
                         throw new Exception("Unknown grain implementation type");
                 }
-                if (sequence && tasks.Count == 20)
+                if (sequence && tasks.Count == vCPU)
                 {
                     await Task.WhenAll(tasks);
                     tasks.Clear();
@@ -400,7 +401,7 @@ namespace ExperimentController
             sinkThread.Join();
             conducterThread.Join();
 
-            Console.WriteLine("Aggregating results and printing"); 
+            Console.WriteLine("Aggregating results and printing");
             filePath = Constants.dataPath + "result.txt";
             AggregateResultsAndPrint();
             Console.WriteLine("Finished running experiment. Press Enter to exit");

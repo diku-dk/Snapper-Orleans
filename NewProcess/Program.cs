@@ -311,10 +311,11 @@ namespace NewProcess
         static IDiscreteDistribution local_dist_uni = new DiscreteUniform(1, 100, new Random());
         static IDiscreteDistribution quantity_dist_uni = new DiscreteUniform(1, 10, new Random());
 
-        private static void GenerateNewOrder(object obj)
+        static int error = 0;
+        private static void GenerateNewOrder(int epoch)
         {
+            Console.WriteLine($"Generate TPCC workload for epoch {epoch}");
             var num_txn = Constants.BASE_NUM_NEWORDER * siloCPU / 4;
-            var epoch = (int)obj;
             for (int txn = 0; txn < num_txn; txn++)
             {
                 var num_hot_wh = (int)(skewness * config.numWarehouse);
@@ -332,7 +333,7 @@ namespace NewProcess
                 var D_ID = district_dist_uni.Sample();
                 grains.Add(W_ID * Constants.NUM_D_PER_W + D_ID);
                 var C_C_ID = C_rnd.Next(0, 1024);
-                var C_ID = Helper.NURand(1023, 1, Constants.NUM_C_PER_D, C_C_ID);
+                var C_ID = Helper.NURand(1023, 1, Constants.NUM_C_PER_D, C_C_ID) - 1;
                 var ol_cnt = ol_cnt_dist_uni.Sample();
                 var rbk = rbk_dist_uni.Sample();
                 var itemsToBuy = new Dictionary<int, Tuple<int, int>>();  // <I_ID, <supply_warehouse, quantity>>
@@ -340,10 +341,14 @@ namespace NewProcess
                 for (int i = 0; i < ol_cnt; i++)
                 {
                     int I_ID;
-                    if (i == ol_cnt - 1 && rbk == 1) I_ID = -1;   // generate 1% of error
+                    if (i == ol_cnt - 1 && rbk == 1)
+                    {
+                        I_ID = -1;   // generate 1% of error
+                        error++;
+                    } 
                     else
                     {
-                        do I_ID = Helper.NURand(8191, 1, Constants.NUM_I, C_I_ID);
+                        do I_ID = Helper.NURand(8191, 1, Constants.NUM_I, C_I_ID) - 1;
                         while (itemsToBuy.ContainsKey(I_ID));
                     }
                     var local = local_dist_uni.Sample() > 1;
@@ -373,19 +378,13 @@ namespace NewProcess
                 case Distribution.UNIFORM:
                     Console.WriteLine($"Generate UNIFORM data for TPCC");
                     skewness = 0;
-                    for (int epoch = 0; epoch < config.numEpochs; epoch++)
-                    {
-                        var thread = new Thread(GenerateNewOrder);
-                        thread.Start(epoch);
-                    }
+                    for (int epoch = 0; epoch < config.numEpochs; epoch++) GenerateNewOrder(epoch);
+                    var total_num_txn = config.numEpochs * Constants.BASE_NUM_NEWORDER * siloCPU / 4;
+                    Console.WriteLine($"num_txn = {total_num_txn}, error = {error}, ratio = {error * 100.0 / (double)total_num_txn}%");
                     break;
                 case Distribution.HOTRECORD:
                     Console.WriteLine($"Generate HOTRECORD data for TPCC, skewness = {skewness}, hotRatio = {hotRatio}");
-                    for (int epoch = 0; epoch < config.numEpochs; epoch++)
-                    {
-                        var thread = new Thread(GenerateNewOrder);
-                        thread.Start(epoch);
-                    }
+                    for (int epoch = 0; epoch < config.numEpochs; epoch++) GenerateNewOrder(epoch);
                     break;
                 default:
                     throw new Exception($"Exception: TPCC does not support distribution {config.distribution}. ");

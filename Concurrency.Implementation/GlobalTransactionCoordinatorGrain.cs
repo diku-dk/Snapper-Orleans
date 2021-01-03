@@ -164,7 +164,7 @@ namespace Concurrency.Implementation
         {
             if (token.highestCommittedBatchID > highestCommittedBatchID) highestCommittedBatchID = token.highestCommittedBatchID;
             numTransactionIdsReserved = 0;    // Reset the range of pre-allocation
-            await CheckBackoff(token);
+            //await CheckBackoff(token);
             var curBatchID = await EmitDeterministicTransactions(token);
             EmitNonDeterministicTransactions(token);
             tidToAllocate = token.lastTransactionID + 1;

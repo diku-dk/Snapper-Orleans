@@ -4,6 +4,7 @@ using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
+using TPCC.Interfaces;
 
 namespace NewProcess
 {
@@ -23,7 +24,7 @@ namespace NewProcess
             switch (config.grainImplementationType)
             {
                 case ImplementationType.SNAPPER:
-                    var grain = client.GetGrain<ICustomerAccountGroupGrain>(grainId);
+                    var grain = client.GetGrain<IWarehouseGrain>(grainId);
                     if (isDet) return grain.StartTransaction(grainAccessInfo, functionName, input);
                     else return grain.StartTransaction(functionName, input);
                 case ImplementationType.ORLEANSEVENTUAL:
