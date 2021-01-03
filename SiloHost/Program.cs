@@ -18,7 +18,7 @@ namespace OrleansSiloHost
     {
         static private int siloPort;
         static private int gatewayPort;
-        static readonly bool enableOrleansTxn = true;
+        static readonly bool enableOrleansTxn = false;
 
         public static int Main(string[] args)
         {

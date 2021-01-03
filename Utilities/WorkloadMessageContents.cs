@@ -9,6 +9,9 @@ namespace Utilities
    
     public class Constants
     {
+        public const int BASE_NUM_MULTITRANSFER = 150000;
+        public const int BASE_NUM_NEWORDER = 150000;
+
         public const double NUM_W_PER_4CORE = 4;
         public const int NUM_D_PER_W = 10;
         public const int NUM_C_PER_D = 3000;
