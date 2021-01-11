@@ -96,6 +96,8 @@ namespace OrleansSiloHost
 
         public async Task<TransactionalStorageLoadResponse<TState>> Load()
         {
+            return new TransactionalStorageLoadResponse<TState>(ETag, new TState(), 0, Metadata, new List<PendingTransactionState<TState>>());
+            /*
             //var start = DateTime.Now;
             if (string.IsNullOrEmpty(ETag)) return new TransactionalStorageLoadResponse<TState>();
             TState committedState;
@@ -137,10 +139,13 @@ namespace OrleansSiloHost
             //var end = DateTime.Now;
             //Console.WriteLine($"load: {(end - start).TotalMilliseconds}ms");
             return new TransactionalStorageLoadResponse<TState>(ETag, committedState, CommittedSequenceId, Metadata, PrepareRecordsToRecover);
+        */
         }
 
         public async Task<string> Store(string expectedETag, TransactionalStateMetaData metadata, List<PendingTransactionState<TState>> statesToPrepare, long? commitUpTo, long? abortAfter)
         {
+            return ETag;
+            /*
             //var start = DateTime.Now;
             if (ETag != expectedETag) throw new ArgumentException(nameof(expectedETag), "Etag does not match");
 
@@ -189,7 +194,7 @@ namespace OrleansSiloHost
             }
             //var end = DateTime.Now;
             //Console.WriteLine($"store: {(end - start).TotalMilliseconds}ms");
-            return ETag;
+            return ETag;*/
         }
 
         private bool FindState(long sequenceId, out int pos)

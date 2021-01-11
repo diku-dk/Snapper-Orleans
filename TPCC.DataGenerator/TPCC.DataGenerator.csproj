@@ -11,6 +11,6 @@
     <ProjectReference Include="..\NewProcess\NewProcess.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="MathNet.Numerics" Version="4.14.0" />
+    <PackageReference Include="MathNet.Numerics" Version="4.15.0" />
   </ItemGroup>
 </Project>

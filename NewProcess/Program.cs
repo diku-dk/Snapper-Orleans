@@ -45,7 +45,7 @@ namespace NewProcess
         static int numProducer;
 
         // parameters for hot record
-        static double skewness = 0.1;
+        static double skewness = 0.01;
         static double hotRatio = 0.75;
 
         private static void ProducerThreadWork(object obj)
@@ -261,8 +261,8 @@ namespace NewProcess
         {
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = 1;
-            numNonDetConsumer = 1;
+            numDetConsumer = 1 * siloCPU / 2;
+            numNonDetConsumer = 1 * siloCPU / 2;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 
@@ -419,7 +419,8 @@ namespace NewProcess
                     break;
                 case Distribution.HOTRECORD:
                     int numHotGrain = (int)(skewness * numGrain);
-                    if (skewness == 0) hotRatio = 0;
+                    //int numHotGrain = siloCPU;
+                    if (numHotGrain == 0) hotRatio = 0;
                     var numHotGrainPerTxn = hotRatio * numGrainPerTxn;
                     Console.WriteLine($"Generate data for HOTRECORD, {numHotGrain} hot grains, {numHotGrainPerTxn} hot grain per txn...");
                     for (int epoch = 0; epoch < config.numEpochs; epoch++)
@@ -449,14 +450,14 @@ namespace NewProcess
                 case Distribution.ZIPFIAN:    // read data from file
                     Console.WriteLine($"read data from files");
                     var zipf = config.zipfianConstant;
-                    var prefix = Constants.dataPath + $@"MultiTransfer\{numGrainPerTxn}\{numGrain}\hybrid\MultiTransfer_{zipf}_";
+                    var prefix = Constants.dataPath + $@"MultiTransfer\{numGrainPerTxn}\zipf{zipf}_";
 
                     // read data from files
                     for (int epoch = 0; epoch < config.numEpochs; epoch++)
                     {
                         string line;
-                        var path = prefix + $@"{epoch}_0.txt";
-                        System.IO.StreamReader file = new System.IO.StreamReader(path);
+                        var path = prefix + $@"epoch{epoch}.txt";
+                        var file = new StreamReader(path);
                         while ((line = file.ReadLine()) != null)
                         {
                             var grainsPerTxn = new List<int>();

@@ -296,7 +296,8 @@ namespace ExperimentController
             else throw new Exception("Exception: Unknown benchmark. ");
             Console.WriteLine($"Load grains, benchmark {workload.benchmark}, numGrains = {numGrain}");
             var tasks = new List<Task<TransactionResult>>();
-            var sequence = true;   // If you want to load the grains in sequence instead of all concurrent
+            var sequence = false;   // If you want to load the grains in sequence instead of all concurrent
+            if (workload.benchmark == BenchmarkType.TPCC) sequence = true;
             for (int i = 0; i < numGrain; i++)
             {
                 FunctionInput input;
@@ -333,7 +334,7 @@ namespace ExperimentController
                     default:
                         throw new Exception("Unknown grain implementation type");
                 }
-                if (sequence && tasks.Count == vCPU)
+                if (sequence && tasks.Count == Environment.ProcessorCount)
                 {
                     await Task.WhenAll(tasks);
                     tasks.Clear();
@@ -376,7 +377,7 @@ namespace ExperimentController
             workload.numAccounts = 5000 * vCPU;
             coordConfig.numCoordinators = vCPU * 2;
             numCoordinators = coordConfig.numCoordinators;
-            workload.numWarehouse = (int)(vCPU * Constants.NUM_W_PER_4CORE / 4);
+            workload.numWarehouse = vCPU * Constants.NUM_W_PER_4CORE / 4;
             numWarehouse = workload.numWarehouse;
             Console.WriteLine($"zipf = {workload.zipfianConstant}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}");
 

@@ -133,7 +133,6 @@ namespace SmallBank.Grains
                 else
                 {
                     var destination = GrainFactory.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(gID);
-                    var funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
                     task = destination.StartTransaction("DepositChecking", funcInput);
                 }
                 await task;
@@ -225,7 +224,7 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        public async Task<TransactionResult> InitBankAccounts(FunctionInput fin)
+        public async Task<TransactionResult> Init(FunctionInput fin)
         {
             var ret = new TransactionResult();
             try
@@ -269,8 +268,8 @@ namespace SmallBank.Grains
                     return Transfer(inputs);
                 case AllTxnTypes.MultiTransfer:
                     return MultiTransfer(inputs);
-                case AllTxnTypes.InitBankAccounts:
-                    return InitBankAccounts(inputs);
+                case AllTxnTypes.Init:
+                    return Init(inputs);
                 default:
                     throw new Exception($"Unknown function {fnType}");
             }
