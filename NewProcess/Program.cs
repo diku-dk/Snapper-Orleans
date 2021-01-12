@@ -45,8 +45,8 @@ namespace NewProcess
         static int numProducer;
 
         // parameters for hot record
-        static double skewness = 0.01;
-        static double hotRatio = 0.75;
+        static double skewness;
+        static double hotRatio;
 
         private static void ProducerThreadWork(object obj)
         {
@@ -259,10 +259,12 @@ namespace NewProcess
 
         private static async void Initialize()
         {
+            skewness = 0.01;
+            hotRatio = 0.75;
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = 1 * siloCPU / 2;
-            numNonDetConsumer = 1 * siloCPU / 2;
+            numDetConsumer = 1 * siloCPU / 4;
+            numNonDetConsumer = 1 * siloCPU / 4;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 

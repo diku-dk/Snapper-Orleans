@@ -6,7 +6,9 @@ using System.Collections.Generic;
 
 namespace TPCC.Interfaces
 {
-    [Serializable]
+    public enum AllTxnTypes {NewOrder, StockUpdate, Init};
+
+[Serializable]
     public class NewOrderInput
     {
         public int C_ID;
@@ -46,6 +48,7 @@ namespace TPCC.Interfaces
 
     public interface IWarehouseGrain : ITransactionExecutionGrain
     {
+        Task<FunctionResult> Init(FunctionInput functionInput);
         Task<FunctionResult> NewOrder(FunctionInput functionInput);
         Task<FunctionResult> StockUpdate(FunctionInput functionInput);
     }
