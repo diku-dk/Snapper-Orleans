@@ -19,7 +19,7 @@ $zipF = 0.5, 1.0, 1.5, 2.0
 $percent = 100, 90, 75, 50, 25, 0
 $detPipe = 0
 $nonDetPipe = 4
-$cpu = 4
+$cpu = 16
 
 for ($j = 1; $j -le 1; $j++)
 {
@@ -33,7 +33,7 @@ for ($j = 1; $j -le 1; $j++)
             #$nonDetPipe = $pipe
             Start-Process "dotnet" -ArgumentList "run --project ExperimentController --no-build -- $zipF $detPercent $cpu"
             Start-Sleep 10
-            for ($worker = 0; $worker -le $cpu / 4 - 1; $worker ++)
+            for ($worker = 0; $worker -le 0; $worker ++)
             {
                 Start-Process "dotnet" -ArgumentList "run --project NewProcess --no-build -- $cpu $detPipe $nonDetPipe"
                 Start-Sleep 1

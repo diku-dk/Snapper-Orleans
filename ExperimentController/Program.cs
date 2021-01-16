@@ -48,7 +48,6 @@ namespace ExperimentController
             //Parse and initialize benchmarkframework section
             var benchmarkFrameWorkSection = ConfigurationManager.GetSection("BenchmarkFrameworkConfig") as NameValueCollection;
             workload.numWorkerNodes = int.Parse(benchmarkFrameWorkSection["numWorkerNodes"]);
-            numWorkerNodes = workload.numWorkerNodes;
             workload.numConnToClusterPerWorkerNode = int.Parse(benchmarkFrameWorkSection["numConnToClusterPerWorkerNode"]);
             workload.numThreadsPerWorkerNode = int.Parse(benchmarkFrameWorkSection["numThreadsPerWorkerNode"]);
             workload.epochDurationMSecs = int.Parse(benchmarkFrameWorkSection["epochDurationMSecs"]);
@@ -358,7 +357,6 @@ namespace ExperimentController
         {
             workload = new WorkloadConfiguration();
             GenerateWorkLoadFromSettingsFile();
-            ackedWorkers = new CountdownEvent(numWorkerNodes);
         }
 
         static void Main(string[] args)
@@ -383,12 +381,16 @@ namespace ExperimentController
             workload.zipfianConstant = float.Parse(args[0]);
             workload.deterministicTxnPercent = float.Parse(args[1]);
             vCPU = int.Parse(args[2]);
+            workload.numWorkerNodes = vCPU / 4;  // !!!!!!!!!
             workload.numAccounts = 5000 * vCPU;
             coordConfig.numCoordinators = vCPU * 2;
             numCoordinators = coordConfig.numCoordinators;
             workload.numWarehouse = vCPU * Constants.NUM_W_PER_4CORE / 4;
             numWarehouse = workload.numWarehouse;
-            Console.WriteLine($"zipf = {workload.zipfianConstant}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}");
+            Console.WriteLine($"worker node = {workload.numWorkerNodes}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}");
+            
+            numWorkerNodes = workload.numWorkerNodes;
+            ackedWorkers = new CountdownEvent(numWorkerNodes);
 
             //Initialize the client to silo cluster, create configurator grain
             InitiateClientAndSpawnConfigurationCoordinator();

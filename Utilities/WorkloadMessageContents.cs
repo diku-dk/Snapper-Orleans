@@ -28,7 +28,7 @@ namespace Utilities
         public const string logPath = @"D:\log\";
         public const string dataPath = @"C:\Users\Administrator\Desktop\data\";
 
-        public const bool multiWorker = false;
+        public const bool multiWorker = true;
         public const string controller_Local_SinkAddress = "@tcp://localhost:5558";
         public const string controller_Local_WorkerAddress = "@tcp://localhost:5575";
         public const string worker_Local_SinkAddress = ">tcp://localhost:5558";
@@ -36,8 +36,8 @@ namespace Utilities
 
         public const string controller_Remote_SinkAddress = "@tcp://172.31.12.68:5558";  // controller private IP
         public const string controller_Remote_WorkerAddress = "@tcp://*:5575";
-        public const string worker_Remote_SinkAddress = ">tcp://18.188.44.200:5558";    // controller public IP
-        public const string worker_Remote_ControllerAddress = ">tcp://18.188.44.200:5558";  // controller public IP
+        public const string worker_Remote_SinkAddress = ">tcp://3.16.66.35:5558";    // controller public IP
+        public const string worker_Remote_ControllerAddress = ">tcp://3.16.66.35:5575";  // controller public IP
 
         public const bool multiSilo = false;
         public const bool localCluster = false;
