@@ -25,6 +25,7 @@ namespace ExperimentProcess
         static WorkloadConfiguration config;
         static bool initializationDone = false;
 
+        static bool isDet;
         static int siloCPU;
         static int pipeSize;
         static int numWorkerThread;
@@ -34,13 +35,19 @@ namespace ExperimentProcess
             int threadIndex = (int)obj;
             var globalWatch = new Stopwatch();
             var benchmark = benchmarks[threadIndex];
-            var client = clients[threadIndex % numWorkerThread];
+            var client = clients[threadIndex];
             Console.WriteLine($"thread = {threadIndex}, pipe = {pipeSize}");
             for (int eIndex = 0; eIndex < config.numEpochs; eIndex++)
             {
                 int numEmit = 0;
-                int numCommit = 0;
+                int numDetCommit = 0;
+                int numNonDetCommit = 0;
+                int numDetTransaction = 0;
+                int numNonDetTransaction = 0;
+                int numDeadlock = 0;
+                int numNotSerializable = 0;
                 var latencies = new List<double>();
+                var det_latencies = new List<double>();
                 var tasks = new List<Task<TransactionResult>>();
                 var reqs = new Dictionary<Task<TransactionResult>, TimeSpan>();
                 await Task.Delay(TimeSpan.FromMilliseconds(100));   // give some time for producer to populate the buffer
@@ -53,7 +60,7 @@ namespace ExperimentProcess
                     while (tasks.Count < pipeSize)
                     {
                         var asyncReqStartTime = globalWatch.Elapsed;
-                        var newTask = benchmark.newTransaction(client);
+                        var newTask = benchmark.newTransaction(client, threadIndex);
                         numEmit++;
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);
@@ -75,16 +82,32 @@ namespace ExperimentProcess
                         }
                         if (noException)
                         {
-                            Debug.Assert(task.Result.isDet == false);
-                            numCommit++;
-                            latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+                            if (task.Result.isDet)   // for det
+                            {
+                                numDetTransaction++;
+                                if (!task.Result.exception)
+                                {
+                                    numDetCommit++;
+                                    det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+                                }
+                            }
+                            else    // for non-det + eventual + orleans txn
+                            {
+                                numNonDetTransaction++;
+                                if (!task.Result.exception)
+                                {
+                                    numNonDetCommit++;
+                                    latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+                                }
+                                else if (task.Result.Exp_Serializable) numNotSerializable++;
+                                else if (task.Result.Exp_Deadlock) numDeadlock++;
+                            }
                         }
                         tasks.Remove(task);
                         reqs.Remove(task);
                     }
                 }
                 while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs);
-
                 //Wait for the tasks exceeding epoch time and also count them into results
                 while (tasks.Count != 0)
                 {
@@ -102,18 +125,40 @@ namespace ExperimentProcess
                     }
                     if (noException)
                     {
-                        Debug.Assert(task.Result.isDet == false);
-                        numCommit++;
-                        latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+                        if (task.Result.isDet)   // for det
+                        {
+                            numDetTransaction++;
+                            if (!task.Result.exception)
+                            {
+                                numDetCommit++;
+                                det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+                            }
+                        }
+                        else    // for non-det + eventual + orleans txn
+                        {
+                            numNonDetTransaction++;
+                            if (!task.Result.exception)
+                            {
+                                numNonDetCommit++;
+                                latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+                            }
+                            else if (task.Result.Exp_Serializable) numNotSerializable++;
+                            else if (task.Result.Exp_Deadlock) numDeadlock++;
+                        }
                     }
                     tasks.Remove(task);
                     reqs.Remove(task);
                 }
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
-                Console.WriteLine($"total_num_txn = {numEmit}, commit = {numCommit}, tp = {1000 * numCommit / (endTime - startTime)}");
-                var res = new WorkloadResults(numEmit, 0, numCommit, 0, startTime, endTime, 0, 0);
-                res.setLatency(latencies, new List<double>());
+
+                if (isDet) Console.WriteLine($"total_num_det = {numDetTransaction}, det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
+                else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}");
+                WorkloadResults res;
+                if (config.grainImplementationType == ImplementationType.SNAPPER)
+                    res = new WorkloadResults(numDetTransaction, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
+                else res = new WorkloadResults(numDetTransaction, numEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
+                res.setLatency(latencies, det_latencies);
                 results[threadIndex] = res;
                 threadAcks[eIndex].Signal();  //Signal the completion of epoch
             }
@@ -121,7 +166,9 @@ namespace ExperimentProcess
 
         private static async void Initialize()
         {
-            Debug.Assert(config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL);
+            if (config.deterministicTxnPercent == 100) isDet = true;
+            else if (config.deterministicTxnPercent == 0) isDet = false;
+            else throw new Exception($"Exception: ExperimentProcess does not support hybrid");
             numWorkerThread = siloCPU / 2;
             switch (config.benchmark)
             {
@@ -139,8 +186,6 @@ namespace ExperimentProcess
             results = new WorkloadResults[numWorkerThread];
             for (int i = 0; i < numWorkerThread; i++) benchmarks[i].generateBenchmark(config);
 
-            await InitializeClients();
-
             barriers = new Barrier[config.numEpochs];
             threadAcks = new CountdownEvent[config.numEpochs];
             for (int i = 0; i < config.numEpochs; i++)
@@ -148,6 +193,8 @@ namespace ExperimentProcess
                 barriers[i] = new Barrier(numWorkerThread + 1);
                 threadAcks[i] = new CountdownEvent(numWorkerThread);
             }
+
+            await InitializeClients();
 
             // spawn threads
             threads = new Thread[numWorkerThread];
@@ -278,10 +325,8 @@ namespace ExperimentProcess
             Console.WriteLine("Worker is Started...");
 
             //inject the specially required arguments into workload setting
-            //siloCPU = int.Parse(args[0]);
-            //pipeSize = int.Parse(args[1]);
-            siloCPU = 32;
-            pipeSize = 4;
+            siloCPU = int.Parse(args[0]);
+            pipeSize = int.Parse(args[1]);
             Console.WriteLine($"pipe per thread = {pipeSize}");
 
             ProcessWork();

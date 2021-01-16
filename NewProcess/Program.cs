@@ -44,10 +44,6 @@ namespace NewProcess
         static int numNonDetConsumer;
         static int numProducer;
 
-        // parameters for hot record
-        static double skewness;
-        static double hotRatio;
-
         private static void ProducerThreadWork(object obj)
         {
             isEpochFinish = new bool[config.numEpochs];
@@ -146,7 +142,6 @@ namespace NewProcess
                 do
                 {
                     while (tasks.Count < pipeSize && queue.TryDequeue(out txn))
-                    //while (tasks.Count < pipeSize && queue.TryDequeue(out txn) && numEmit < numTxn)
                     {
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, txn);
@@ -217,7 +212,7 @@ namespace NewProcess
                     }
                     if (noException)
                     {
-                        if (task.Result.isDet)   // for det + eventual + orleans txn
+                        if (task.Result.isDet)   // for det
                         {
                             numDetTransaction++;
                             if (!task.Result.exception)
@@ -226,7 +221,7 @@ namespace NewProcess
                                 det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
                             }
                         }
-                        else    // for non-det 
+                        else    // for non-det + eventual + orleans txn
                         {
                             numNonDetTransaction++;
                             if (!task.Result.exception)
@@ -259,12 +254,10 @@ namespace NewProcess
 
         private static async void Initialize()
         {
-            skewness = 0.01;
-            hotRatio = 0.75;
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = 1 * siloCPU / 4;
-            numNonDetConsumer = 1 * siloCPU / 4;
+            numDetConsumer = 2;
+            numNonDetConsumer = 2;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 
@@ -307,30 +300,21 @@ namespace NewProcess
         }
 
         static Random C_rnd = new Random();
+        static IDiscreteDistribution wh_dist;
         static IDiscreteDistribution district_dist_uni = new DiscreteUniform(0, Constants.NUM_D_PER_W - 1, new Random());
         static IDiscreteDistribution ol_cnt_dist_uni = new DiscreteUniform(5, 15, new Random());
         static IDiscreteDistribution rbk_dist_uni = new DiscreteUniform(1, 100, new Random());
         static IDiscreteDistribution local_dist_uni = new DiscreteUniform(1, 100, new Random());
         static IDiscreteDistribution quantity_dist_uni = new DiscreteUniform(1, 10, new Random());
 
-        static int error = 0;
         private static void GenerateNewOrder(int epoch)
         {
             Console.WriteLine($"Generate TPCC workload for epoch {epoch}");
             var num_txn = Constants.BASE_NUM_NEWORDER * siloCPU / 4;
+            if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) num_txn *= 3;
             for (int txn = 0; txn < num_txn; txn++)
             {
-                var num_hot_wh = (int)(skewness * config.numWarehouse);
-                var wh_dist_normal = new DiscreteUniform(num_hot_wh, config.numWarehouse - 1, new Random());
-                IDiscreteDistribution wh_dist_hot = wh_dist_normal;
-                if (num_hot_wh > 0) wh_dist_hot = new DiscreteUniform(0, num_hot_wh - 1, new Random());
-
-                // generate W_ID (75% possibility to be hot warehouse)
-                int W_ID;
-                var rnd = new Random();
-                if (rnd.Next(0, 100) < hotRatio * 100) W_ID = wh_dist_hot.Sample();
-                else W_ID = wh_dist_normal.Sample();
-
+                int W_ID = wh_dist.Sample();
                 var grains = new List<int>();
                 var D_ID = district_dist_uni.Sample();
                 grains.Add(W_ID * Constants.NUM_D_PER_W + D_ID);
@@ -343,11 +327,7 @@ namespace NewProcess
                 for (int i = 0; i < ol_cnt; i++)
                 {
                     int I_ID;
-                    if (i == ol_cnt - 1 && rbk == 1)
-                    {
-                        I_ID = -1;   // generate 1% of error
-                        error++;
-                    } 
+                    if (i == ol_cnt - 1 && rbk == 1) I_ID = -1;
                     else
                     {
                         do I_ID = Helper.NURand(8191, 1, Constants.NUM_I, C_I_ID) - 1;
@@ -358,7 +338,7 @@ namespace NewProcess
                     if (local) supply_wh = W_ID;    // supply by home warehouse
                     else                            // supply by remote warehouse
                     {
-                        do supply_wh = wh_dist_hot.Sample();   // select from a hot warehouse as remote supplier
+                        do supply_wh = wh_dist.Sample();   // select from a hot warehouse as remote supplier
                         while (supply_wh == W_ID);
                     }
                     var quantity = quantity_dist_uni.Sample();
@@ -379,13 +359,7 @@ namespace NewProcess
             {
                 case Distribution.UNIFORM:
                     Console.WriteLine($"Generate UNIFORM data for TPCC");
-                    skewness = 0;
-                    for (int epoch = 0; epoch < config.numEpochs; epoch++) GenerateNewOrder(epoch);
-                    var total_num_txn = config.numEpochs * Constants.BASE_NUM_NEWORDER * siloCPU / 4;
-                    Console.WriteLine($"num_txn = {total_num_txn}, error = {error}, ratio = {error * 100.0 / (double)total_num_txn}%");
-                    break;
-                case Distribution.HOTRECORD:
-                    Console.WriteLine($"Generate HOTRECORD data for TPCC, skewness = {skewness}, hotRatio = {hotRatio}");
+                    wh_dist = new DiscreteUniform(0, config.numWarehouse - 1, new Random());
                     for (int epoch = 0; epoch < config.numEpochs; epoch++) GenerateNewOrder(epoch);
                     break;
                 default:
@@ -393,10 +367,40 @@ namespace NewProcess
             }
         }
 
+        private static void InitializeGetBalanceWorkload()
+        {
+            var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * 4 * siloCPU / 4;
+            if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
+            var numGrain = config.numAccounts / config.numAccountsPerGroup;
+            switch (config.distribution)
+            {
+                case Distribution.UNIFORM:
+                    var dist = new DiscreteUniform(0, numGrain - 1, new Random());
+                    for (int epoch = 0; epoch < config.numEpochs; epoch++)
+                    {
+                        for (int txn = 0; txn < numTxnPerEpoch; txn++)
+                        {
+                            var grainsPerTxn = new List<int>();
+                            grainsPerTxn.Add(dist.Sample());
+                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
+                        }
+                    }
+                    break;
+                default:
+                    throw new Exception("Exception: NewProcess only support Uniform for GetBalance. ");
+            }
+        }
+
         private static void InitializeSmallBankWorkload()
         {
+            if (config.mixture[0] == 100)
+            {
+                InitializeGetBalanceWorkload();
+                return;
+            }
             if (config.mixture.Sum() > 0) throw new Exception("Exception: NewProcess only support MultiTransfer for SmallBankBenchmark");
             var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * siloCPU / 4;
+            if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
             var numGrain = config.numAccounts / config.numAccountsPerGroup;
             var numGrainPerTxn = config.numGrainsMultiTransfer;
             switch (config.distribution)
@@ -420,16 +424,14 @@ namespace NewProcess
                     }
                     break;
                 case Distribution.HOTRECORD:
-                    int numHotGrain = (int)(skewness * numGrain);
-                    //int numHotGrain = siloCPU;
-                    if (numHotGrain == 0) hotRatio = 0;
-                    var numHotGrainPerTxn = hotRatio * numGrainPerTxn;
+                    int numHotGrain = (int)(Constants.skewness * numGrain);
+                    var numHotGrainPerTxn = Constants.hotRatio * numGrainPerTxn;
                     Console.WriteLine($"Generate data for HOTRECORD, {numHotGrain} hot grains, {numHotGrainPerTxn} hot grain per txn...");
+                    var normal_dist = new DiscreteUniform(numHotGrain, numGrain - 1, new Random());
+                    DiscreteUniform hot_dist = null;
+                    if (numHotGrain > 0) hot_dist = new DiscreteUniform(0, numHotGrain - 1, new Random());
                     for (int epoch = 0; epoch < config.numEpochs; epoch++)
                     {
-                        var normal_dist = new DiscreteUniform(numHotGrain, numGrain - 1, new Random());
-                        DiscreteUniform hot_dist = null;
-                        if (numHotGrain > 0) hot_dist = new DiscreteUniform(0, numHotGrain - 1, new Random());
                         for (int txn = 0; txn < numTxnPerEpoch; txn++)
                         {
                             var grainsPerTxn = new List<int>();

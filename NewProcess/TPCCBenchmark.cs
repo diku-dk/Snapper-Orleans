@@ -1,6 +1,6 @@
-﻿using Orleans;
+﻿using System;
+using Orleans;
 using Utilities;
-using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,13 +28,10 @@ namespace NewProcess
                     if (isDet) return grain.StartTransaction(grainAccessInfo, functionName, input);
                     else return grain.StartTransaction(functionName, input);
                 case ImplementationType.ORLEANSEVENTUAL:
-                    var eventuallyConsistentGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(grainId);
+                    var eventuallyConsistentGrain = client.GetGrain<IOrleansEventuallyConsistentWarehouseGrain>(grainId);
                     return eventuallyConsistentGrain.StartTransaction(functionName, input);
-                case ImplementationType.ORLEANSTXN:
-                    var txnGrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(grainId);
-                    return txnGrain.StartTransaction(functionName, input);
                 default:
-                    return null;
+                    throw new Exception("Exception: TPCC does not support orleans txn");
             }
         }
 

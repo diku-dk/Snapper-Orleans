@@ -1,18 +1,16 @@
 ﻿using System;
 using Orleans;
 using Utilities;
-using SmallBank.Interfaces;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using MathNet.Numerics.Distributions;
-using System.Linq;
+using SmallBank.Interfaces;
 
 namespace ExperimentProcess
 {
     public class SmallBankBenchmark : IBenchmark
     {
-        double skewness = 0.01;
-        double hotRatio = 0.75;
         WorkloadConfiguration config;
         IDiscreteDistribution hot_dist;
         IDiscreteDistribution normal_dist;
@@ -29,7 +27,7 @@ namespace ExperimentProcess
                     normal_dist = new DiscreteUniform(0, numGrain - 1, new Random());
                     break;
                 case Distribution.HOTRECORD:
-                    var num_hot_grain = (int)(skewness * numGrain);
+                    var num_hot_grain = (int)(Constants.skewness * numGrain);
                     hot_dist = new DiscreteUniform(0, num_hot_grain - 1, new Random());
                     normal_dist = new DiscreteUniform(num_hot_grain, numGrain - 1, new Random());
                     break;
@@ -40,8 +38,17 @@ namespace ExperimentProcess
 
         private Task<TransactionResult> Execute(IClusterClient client, int grainId, string functionName, FunctionInput input, Dictionary<int, int> grainAccessInfo)
         {
-            var eventuallyConsistentGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(grainId);
-            return eventuallyConsistentGrain.StartTransaction(functionName, input);
+            if (config.grainImplementationType == ImplementationType.SNAPPER)
+            {
+                var grain = client.GetGrain<ICustomerAccountGroupGrain>(grainId);
+                return grain.StartTransaction(functionName, input);
+            }
+            else if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL)
+            {
+                var eventuallyConsistentGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(grainId);
+                return eventuallyConsistentGrain.StartTransaction(functionName, input);
+            }
+            else throw new Exception("Exception: SmallBank does not support orleans txn");
         }
 
         private int getAccountForGrain(int grainId)
@@ -49,11 +56,12 @@ namespace ExperimentProcess
             return grainId * config.numAccountsPerGroup;
         }
 
-        public Task<TransactionResult> newTransaction(IClusterClient client)
+        public Task<TransactionResult> newTransaction(IClusterClient client, int tid)
         {
             if (config.mixture.Sum() > 0) throw new Exception("Exception: ExperimentProcess only support MultiTransfer for SmallBankBenchmark");
             var numGrainPerTxn = config.numGrainsMultiTransfer;
-            var numHotGrainPerTxn = config.distribution == Distribution.UNIFORM ? 0 : hotRatio * numGrainPerTxn;
+            var numHotGrainPerTxn = Constants.hotRatio * numGrainPerTxn;
+            if (config.distribution == Distribution.UNIFORM) numHotGrainPerTxn = 0;
             var accountGrains = new List<int>();
             for (int normal = 0; normal < numGrainPerTxn - numHotGrainPerTxn; normal++)
             {

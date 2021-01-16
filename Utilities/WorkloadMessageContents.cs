@@ -9,6 +9,9 @@ namespace Utilities
    
     public class Constants
     {
+        public const double skewness = 0.01;
+        public const double hotRatio = 0.75;
+
         public const int BASE_NUM_MULTITRANSFER = 150000;
         public const int BASE_NUM_NEWORDER = 50000;
 

@@ -311,8 +311,17 @@ namespace ExperimentController
                 switch (workload.grainImplementationType)
                 {
                     case ImplementationType.ORLEANSEVENTUAL:
-                        var etxnGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(i);
-                        tasks.Add(etxnGrain.StartTransaction("Init", input));
+                        if (workload.benchmark == BenchmarkType.SMALLBANK)
+                        {
+                            var etxnGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(i);
+                            tasks.Add(etxnGrain.StartTransaction("Init", input));
+                        }
+                        else if (workload.benchmark == BenchmarkType.TPCC)
+                        {
+                            var etxnGrain = client.GetGrain<IOrleansEventuallyConsistentWarehouseGrain>(i);
+                            tasks.Add(etxnGrain.StartTransaction("Init", input));
+                        }
+                        else throw new Exception("Exception: Unknown benchmark.");
                         break;
                     case ImplementationType.ORLEANSTXN:
                         var orltxnGrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(i);
