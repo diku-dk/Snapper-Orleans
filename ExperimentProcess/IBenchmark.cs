@@ -6,7 +6,7 @@ namespace ExperimentProcess
 {
     public interface IBenchmark
     {
-        void generateBenchmark(WorkloadConfiguration workloadConfig);
-        Task<TransactionResult> newTransaction(IClusterClient client, int tid);
+        void generateBenchmark(WorkloadConfiguration workloadConfig, int tid);
+        Task<TransactionResult> newTransaction(IClusterClient client);
     }
 }

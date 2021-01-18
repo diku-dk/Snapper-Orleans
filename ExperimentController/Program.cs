@@ -381,7 +381,7 @@ namespace ExperimentController
             workload.zipfianConstant = float.Parse(args[0]);
             workload.deterministicTxnPercent = float.Parse(args[1]);
             vCPU = int.Parse(args[2]);
-            workload.numWorkerNodes = vCPU / 4;  // !!!!!!!!!
+            //workload.numWorkerNodes = vCPU / 4;  // !!!!!!!!!
             workload.numAccounts = 5000 * vCPU;
             coordConfig.numCoordinators = vCPU * 2;
             numCoordinators = coordConfig.numCoordinators;

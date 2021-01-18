@@ -37,6 +37,7 @@ namespace NewProcess
 
         public Task<TransactionResult> newTransaction(IClusterClient client, RequestData data)
         {
+            //Console.WriteLine($"Access {data.grains.Count} grains");
             var grainAccessInfo = new Dictionary<int, int>();
             foreach (var grain in data.grains) grainAccessInfo.Add(grain, 1);
             var input = new FunctionInput(data.tpcc_input);

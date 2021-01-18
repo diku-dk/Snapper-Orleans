@@ -60,7 +60,7 @@ namespace ExperimentProcess
                     while (tasks.Count < pipeSize)
                     {
                         var asyncReqStartTime = globalWatch.Elapsed;
-                        var newTask = benchmark.newTransaction(client, threadIndex);
+                        var newTask = benchmark.newTransaction(client);
                         numEmit++;
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);
@@ -169,7 +169,7 @@ namespace ExperimentProcess
             if (config.deterministicTxnPercent == 100) isDet = true;
             else if (config.deterministicTxnPercent == 0) isDet = false;
             else throw new Exception($"Exception: ExperimentProcess does not support hybrid");
-            numWorkerThread = siloCPU / 2;
+            numWorkerThread = siloCPU / 4;
             switch (config.benchmark)
             {
                 case BenchmarkType.SMALLBANK:
@@ -184,7 +184,7 @@ namespace ExperimentProcess
                     throw new Exception("Exception: NewProcess only support SmallBank and TPCC benchmarks");
             }
             results = new WorkloadResults[numWorkerThread];
-            for (int i = 0; i < numWorkerThread; i++) benchmarks[i].generateBenchmark(config);
+            for (int i = 0; i < numWorkerThread; i++) benchmarks[i].generateBenchmark(config, i);
 
             barriers = new Barrier[config.numEpochs];
             threadAcks = new CountdownEvent[config.numEpochs];

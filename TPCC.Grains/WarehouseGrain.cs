@@ -27,10 +27,12 @@ namespace TPCC.Grains
             {
                 var myState = await state.ReadWrite(context);
                 InMemoryDataGenerator.GenerateData(input.Item1, input.Item2, myState);
+                //InMemoryDataGenerator.GenerateSimpleData(input.Item1, input.Item2, myState);
                 //Console.WriteLine($"Init W {input.Item1}, D {input.Item2}, w.stock.count = {myState.stock_table.Count}");
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
                 ret.setException();
             }
             return ret;
@@ -52,7 +54,7 @@ namespace TPCC.Grains
                     if (!items.ContainsKey(item.Key))
                     {
                         if (context.isDeterministic) abort = true;
-                        else throw new Exception("Exception: invalid I_ID");
+                        else throw new Exception($"Exception: invalid I_ID {item.Key}");
                     }
                 }
 
@@ -63,9 +65,12 @@ namespace TPCC.Grains
                 foreach (var item in input.ItemsToBuy)    // <I_ID, <supply_warehouse, quantity>>
                 {
                     if (W_ID != item.Value.Item1) all_local = false;
-                    var dest = Helper.GetGrainID(item.Value.Item1, item.Key, false);
-                    if (!stockToUpdate.ContainsKey(dest)) stockToUpdate.Add(dest, new List<Tuple<int, int>>());
-                    if (!abort) stockToUpdate[dest].Add(new Tuple<int, int>(item.Key, item.Value.Item2));
+                    if (items.ContainsKey(item.Key))
+                    {
+                        var dest = Helper.GetGrainID(item.Value.Item1, item.Key, false);
+                        if (!stockToUpdate.ContainsKey(dest)) stockToUpdate.Add(dest, new List<Tuple<int, int>>());
+                        stockToUpdate[dest].Add(new Tuple<int, int>(item.Key, item.Value.Item2));
+                    }
                 }
 
                 // STEP 2: update stock
@@ -138,6 +143,7 @@ namespace TPCC.Grains
             }
             catch (Exception e)
             {
+                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
                 if (!e.Message.Contains("I_ID")) ret.setException();
             }
             return ret;
@@ -145,6 +151,7 @@ namespace TPCC.Grains
 
         public async Task<FunctionResult> StockUpdate(FunctionInput fin)
         {
+            var remoteFlag = 0;
             var context = fin.context;
             var ret = new FunctionResult();
             var input = (StockUpdateInput)fin.inputObject;
@@ -155,7 +162,7 @@ namespace TPCC.Grains
                 var myState = await state.ReadWrite(context);
                 var W_ID = myState.warehouse_info.W_ID;
                 var D_ID = myState.district_info.D_ID;
-                var remoteFlag = W_ID == input.W_ID ? 0 : 1;
+                remoteFlag = W_ID == input.W_ID ? 0 : 1;
                 foreach (var item in input.itemsToBuy)   // <I_ID, quantity>
                 {
                     var I_ID = item.Item1;
@@ -175,8 +182,9 @@ namespace TPCC.Grains
                 }
                 ret.setResult(new StockUpdateResult(result));
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                //Console.WriteLine($"Exception: remote = {remoteFlag == 1}, {e.Message}, {e.StackTrace}");
                 ret.setException();
             }
             return ret;

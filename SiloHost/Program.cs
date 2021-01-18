@@ -72,9 +72,9 @@ namespace OrleansSiloHost
                     options.CollectionAge = TimeSpan.FromMinutes(1000);
                 })
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback);
-                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+            //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
-            if (enableOrleansTxn) 
+            if (enableOrleansTxn)
                 builder
                     .AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; })
                     .UseTransactions();
@@ -114,7 +114,7 @@ namespace OrleansSiloHost
                 .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .ConfigureServices(ConfigureServices);
-                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+            //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
             if (enableOrleansTxn)
             {
@@ -135,7 +135,7 @@ namespace OrleansSiloHost
             if (Constants.enableAzureClustering) builder.UseAzureStorageClustering(azureOptions);
             else builder.UseDynamoDBClustering(dynamoDBOptions);
 
-            var host = builder.Build();            
+            var host = builder.Build();
             await host.StartAsync();
             return host;
         }

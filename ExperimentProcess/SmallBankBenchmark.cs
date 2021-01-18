@@ -16,7 +16,7 @@ namespace ExperimentProcess
         IDiscreteDistribution normal_dist;
         IDiscreteDistribution transferAmountDistribution;
 
-        public void generateBenchmark(WorkloadConfiguration workloadConfig)
+        public void generateBenchmark(WorkloadConfiguration workloadConfig, int tid)
         {
             config = workloadConfig;
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
@@ -56,7 +56,7 @@ namespace ExperimentProcess
             return grainId * config.numAccountsPerGroup;
         }
 
-        public Task<TransactionResult> newTransaction(IClusterClient client, int tid)
+        public Task<TransactionResult> newTransaction(IClusterClient client)
         {
             if (config.mixture.Sum() > 0) throw new Exception("Exception: ExperimentProcess only support MultiTransfer for SmallBankBenchmark");
             var numGrainPerTxn = config.numGrainsMultiTransfer;
