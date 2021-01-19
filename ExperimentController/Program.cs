@@ -81,9 +81,20 @@ namespace ExperimentController
             workload.numGrainsMultiTransfer = int.Parse(benchmarkConfigSection["numGrainsMultiTransfer"]);
             workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfigSection["grainImplementationType"]);
 
-            if (workload.benchmark == BenchmarkType.SMALLBANK)
-                exeConfig = new ExecutionGrainConfiguration("SmallBank.Grains.CustomerAccountGroupGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
-            else exeConfig = new ExecutionGrainConfiguration("TPCC.Grains.WarehouseGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
+            switch (workload.benchmark)
+            {
+                case BenchmarkType.SMALLBANK:
+                    exeConfig = new ExecutionGrainConfiguration("SmallBank.Grains.CustomerAccountGroupGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
+                    break;
+                case BenchmarkType.TPCC:
+                    exeConfig = new ExecutionGrainConfiguration("TPCC.Grains.WarehouseGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
+                    break;
+                case BenchmarkType.BIGTPCC:
+                    exeConfig = new ExecutionGrainConfiguration("TPCC.Grains.BigWarehouseGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
+                    break;
+                default:
+                    throw new Exception($"Exception: Unknown benchmark {workload.benchmark}");
+            }
             coordConfig = new CoordinatorGrainConfiguration(batchInterval, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
             Console.WriteLine("Generated workload configuration");
         }
