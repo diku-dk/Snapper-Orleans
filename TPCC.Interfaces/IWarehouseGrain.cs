@@ -8,15 +8,24 @@ namespace TPCC.Interfaces
 {
     public enum AllTxnTypes {NewOrder, StockUpdate, Init};
 
-[Serializable]
+    [Serializable]
     public class NewOrderInput
     {
+        public int D_ID;   // only for Big TPCC
+        
         public int C_ID;
         public DateTime O_ENTRY_D;
         public Dictionary<int, Tuple<int, int>> ItemsToBuy;  // <I_ID, <supply_warehouse, quantity>>
 
         public NewOrderInput(int C_ID, DateTime O_ENTRY_D, Dictionary<int, Tuple<int, int>> ItemsToBuy)
         {
+            this.C_ID = C_ID;
+            this.ItemsToBuy = ItemsToBuy;
+        }
+
+        public NewOrderInput(int D_ID, int C_ID, DateTime O_ENTRY_D, Dictionary<int, Tuple<int, int>> ItemsToBuy)
+        {
+            this.D_ID = D_ID;
             this.C_ID = C_ID;
             this.ItemsToBuy = ItemsToBuy;
         }
@@ -47,6 +56,13 @@ namespace TPCC.Interfaces
     }
 
     public interface IWarehouseGrain : ITransactionExecutionGrain
+    {
+        Task<FunctionResult> Init(FunctionInput functionInput);
+        Task<FunctionResult> NewOrder(FunctionInput functionInput);
+        Task<FunctionResult> StockUpdate(FunctionInput functionInput);
+    }
+
+    public interface IBigWarehouseGrain : ITransactionExecutionGrain
     {
         Task<FunctionResult> Init(FunctionInput functionInput);
         Task<FunctionResult> NewOrder(FunctionInput functionInput);

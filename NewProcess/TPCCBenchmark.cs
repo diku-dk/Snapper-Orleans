@@ -24,9 +24,19 @@ namespace NewProcess
             switch (config.grainImplementationType)
             {
                 case ImplementationType.SNAPPER:
-                    var grain = client.GetGrain<IWarehouseGrain>(grainId);
-                    if (isDet) return grain.StartTransaction(grainAccessInfo, functionName, input);
-                    else return grain.StartTransaction(functionName, input);
+                    switch (config.benchmark)
+                    {
+                        case BenchmarkType.TPCC:
+                            var grain = client.GetGrain<IWarehouseGrain>(grainId);
+                            if (isDet) return grain.StartTransaction(grainAccessInfo, functionName, input);
+                            else return grain.StartTransaction(functionName, input);
+                        case BenchmarkType.BIGTPCC:
+                            var biggrain = client.GetGrain<IBigWarehouseGrain>(grainId);
+                            if (isDet) return biggrain.StartTransaction(grainAccessInfo, functionName, input);
+                            else return biggrain.StartTransaction(functionName, input);
+                        default:
+                            throw new Exception($"Exception: Unknown benchmark {config.benchmark}");
+                    }
                 case ImplementationType.ORLEANSEVENTUAL:
                     var eventuallyConsistentGrain = client.GetGrain<IOrleansEventuallyConsistentWarehouseGrain>(grainId);
                     return eventuallyConsistentGrain.StartTransaction(functionName, input);

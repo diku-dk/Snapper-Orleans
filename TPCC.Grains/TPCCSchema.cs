@@ -279,4 +279,48 @@ namespace TPCC.Grains
             return new WarehouseData(this);
         }
     }
+
+    [Serializable]
+    public class BigWarehouseData : ICloneable
+    {
+        public Warehouse warehouse_info;
+        public Dictionary<int, District> district_table;                // key: D_ID
+        public Dictionary<int, Customer> customer_table;                // key: C_ID
+        public List<History> history;
+        public List<NewOrder> neworder;
+        public Dictionary<int, Order> order_table;                      // key: O_ID
+        public Dictionary<Tuple<int, int>, OrderLine> orderline_table;  // key: <O_ID, NUMBER>
+        public Dictionary<int, Item> item_table;                        // key: I_ID
+        public Dictionary<int, Stock> stock_table;                      // key: I_ID
+
+        public BigWarehouseData()
+        {
+            district_table = new Dictionary<int, District>();
+            customer_table = new Dictionary<int, Customer>();
+            history = new List<History>();
+            neworder = new List<NewOrder>();
+            order_table = new Dictionary<int, Order>();
+            orderline_table = new Dictionary<Tuple<int, int>, OrderLine>();
+            item_table = new Dictionary<int, Item>();
+            stock_table = new Dictionary<int, Stock>();
+        }
+
+        public BigWarehouseData(BigWarehouseData warehouse)
+        {
+            warehouse_info = warehouse.warehouse_info;
+            district_table = warehouse.district_table;
+            customer_table = warehouse.customer_table;
+            history = warehouse.history;
+            neworder = warehouse.neworder;
+            order_table = warehouse.order_table;
+            orderline_table = warehouse.orderline_table;
+            item_table = warehouse.item_table;
+            stock_table = warehouse.stock_table;
+        }
+
+        object ICloneable.Clone()
+        {
+            return new BigWarehouseData(this);
+        }
+    }
 }

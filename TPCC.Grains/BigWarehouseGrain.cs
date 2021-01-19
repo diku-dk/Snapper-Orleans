@@ -6,13 +6,13 @@ using Orleans.CodeGeneration;
 using System.Collections.Generic;
 using Concurrency.Implementation;
 
-[assembly: GenerateSerializer(typeof(TPCC.Grains.WarehouseData))]
+[assembly: GenerateSerializer(typeof(TPCC.Grains.BigWarehouseData))]
 
 namespace TPCC.Grains
 {
-    public class WarehouseGrain : TransactionExecutionGrain<WarehouseData>, IWarehouseGrain
+    public class BigWarehouseGrain : TransactionExecutionGrain<BigWarehouseData>, IBigWarehouseGrain
     {
-        public WarehouseGrain() : base("TPCC.Grains.WarehouseGrain")
+        public BigWarehouseGrain() : base("TPCC.Grains.WarehouseGrain")
         {
         }
 
@@ -22,17 +22,14 @@ namespace TPCC.Grains
         {
             var context = fin.context;
             var ret = new FunctionResult();
-            var input = (Tuple<int, int>)fin.inputObject;
+            var input = (int)fin.inputObject;   // W_ID
             try
             {
                 var myState = await state.ReadWrite(context);
-                InMemoryDataGenerator.GenerateData(input.Item1, input.Item2, myState);
-                //InMemoryDataGenerator.GenerateSimpleData(input.Item1, input.Item2, myState);
-                //Console.WriteLine($"Init W {input.Item1}, D {input.Item2}, w.stock.count = {myState.stock_table.Count}");
+                InMemoryDataGenerator.GenerateBigData(input, myState);
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
                 ret.setException();
             }
             return ret;
@@ -67,7 +64,7 @@ namespace TPCC.Grains
                     if (W_ID != item.Value.Item1) all_local = false;
                     if (items.ContainsKey(item.Key))
                     {
-                        var dest = Helper.GetGrainID(item.Value.Item1, item.Key, false);
+                        var dest = item.Value.Item1;
                         if (!stockToUpdate.ContainsKey(dest)) stockToUpdate.Add(dest, new List<Tuple<int, int>>());
                         if(!abort) stockToUpdate[dest].Add(new Tuple<int, int>(item.Key, item.Value.Item2));
                     }
@@ -75,16 +72,15 @@ namespace TPCC.Grains
 
                 // STEP 2: update stock
                 var tasks = new List<Task<FunctionResult>>();
-                var D_ID = myState.district_info.D_ID;
-                var myID = Helper.GetGrainID(W_ID, D_ID, true);
+                var D_ID = input.D_ID;
                 foreach (var grain in stockToUpdate)
                 {
                     var func_input = new FunctionInput(fin, new StockUpdateInput(W_ID, D_ID, grain.Value));
-                    if (grain.Key == myID) tasks.Add(StockUpdate(func_input));
+                    if (grain.Key == W_ID) tasks.Add(StockUpdate(func_input));
                     else
                     {
-                        var fc = new FunctionCall(typeof(WarehouseGrain), "StockUpdate", func_input);
-                        var dest = GrainFactory.GetGrain<IWarehouseGrain>(grain.Key);
+                        var fc = new FunctionCall(typeof(BigWarehouseGrain), "StockUpdate", func_input);
+                        var dest = GrainFactory.GetGrain<IBigWarehouseGrain>(grain.Key);
                         tasks.Add(dest.Execute(fc));
                     }
                 }
@@ -105,7 +101,7 @@ namespace TPCC.Grains
 
                     if (!hasExp)
                     {
-                        myState.district_info.D_NEXT_O_ID++;
+                        myState.district_table[D_ID].D_NEXT_O_ID++;
                         var O_ID = order_local_count++;
                         var neworder = new NewOrder(O_ID);
                         var order = new Order(O_ID, input.C_ID, input.O_ENTRY_D, null, input.ItemsToBuy.Count, all_local);
@@ -135,7 +131,7 @@ namespace TPCC.Grains
                         }
                         var C_DISCOUNT = myState.customer_table[input.C_ID].C_DISCOUNT;
                         var W_TAX = myState.warehouse_info.W_TAX;
-                        var D_TAX = myState.district_info.D_TAX;
+                        var D_TAX = myState.district_table[D_ID].D_TAX;
                         total_amount *= (1 - C_DISCOUNT) * (1 + W_TAX + D_TAX);
                         ret.setResult(total_amount);
                     }
@@ -143,7 +139,6 @@ namespace TPCC.Grains
             }
             catch (Exception e)
             {
-                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
                 if (!e.Message.Contains("I_ID")) ret.setException();
             }
             return ret;
@@ -151,7 +146,7 @@ namespace TPCC.Grains
 
         public async Task<FunctionResult> StockUpdate(FunctionInput fin)
         {
-            var remoteFlag = 0;
+            int remoteFlag;
             var context = fin.context;
             var ret = new FunctionResult();
             var input = (StockUpdateInput)fin.inputObject;
@@ -161,7 +156,7 @@ namespace TPCC.Grains
                 if (input.itemsToBuy.Count == 0) throw new Exception("Exception: empty item set");
                 var myState = await state.ReadWrite(context);
                 var W_ID = myState.warehouse_info.W_ID;
-                var D_ID = myState.district_info.D_ID;
+                var D_ID = input.D_ID;
                 remoteFlag = W_ID == input.W_ID ? 0 : 1;
                 foreach (var item in input.itemsToBuy)   // <I_ID, quantity>
                 {
@@ -182,9 +177,8 @@ namespace TPCC.Grains
                 }
                 ret.setResult(new StockUpdateResult(result));
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                //Console.WriteLine($"Exception: remote = {remoteFlag == 1}, {e.Message}, {e.StackTrace}");
                 ret.setException();
             }
             return ret;

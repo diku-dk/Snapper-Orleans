@@ -205,7 +205,7 @@ namespace TPCC.DataGenerator
                     var grainID = Helper.GetGrainID(supply_wh, I_ID, false);
                     if (!grains.Contains(grainID)) grains.Add(grainID);
                 }
-                var req = new RequestData(W_ID, D_ID, C_ID, DateTime.Now, itemsToBuy);
+                var req = new RequestData(D_ID, C_ID, DateTime.Now, itemsToBuy);
                 req.grains = grains;
                 reqs.Add(req);
             }

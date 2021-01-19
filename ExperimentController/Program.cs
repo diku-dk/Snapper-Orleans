@@ -290,9 +290,21 @@ namespace ExperimentController
         private static async void LoadGrains()
         {
             int numGrain;
-            if (workload.benchmark == BenchmarkType.SMALLBANK) numGrain = workload.numAccounts / workload.numAccountsPerGroup;
-            else if (workload.benchmark == BenchmarkType.TPCC) numGrain = workload.numWarehouse * Constants.NUM_D_PER_W;
-            else throw new Exception("Exception: Unknown benchmark. ");
+            switch (workload.benchmark)
+            {
+                case BenchmarkType.SMALLBANK:
+                    numGrain = workload.numAccounts / workload.numAccountsPerGroup;
+                    break;
+                case BenchmarkType.TPCC:
+                    numGrain = workload.numWarehouse * Constants.NUM_D_PER_W;
+                    break;
+                case BenchmarkType.BIGTPCC:
+                    numGrain = workload.numWarehouse;
+                    break;
+                default:
+                    throw new Exception($"Exception: Unknown benchmark. ");
+            }
+            
             Console.WriteLine($"Load grains, benchmark {workload.benchmark}, numGrains = {numGrain}");
             var tasks = new List<Task<TransactionResult>>();
             var sequence = false;   // If you want to load the grains in sequence instead of all concurrent
@@ -300,12 +312,21 @@ namespace ExperimentController
             for (int i = 0; i < numGrain; i++)
             {
                 FunctionInput input;
-                if (workload.benchmark == BenchmarkType.SMALLBANK)
+                switch (workload.benchmark)
                 {
-                    var args = new Tuple<int, int>(workload.numAccountsPerGroup, i);
-                    input = new FunctionInput(args);
+                    case BenchmarkType.SMALLBANK:
+                        var args = new Tuple<int, int>(workload.numAccountsPerGroup, i);
+                        input = new FunctionInput(args);
+                        break;
+                    case BenchmarkType.TPCC:
+                        input = new FunctionInput(new Tuple<int, int>(i / Constants.NUM_D_PER_W, i % Constants.NUM_D_PER_W));
+                        break;
+                    case BenchmarkType.BIGTPCC:
+                        input = new FunctionInput(i);
+                        break;
+                    default:
+                        throw new Exception($"Exception: Unknown benchmark. ");
                 }
-                else input = new FunctionInput(new Tuple<int, int>(i / Constants.NUM_D_PER_W, i % Constants.NUM_D_PER_W));
 
                 switch (workload.grainImplementationType)
                 {
@@ -335,6 +356,11 @@ namespace ExperimentController
                         else if (workload.benchmark == BenchmarkType.TPCC)
                         {
                             var sntxnGrain = client.GetGrain<IWarehouseGrain>(i);
+                            tasks.Add(sntxnGrain.StartTransaction("Init", input));
+                        }
+                        else if (workload.benchmark == BenchmarkType.BIGTPCC)
+                        {
+                            var sntxnGrain = client.GetGrain<IBigWarehouseGrain>(i);
                             tasks.Add(sntxnGrain.StartTransaction("Init", input));
                         }
                         else throw new Exception("Exception: Unknown benchmark.");

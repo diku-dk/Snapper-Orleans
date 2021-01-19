@@ -13,7 +13,7 @@ namespace Concurrency.Implementation
     [GrainPlacementStrategy]
     public abstract class TransactionExecutionGrain<TState> : Grain, ITransactionExecutionGrain where TState : ICloneable, new()
     {
-        public int myID;
+        private int myID;
         private int coordID;
         public int numCoord;
         protected string grainClassName;

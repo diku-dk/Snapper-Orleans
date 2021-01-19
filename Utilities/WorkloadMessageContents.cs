@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Utilities
 {
-    public enum BenchmarkType {SMALLBANK, TPCC};
+    public enum BenchmarkType {SMALLBANK, TPCC, BIGTPCC};
     public enum Distribution { ZIPFIAN, UNIFORM, HOTRECORD }
     public enum ImplementationType { SNAPPER, ORLEANSEVENTUAL, ORLEANSTXN };
    
