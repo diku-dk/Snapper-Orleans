@@ -27,7 +27,7 @@ namespace ExperimentConductor
         {
             client = new AmazonDynamoDBClient(DYNAMODB_ACCESS_KEY_ID, DYNAMODB_ACCESS_KEY_VALUE, Amazon.RegionEndpoint.USWest2);
             Console.WriteLine("Initialized dynamodb client");
-            
+
 
         }
 

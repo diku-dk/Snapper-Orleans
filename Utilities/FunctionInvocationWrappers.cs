@@ -60,7 +60,7 @@ namespace Utilities
         public bool isBeforeAfterConsecutive;
         public int grainWithHighestBeforeBid;
         public HashSet<int> grainsInNestedFunctions;
-        
+
         public FunctionResult(object resultObject = null)
         {
             exception = false;
@@ -144,7 +144,7 @@ namespace Utilities
         public FunctionInput funcInput;
         public Type type;
         public string func;
-        
+
         public FunctionCall(Type t, string func, FunctionInput funcInput)
         {
             type = t;

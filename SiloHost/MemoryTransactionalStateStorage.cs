@@ -98,70 +98,114 @@ namespace OrleansSiloHost
         {
             return new TransactionalStorageLoadResponse<TState>(ETag, new TState(), 0, Metadata, new List<PendingTransactionState<TState>>());
             /*
-            //var start = DateTime.Now;
-            if (string.IsNullOrEmpty(ETag)) return new TransactionalStorageLoadResponse<TState>();
-            TState committedState;
-            if (CommittedSequenceId == 0) committedState = new TState();
-            else
+            try
             {
-                if (!FindState(CommittedSequenceId, out var pos))
+                var keyTask = ReadKey();
+                var statesTask = ReadStates();
+                key = await keyTask.ConfigureAwait(false);
+                states = await statesTask.ConfigureAwait(false);
+
+                if (string.IsNullOrEmpty(key.ETag))
                 {
-                    var error = $"Storage state corrupted: no record for committed state v{CommittedSequenceId}";
-                    throw new InvalidOperationException(error);
+                    if (logger.IsEnabled(LogLevel.Debug))
+                        logger.LogDebug($"{partition} Loaded v0, fresh");
+
+                    // first time load
+                    return new TransactionalStorageLoadResponse<TState>();
                 }
-                committedState = serializer.deserialize<TState>(states[pos].Value.state);
-            }
-            var PrepareRecordsToRecover = new List<PendingTransactionState<TState>>();
-            for (int i = 0; i < states.Count; i++)
-            {
-                var kvp = states[i];
-
-                // pending states for already committed transactions can be ignored
-                if (kvp.Key <= CommittedSequenceId) continue;
-
-                // upon recovery, local non-committed transactions are considered aborted
-                if (kvp.Value.TransactionManager == null) break;
-
-                ParticipantId tm = serializer.deserialize<ParticipantId>(kvp.Value.TransactionManager);
-
-                PrepareRecordsToRecover.Add(new PendingTransactionState<TState>()
+                else
                 {
-                    SequenceId = kvp.Key,
-                    State = serializer.deserialize<TState>(kvp.Value.state),
-                    TimeStamp = kvp.Value.TransactionTimestamp,
-                    TransactionId = kvp.Value.TransactionId,
-                    TransactionManager = tm
-                });
+                    TState committedState;
+                    if (this.key.CommittedSequenceId == 0)
+                    {
+                        committedState = new TState();
+                    }
+                    else
+                    {
+                        if (!FindState(this.key.CommittedSequenceId, out var pos))
+                        {
+                            var error = $"Storage state corrupted: no record for committed state v{this.key.CommittedSequenceId}";
+                            logger.LogCritical($"{partition} {error}");
+                            throw new InvalidOperationException(error);
+                        }
+                        committedState = states[pos].Value.GetState<TState>(this.jsonSettings);
+                    }
 
+                    var PrepareRecordsToRecover = new List<PendingTransactionState<TState>>();
+                    for (int i = 0; i < states.Count; i++)
+                    {
+                        var kvp = states[i];
+
+                        // pending states for already committed transactions can be ignored
+                        if (kvp.Key <= key.CommittedSequenceId)
+                            continue;
+
+                        // upon recovery, local non-committed transactions are considered aborted
+                        if (kvp.Value.TransactionManager == null)
+                            break;
+
+                        ParticipantId tm = JsonConvert.DeserializeObject<ParticipantId>(kvp.Value.TransactionManager, this.jsonSettings);
+
+                        PrepareRecordsToRecover.Add(new PendingTransactionState<TState>()
+                        {
+                            SequenceId = kvp.Key,
+                            State = kvp.Value.GetState<TState>(this.jsonSettings),
+                            TimeStamp = kvp.Value.TransactionTimestamp,
+                            TransactionId = kvp.Value.TransactionId,
+                            TransactionManager = tm
+                        });
+                    }
+
+                    // clear the state strings... no longer needed, ok to GC now
+                    for (int i = 0; i < states.Count; i++)
+                    {
+                        states[i].Value.StateJson = null;
+                    }
+
+                    if (logger.IsEnabled(LogLevel.Debug))
+                        logger.LogDebug($"{partition} Loaded v{this.key.CommittedSequenceId} rows={string.Join(",", states.Select(s => s.Key.ToString("x16")))}");
+
+                    TransactionalStateMetaData metadata = JsonConvert.DeserializeObject<TransactionalStateMetaData>(this.key.Metadata, this.jsonSettings);
+                    return new TransactionalStorageLoadResponse<TState>(this.key.ETag, committedState, this.key.CommittedSequenceId, metadata, PrepareRecordsToRecover);
+                }
             }
-            // clear the state strings... no longer needed, ok to GC now
-            for (int i = 0; i < states.Count; i++) states[i].Value.state = null;
-            //var end = DateTime.Now;
-            //Console.WriteLine($"load: {(end - start).TotalMilliseconds}ms");
-            return new TransactionalStorageLoadResponse<TState>(ETag, committedState, CommittedSequenceId, Metadata, PrepareRecordsToRecover);
-        */
+            catch (Exception ex)
+            {
+                this.logger.LogError("Transactional state load failed {Exception}.", ex);
+                throw;
+            }
+            */
         }
 
         public async Task<string> Store(string expectedETag, TransactionalStateMetaData metadata, List<PendingTransactionState<TState>> statesToPrepare, long? commitUpTo, long? abortAfter)
         {
-            return ETag;
             /*
-            //var start = DateTime.Now;
-            if (ETag != expectedETag) throw new ArgumentException(nameof(expectedETag), "Etag does not match");
+            if (this.key.ETag != expectedETag)
+                throw new ArgumentException(nameof(expectedETag), "Etag does not match");
+
+            // assemble all storage operations into a single batch
+            // these operations must commit in sequence, but not necessarily atomically
+            // so we can split this up if needed
+            var batchOperation = new BatchOperation(logger, key, table);
 
             // first, clean up aborted records
             if (abortAfter.HasValue && states.Count != 0)
             {
                 while (states.Count > 0 && states[states.Count - 1].Key > abortAfter)
+                {
+                    var entity = states[states.Count - 1].Value;
+                    await batchOperation.Add(TableOperation.Delete(entity)).ConfigureAwait(false);
                     states.RemoveAt(states.Count - 1);
+
+                    if (logger.IsEnabled(LogLevel.Trace))
+                        logger.LogTrace($"{partition}.{entity.RowKey} Delete {entity.TransactionId}");
+                }
             }
 
             // second, persist non-obsolete prepare records
-            var obsoleteBefore = commitUpTo.HasValue ? commitUpTo.Value : CommittedSequenceId;
+            var obsoleteBefore = commitUpTo.HasValue ? commitUpTo.Value : key.CommittedSequenceId;
             if (statesToPrepare != null)
-            {
                 foreach (var s in statesToPrepare)
-                {
                     if (s.SequenceId >= obsoleteBefore)
                     {
                         if (FindState(s.SequenceId, out var pos))
@@ -170,31 +214,66 @@ namespace OrleansSiloHost
                             StateEntity existing = states[pos].Value;
                             existing.TransactionId = s.TransactionId;
                             existing.TransactionTimestamp = s.TimeStamp;
-                            existing.TransactionManager = serializer.serialize(s.TransactionManager);
-                            existing.state = serializer.serialize(s.State);
+                            existing.TransactionManager = JsonConvert.SerializeObject(s.TransactionManager, this.jsonSettings);
+                            existing.SetState(s.State, this.jsonSettings);
+                            await batchOperation.Add(TableOperation.Replace(existing)).ConfigureAwait(false);
+
+                            if (logger.IsEnabled(LogLevel.Trace))
+                                logger.LogTrace($"{partition}.{existing.RowKey} Update {existing.TransactionId}");
                         }
                         else
                         {
-                            var entity = new StateEntity();
+                            var entity = StateEntity.Create(this.jsonSettings, this.partition, s);
+                            await batchOperation.Add(TableOperation.Insert(entity)).ConfigureAwait(false);
                             states.Insert(pos, new KeyValuePair<long, StateEntity>(s.SequenceId, entity));
+
+                            if (logger.IsEnabled(LogLevel.Trace))
+                                logger.LogTrace($"{partition}.{entity.RowKey} Insert {entity.TransactionId}");
                         }
                     }
-                }
-            }
 
             // third, persist metadata and commit position
-            Metadata = metadata;
-            if (commitUpTo.HasValue && commitUpTo.Value > CommittedSequenceId) CommittedSequenceId = commitUpTo.Value;
+            key.Metadata = JsonConvert.SerializeObject(metadata, this.jsonSettings);
+            if (commitUpTo.HasValue && commitUpTo.Value > key.CommittedSequenceId)
+            {
+                key.CommittedSequenceId = commitUpTo.Value;
+            }
+            if (string.IsNullOrEmpty(this.key.ETag))
+            {
+                await batchOperation.Add(TableOperation.Insert(this.key)).ConfigureAwait(false);
+
+                if (logger.IsEnabled(LogLevel.Trace))
+                    logger.LogTrace($"{partition}.{KeyEntity.RK} Insert. v{this.key.CommittedSequenceId}, {metadata.CommitRecords.Count}c");
+            }
+            else
+            {
+                await batchOperation.Add(TableOperation.Replace(this.key)).ConfigureAwait(false);
+
+                if (logger.IsEnabled(LogLevel.Trace))
+                    logger.LogTrace($"{partition}.{KeyEntity.RK} Update. v{this.key.CommittedSequenceId}, {metadata.CommitRecords.Count}c");
+            }
 
             // fourth, remove obsolete records
             if (states.Count > 0 && states[0].Key < obsoleteBefore)
             {
                 FindState(obsoleteBefore, out var pos);
+                for (int i = 0; i < pos; i++)
+                {
+                    await batchOperation.Add(TableOperation.Delete(states[i].Value)).ConfigureAwait(false);
+
+                    if (logger.IsEnabled(LogLevel.Trace))
+                        logger.LogTrace($"{partition}.{states[i].Value.RowKey} Delete {states[i].Value.TransactionId}");
+                }
                 states.RemoveRange(0, pos);
             }
-            //var end = DateTime.Now;
-            //Console.WriteLine($"store: {(end - start).TotalMilliseconds}ms");
-            return ETag;*/
+
+            await batchOperation.Flush().ConfigureAwait(false);
+
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug($"{partition} Stored v{this.key.CommittedSequenceId} eTag={key.ETag}");
+            
+            return key.ETag;*/
+            return ETag;
         }
 
         private bool FindState(long sequenceId, out int pos)

@@ -4,6 +4,8 @@ using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Orleans.Transactions.Abstractions;
+using Orleans.Concurrency;
+using System.Diagnostics;
 
 namespace SmallBank.Grains
 {
@@ -17,6 +19,7 @@ namespace SmallBank.Grains
     using MultiTransferInput = Tuple<Tuple<string, int>, float, List<Tuple<string, int>>>;
     using InitAccountInput = Tuple<int, int>;
 
+    [Reentrant]
     class OrleansTransactionalAccountGroupGrain : Orleans.Grain, IOrleansTransactionalAccountGroupGrain
     {
         public int numAccountPerGroup = 1;
@@ -67,17 +70,26 @@ namespace SmallBank.Grains
             var ret = new TransactionResult();
             try
             {
-                var myState = await state.PerformRead(s => s);
+                var success = false;
                 var inputTuple = (DepositCheckingInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
-                if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
-                if (!myState.checkingAccount.ContainsKey(id))
+
+                await state.PerformUpdate(myState =>
+                {
+                    if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                    if (myState.checkingAccount.ContainsKey(id))
+                    {
+                        myState.checkingAccount[id] += inputTuple.Item2;
+                        success = true;
+                    }
+                });
+
+                if (!success)
                 {
                     ret.exception = true;
                     return ret;
                 }
-                await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] += inputTuple.Item2);               
             }
             catch (Exception)
             {
@@ -199,25 +211,38 @@ namespace SmallBank.Grains
             var ret = new TransactionResult();
             try
             {
-                var myState = await state.PerformRead(s => s);
+                var success = false;
+                var myGroupID = -1;
                 var inputTuple = (MultiTransferInput)fin.inputObject;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
-                if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
-                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item2 * inputTuple.Item3.Count)
+
+                await state.PerformUpdate(myState =>
+                {
+                    myGroupID = myState.GroupID;
+                    if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                    if (myState.checkingAccount.ContainsKey(id) && myState.checkingAccount[id] >= inputTuple.Item2 * inputTuple.Item3.Count)
+                    {
+                        myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                        success = true;
+                    }
+                });
+
+                if (!success)
                 {
                     ret.exception = true;
                     return ret;
                 }
                 else
                 {
+                    Debug.Assert(myGroupID >= 0);
                     var destinations = inputTuple.Item3;
                     var tasks = new List<Task<TransactionResult>>();
                     foreach (var tuple in destinations)
                     {
                         var gID = MapCustomerIdToGroup(tuple.Item2);
                         var funcInput = new FunctionInput(fin, new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2));
-                        if (gID == myState.GroupID)
+                        if (gID == myGroupID)
                         {
                             var localCall = DepositChecking(funcInput);
                             tasks.Add(localCall);
@@ -230,7 +255,6 @@ namespace SmallBank.Grains
                         }
                     }
                     await Task.WhenAll(tasks);
-                    await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count);
                 }
             }
             catch (Exception)

@@ -27,6 +27,7 @@ namespace TPCC.Grains
             {
                 var myState = await state.ReadWrite(context);
                 InMemoryDataGenerator.GenerateBigData(input, myState);
+
             }
             catch (Exception)
             {
@@ -66,7 +67,7 @@ namespace TPCC.Grains
                     {
                         var dest = item.Value.Item1;
                         if (!stockToUpdate.ContainsKey(dest)) stockToUpdate.Add(dest, new List<Tuple<int, int>>());
-                        if(!abort) stockToUpdate[dest].Add(new Tuple<int, int>(item.Key, item.Value.Item2));
+                        if (!abort) stockToUpdate[dest].Add(new Tuple<int, int>(item.Key, item.Value.Item2));
                     }
                 }
 

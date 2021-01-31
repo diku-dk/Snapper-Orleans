@@ -12,7 +12,7 @@ namespace Utilities
         public int highestBatchIdCommitted;
         public int transactionID { get; set; }
         public Dictionary<int, int> grainAccessInformation;  // <grainID, access this grian how many times>
-        
+
         public TransactionContext(int tid)
         {
             transactionID = tid;

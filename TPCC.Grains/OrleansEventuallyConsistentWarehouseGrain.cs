@@ -1,11 +1,13 @@
 ﻿using System;
 using Utilities;
 using TPCC.Interfaces;
+using Orleans.Concurrency;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
 namespace TPCC.Grains
 {
+    [Reentrant]
     class OrleansEventuallyConsistentWarehouseGrain : Orleans.Grain, IOrleansEventuallyConsistentWarehouseGrain
     {
         WarehouseData state = new WarehouseData();
@@ -154,7 +156,7 @@ namespace TPCC.Grains
             return ret;
         }
 
-    Task<TransactionResult> IOrleansEventuallyConsistentWarehouseGrain.StartTransaction(string startFunction, FunctionInput inputs)
+        Task<TransactionResult> IOrleansEventuallyConsistentWarehouseGrain.StartTransaction(string startFunction, FunctionInput inputs)
         {
             AllTxnTypes fnType;
             if (!Enum.TryParse(startFunction.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunction}");

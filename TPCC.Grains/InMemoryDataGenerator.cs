@@ -1,18 +1,19 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using Utilities;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace TPCC.Grains
 {
     public class InMemoryDataGenerator
     {
-        static Random random = new Random();
         const string numbers = "0123456789";
         const string alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
         public static void GenerateSimpleData(int W_ID, int D_ID, WarehouseData data)
         {
+            var random = new Random();
+
             // generate data for Warehouse table
             var W_NAME = "".PadRight(10, 'a');
             var W_STREET_1 = "".PadRight(20, 'a');
@@ -91,6 +92,8 @@ namespace TPCC.Grains
 
         public static void GenerateData(int W_ID, int D_ID, WarehouseData data)
         {
+            var random = new Random();
+
             // generate data for Warehouse table
             var W_NAME = RandomString(10, alphanumeric);
             var W_STREET_1 = RandomString(20, alphanumeric);
@@ -169,6 +172,8 @@ namespace TPCC.Grains
 
         public static void GenerateBigData(int W_ID, BigWarehouseData data)
         {
+            var random = new Random();
+
             // generate data for Warehouse table
             var W_NAME = RandomString(10, alphanumeric);
             var W_STREET_1 = RandomString(20, alphanumeric);
@@ -195,7 +200,7 @@ namespace TPCC.Grains
                 var D_NEXT_O_ID = random.Next(0, 10000000);
                 data.district_table.Add(D_ID, new District(D_ID, D_NAME, D_STREET_1, D_STREET_2, D_CITY, D_STATE, D_ZIP, D_TAX, D_YTD, D_NEXT_O_ID));
             }
-            
+
             // generate data for Customer table
             for (int i = 0; i < Constants.NUM_C_PER_D; i++)
             {
@@ -250,12 +255,14 @@ namespace TPCC.Grains
 
         private static string RandomString(int length, string chars)
         {
+            var random = new Random();
             return new string(Enumerable.Repeat(chars, length)
               .Select(s => s[random.Next(s.Length)]).ToArray());
         }
 
         private static int numeric(int m, bool signed)
         {
+            var random = new Random();
             var num = random.Next((int)Math.Pow(10, m), (int)Math.Pow(10, m + 1));
             var isPositive = random.Next(0, 2);
             if (signed && isPositive > 1) return -num;
@@ -265,6 +272,7 @@ namespace TPCC.Grains
         private static float numeric(int m, int n, bool signed)   // float 6-9位小数，double 15-17位小数
         {
             float the_number;
+            var random = new Random();
             var str = RandomString(m, numbers);
             if (m == n) the_number = float.Parse("0." + str);
             else if (m > n)

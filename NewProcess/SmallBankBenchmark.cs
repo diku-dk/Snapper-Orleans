@@ -5,6 +5,7 @@ using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using MathNet.Numerics.Distributions;
+using System.Linq;
 
 namespace NewProcess
 {
@@ -13,7 +14,7 @@ namespace NewProcess
         bool isDet;
         WorkloadConfiguration config;
         IDiscreteDistribution transferAmountDistribution;
-        
+
         public void generateBenchmark(WorkloadConfiguration workloadConfig, bool isDet)
         {
             this.isDet = isDet;
@@ -48,14 +49,14 @@ namespace NewProcess
         public Task<TransactionResult> newTransaction(IClusterClient client, RequestData data)
         {
             var accountGrains = data.grains;
+            //accountGrains.Sort();
             var grainAccessInfo = new Dictionary<int, int>();
             if (config.mixture[0] == 100)
             {
                 grainAccessInfo.Add(accountGrains[0], 1);
                 return Execute(client, accountGrains[0], "Balance", new FunctionInput(), grainAccessInfo);
             }
-            
-            // txn type must be MultiTransfer
+
             int groupId = 0;
             Tuple<string, int> item1 = null;
             float item2 = transferAmountDistribution.Sample();

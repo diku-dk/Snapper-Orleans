@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using MathNet.Numerics.Distributions;
 using System.IO;
+using MathNet.Numerics.Statistics;
 
 namespace NewProcess
 {
@@ -161,7 +162,7 @@ namespace NewProcess
                         }
                         catch (Exception e)    // this exception is only related to OrleansTransaction
                         {
-                            Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
+                            //Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
                             noException = false;
                         }
                         if (noException)
@@ -207,7 +208,7 @@ namespace NewProcess
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine($"Exception: {e.Message}. ");
+                        //Console.WriteLine($"Exception: {e.Message}. ");
                         noException = false;
                     }
                     if (noException)
@@ -256,8 +257,8 @@ namespace NewProcess
         {
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = siloCPU / 1;
-            numNonDetConsumer = siloCPU / 1;
+            numDetConsumer = siloCPU / 4;
+            numNonDetConsumer = siloCPU / 4;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 
@@ -316,6 +317,7 @@ namespace NewProcess
             initializationDone = true;
         }
 
+        static List<int> total_grain;
         private static void GenerateBigNewOrder(int epoch)
         {
             Console.WriteLine($"Generate Big TPCC workload for epoch {epoch}");
@@ -352,7 +354,7 @@ namespace NewProcess
                         while (itemsToBuy.ContainsKey(I_ID));
                     }
 
-                    var local = local_dist_uni.Sample() > 50;    // 50%
+                    var local = local_dist_uni.Sample() > 1;
                     int supply_wh;
                     if (local) supply_wh = W_ID;    // supply by home warehouse
                     else                            // supply by remote warehouse
@@ -369,9 +371,14 @@ namespace NewProcess
                         if (!grains.Contains(grainID)) grains.Add(grainID);
                     }
                 }
-                var req = new RequestData(D_ID, C_ID, DateTime.Now, itemsToBuy);
-                req.grains = grains;
-                shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), req));
+
+                if (grains.Count != 2) txn--;
+                else
+                {
+                    var req = new RequestData(D_ID, C_ID, DateTime.Now, itemsToBuy);
+                    req.grains = grains;
+                    shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), req));
+                }
             }
         }
 
@@ -380,8 +387,13 @@ namespace NewProcess
             switch (config.distribution)
             {
                 case Distribution.UNIFORM:
+                    total_grain = new List<int>();
                     Console.WriteLine($"Generate UNIFORM data for Big TPCC");
                     for (int epoch = 0; epoch < config.numEpochs; epoch++) GenerateBigNewOrder(epoch);
+                    var count = 0;
+                    foreach (var num in total_grain) if (num > 1) count++;
+                    var MeanAndSd = ArrayStatistics.MeanStandardDeviation(total_grain.ToArray());
+                    Console.WriteLine($"ave = {MeanAndSd.Item1}, sd = {MeanAndSd.Item2}, multi-grain = {count * 100.0 / total_grain.Count}%");
                     break;
                 default:
                     throw new Exception($"Exception: Big TPCC does not support distribution {config.distribution}. ");
@@ -394,6 +406,10 @@ namespace NewProcess
 
             var numRound = siloCPU / 4;
             if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) numRound *= 3;
+
+            var remote_count = 0;
+            var txn_size = new List<int>();
+
             for (int round = 0; round < siloCPU / 4; round++)
             {
                 var wh_dist = new DiscreteUniform(0, config.numWarehouse - 1, new Random());
@@ -414,6 +430,8 @@ namespace NewProcess
                     var rbk = rbk_dist_uni.Sample();
                     var itemsToBuy = new Dictionary<int, Tuple<int, int>>();  // <I_ID, <supply_warehouse, quantity>>
 
+                    var remote_flag = false;
+
                     for (int i = 0; i < ol_cnt; i++)
                     {
                         int I_ID;
@@ -430,6 +448,7 @@ namespace NewProcess
                         if (local) supply_wh = W_ID;    // supply by home warehouse
                         else                            // supply by remote warehouse
                         {
+                            remote_flag = true;
                             do supply_wh = wh_dist.Sample();
                             while (supply_wh == W_ID);
                         }
@@ -442,11 +461,15 @@ namespace NewProcess
                             if (!grains.Contains(grainID)) grains.Add(grainID);
                         }
                     }
+                    if (remote_flag) remote_count++;
+                    txn_size.Add(grains.Count);
                     var req = new RequestData(C_ID, DateTime.Now, itemsToBuy);
                     req.grains = grains;
                     shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), req));
                 }
             }
+            var numTxn = Constants.BASE_NUM_NEWORDER * numRound;
+            Console.WriteLine($"siloCPU = {siloCPU}, epoch = {epoch}, remote wh rate = {remote_count * 100.0 / numTxn}%, txn_size_ave = {txn_size.Average()}");
         }
 
         private static void InitializeTPCCWorkload()
@@ -547,8 +570,8 @@ namespace NewProcess
                     }
                     break;
                 case Distribution.ZIPFIAN:    // read data from file
-                    Console.WriteLine($"read data from files");
                     var zipf = config.zipfianConstant;
+                    Console.WriteLine($"read data from files, txnsize = {numGrainPerTxn}, zipf = {zipf}");
                     var prefix = Constants.dataPath + $@"MultiTransfer\{numGrainPerTxn}\zipf{zipf}_";
 
                     // read data from files
@@ -743,10 +766,7 @@ namespace NewProcess
             siloCPU = int.Parse(args[0]);
             detPipeSize = int.Parse(args[1]);
             nonDetPipeSize = int.Parse(args[2]);
-            //skewness = double.Parse(args[3]);
-            //hotGrainRatio = double.Parse(args[4]);
             Console.WriteLine($"detPipe per thread = {detPipeSize}, nonDetPipe per thread = {nonDetPipeSize}");
-            //Console.WriteLine($"skewness = {skewness}, hotGrainRatio = {hotGrainRatio}");
 
             ProcessWork();
             //Console.ReadLine();

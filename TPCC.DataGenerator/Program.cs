@@ -18,7 +18,7 @@ namespace TPCC.DataGenerator
         static Random random = new Random();
         const string numbers = "0123456789";
         const string alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        
+
         private static void GenerateWarehouseData(object obj)
         {
             var tuple = (Tuple<int, int, int>)obj;
@@ -115,7 +115,7 @@ namespace TPCC.DataGenerator
 
         private static int numeric(int m, bool signed)
         {
-            var num  = random.Next((int)Math.Pow(10, m), (int)Math.Pow(10, m + 1));
+            var num = random.Next((int)Math.Pow(10, m), (int)Math.Pow(10, m + 1));
             var isPositive = random.Next(0, 2);
             if (signed && isPositive > 1) return -num;
             else return num;

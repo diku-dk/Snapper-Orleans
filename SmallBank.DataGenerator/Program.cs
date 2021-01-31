@@ -11,7 +11,7 @@ namespace SmallBank.DataGenerator
         private static int numEpoch = 6;
         private static int numGrain = 10000;
         private static int[] numGrainPerTxn = { 2 };
-        private static double[] zip = { 1 };
+        private static double[] zip = { 0.5, 1.5, 2.0 };
 
         private static void ThreadWorkForHybrid(Object obj)
         {

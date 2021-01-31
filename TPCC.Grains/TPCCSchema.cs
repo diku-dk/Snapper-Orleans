@@ -83,7 +83,7 @@ namespace TPCC.Grains
         public int C_PAYMENT_CNT;
         public int C_DELIVERY_CNT;
         public string C_DATA;
-        
+
         public Customer(int C_ID, string C_FIRST, string C_MIDDLE, string C_LAST, string C_STREET_1, string C_STREET_2, string C_CITY, string C_STATE, string C_ZIP, string C_PHONE, DateTime C_SINCE, string C_CREDIT, float C_CREDIT_LIM, float C_DISCOUNT, float C_BALANCE, float C_YTD_PAYMENT, int C_PAYMENT_CNT, int C_DELIVERY_CNT, string C_DATA)
         {
             this.C_ID = C_ID;

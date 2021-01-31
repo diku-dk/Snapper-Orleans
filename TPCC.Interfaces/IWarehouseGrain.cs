@@ -6,13 +6,13 @@ using System.Collections.Generic;
 
 namespace TPCC.Interfaces
 {
-    public enum AllTxnTypes {NewOrder, StockUpdate, Init};
+    public enum AllTxnTypes { NewOrder, StockUpdate, Init };
 
     [Serializable]
     public class NewOrderInput
     {
         public int D_ID;   // only for Big TPCC
-        
+
         public int C_ID;
         public DateTime O_ENTRY_D;
         public Dictionary<int, Tuple<int, int>> ItemsToBuy;  // <I_ID, <supply_warehouse, quantity>>

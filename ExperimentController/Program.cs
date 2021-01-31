@@ -156,6 +156,7 @@ namespace ExperimentController
                 nonDetThroughPutAccumulator.Add(nonDetCommittedTxnThroughput);
                 abortRateAccumulator.Add(abortRate);
             }
+
             //Compute statistics on the accumulators, maybe a better way is to maintain a sorted list
             var detThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(detThroughPutAccumulator.ToArray());
             var nonDetThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(nonDetThroughPutAccumulator.ToArray());
@@ -195,6 +196,19 @@ namespace ExperimentController
                 }
                 file.WriteLine();
             }
+            /*
+            if (workload.deterministicTxnPercent == 100) filePath = Constants.dataPath + $"PACT_{workload.numAccountsMultiTransfer}.txt";
+            if (workload.deterministicTxnPercent == 0)
+            {
+                if (nonDetCCType == ConcurrencyType.TIMESTAMP) filePath = Constants.dataPath + $"TS_{workload.numAccountsMultiTransfer}.txt";
+                if (nonDetCCType == ConcurrencyType.S2PL) filePath = Constants.dataPath + $"2PL_{workload.numAccountsMultiTransfer}.txt";
+            } 
+            using (file = new System.IO.StreamWriter(filePath, true))
+            {
+                Console.WriteLine($"aggLatencies.count = {aggLatencies.Count}, aggDetLatencies.count = {aggDetLatencies.Count}");
+                foreach (var latency in aggLatencies) file.WriteLine(latency);
+                foreach (var latency in aggDetLatencies) file.WriteLine(latency);
+            }*/
         }
 
         private static void WaitForWorkerAcksAndReset()
@@ -315,10 +329,10 @@ namespace ExperimentController
                 default:
                     throw new Exception($"Exception: Unknown benchmark. ");
             }
-            
+
             Console.WriteLine($"Load grains, benchmark {workload.benchmark}, numGrains = {numGrain}");
             var tasks = new List<Task<TransactionResult>>();
-            var sequence = false;   // If you want to load the grains in sequence instead of all concurrent
+            var sequence = true;   // If you want to load the grains in sequence instead of all concurrent
             if (workload.benchmark == BenchmarkType.TPCC) sequence = true;
             for (int i = 0; i < numGrain; i++)
             {
@@ -379,8 +393,10 @@ namespace ExperimentController
                     default:
                         throw new Exception("Unknown grain implementation type");
                 }
+
                 if (sequence && tasks.Count == Environment.ProcessorCount)
                 {
+                    Console.WriteLine($"Load {Environment.ProcessorCount} grains");
                     await Task.WhenAll(tasks);
                     tasks.Clear();
                 }
@@ -418,14 +434,13 @@ namespace ExperimentController
             workload.zipfianConstant = float.Parse(args[0]);
             workload.deterministicTxnPercent = float.Parse(args[1]);
             vCPU = int.Parse(args[2]);
-            //workload.numWorkerNodes = vCPU / 4;  // !!!!!!!!!
             workload.numAccounts = 5000 * vCPU;
             coordConfig.numCoordinators = vCPU * 2;
             numCoordinators = coordConfig.numCoordinators;
             workload.numWarehouse = vCPU * Constants.NUM_W_PER_4CORE / 4;
             numWarehouse = workload.numWarehouse;
             Console.WriteLine($"worker node = {workload.numWorkerNodes}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}");
-            
+
             numWorkerNodes = workload.numWorkerNodes;
             ackedWorkers = new CountdownEvent(numWorkerNodes);
 

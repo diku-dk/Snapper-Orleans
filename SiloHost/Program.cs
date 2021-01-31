@@ -128,7 +128,11 @@ namespace OrleansSiloHost
                 }
                 else
                     builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
-                builder.UseTransactions();
+                builder
+                    .Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(1000))
+                    .Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(1000))
+                    //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20))
+                    .UseTransactions();
             }
             else builder.AddMemoryGrainStorageAsDefault();
 
