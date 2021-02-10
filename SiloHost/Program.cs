@@ -127,10 +127,18 @@ namespace OrleansSiloHost
                         });
                 }
                 else
+                {
                     builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                    /*
+                    builder.AddFileGrainStorage("File", opts =>
+                    {
+                        opts.RootDirectory = @"C:\Users\Administrator\Desktop\logorleans";
+                    });*/
+                }
+                 
                 builder
-                    .Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(1000))
-                    .Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(1000))
+                    //.Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(5))
+                    //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))
                     //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20))
                     .UseTransactions();
             }

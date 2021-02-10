@@ -13,6 +13,10 @@ namespace Concurrency.Interface
     }
     public interface IGlobalTransactionCoordinatorGrain : IGrainWithIntegerKey
     {
+        // if persist PACT input
+        [AlwaysInterleave]
+        Task<TransactionContext> NewTransaction(Dictionary<int, int> grainAccessInformation, int grainID, object input);
+
         /// <summary>
         /// Client calls this function to submit a new deterministic transaction
         /// </summary>

@@ -58,17 +58,17 @@ namespace Concurrency.Implementation.Logging
         }
         async Task ILoggingProtocol<TState>.HandleBeforePrepareIn2PC(int tid, int coordinatorKey, HashSet<int> grains)
         {
-            var logRecord = new LogParticipant(getSequenceNumber(), grainID, tid, grains);
+            var logRecord = new LogParticipant(getSequenceNumber(), coordinatorKey, tid, grains);
             await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnAbortIn2PC(ITransactionalState<TState> state, int tid, int coordinatorKey)
+        async Task ILoggingProtocol<TState>.HandleOnAbortIn2PC(int tid, int coordinatorKey)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.ABORT, coordinatorKey, tid);
             await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnCommitIn2PC(ITransactionalState<TState> state, int tid, int coordinatorKey)
+        async Task ILoggingProtocol<TState>.HandleOnCommitIn2PC(int tid, int coordinatorKey)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.COMMIT, coordinatorKey, tid);
             await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
@@ -99,6 +99,11 @@ namespace Concurrency.Implementation.Logging
             await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
         }
 
-
+        // if persist PACT input
+        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, Dictionary<int, DeterministicBatchSchedule> batchSchedule, Dictionary<int, Tuple<int, object>> inputs)
+        {
+            var logRecord = new LogForPACT(getSequenceNumber(), bid, batchSchedule, inputs);
+            await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
+        }
     }
 }

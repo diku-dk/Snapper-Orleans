@@ -61,7 +61,10 @@ namespace Concurrency.Implementation
          */
         public async Task<TransactionResult> StartTransaction(Dictionary<int, int> grainAccessInformation, string startFunction, FunctionInput inputs)
         {
-            var context = await myCoordinator.NewTransaction(grainAccessInformation);
+            // if persist PACT input
+            var context = await myCoordinator.NewTransaction(grainAccessInformation, myID, inputs.inputObject);
+
+            //var context = await myCoordinator.NewTransaction(grainAccessInformation);
             if (highestCommittedBid < context.highestBatchIdCommitted) highestCommittedBid = context.highestBatchIdCommitted;
             inputs.context = context;
             var c1 = new FunctionCall(GetType(), startFunction, inputs);
@@ -200,7 +203,7 @@ namespace Concurrency.Implementation
                 {
                     //The scheduler has switched batches, need to commit now
                     var coordID = batchScheduleMap[bid].globalCoordinator;
-                    if (log != null) await log.HandleOnCompleteInDeterministicProtocol(state, bid, coordID);
+                    //if (log != null) await log.HandleOnCompleteInDeterministicProtocol(state, bid, coordID);    // if persist PACT input
 
                     IGlobalTransactionCoordinatorGrain coordinator;
                     if (coordList.ContainsKey(coordID) == false)
@@ -297,7 +300,7 @@ namespace Concurrency.Implementation
         {
             var grainIDsInTransaction = result.grainsInNestedFunctions;
             var commitTasks = new List<Task>();
-            if (log != null) commitTasks.Add(log.HandleOnCommitIn2PC(state, tid, coordinatorMap[tid]));
+            if (log != null) commitTasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));
             foreach (var grain in grainIDsInTransaction)
             {
                 if (grain == myID) commitTasks.Add(Commit(tid));
@@ -338,7 +341,7 @@ namespace Concurrency.Implementation
             if (state == null) return;
             var tasks = new List<Task>();
             tasks.Add(state.Commit(tid));
-            if (log != null) tasks.Add(log.HandleOnCommitIn2PC(state, tid, coordinatorMap[tid]));
+            if (log != null) tasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));
             myScheduler.ackComplete(tid);
             Cleanup(tid);
             await Task.WhenAll(tasks);

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 namespace Utilities
 {
+    [Serializable]
     public class DeterministicBatchSchedule
     {
         public List<int> transactionList;

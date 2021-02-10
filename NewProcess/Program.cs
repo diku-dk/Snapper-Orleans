@@ -162,7 +162,7 @@ namespace NewProcess
                         }
                         catch (Exception e)    // this exception is only related to OrleansTransaction
                         {
-                            //Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
+                            Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
                             noException = false;
                         }
                         if (noException)
@@ -208,7 +208,7 @@ namespace NewProcess
                     }
                     catch (Exception e)
                     {
-                        //Console.WriteLine($"Exception: {e.Message}. ");
+                        Console.WriteLine($"Exception: {e.Message}. ");
                         noException = false;
                     }
                     if (noException)
@@ -289,8 +289,16 @@ namespace NewProcess
             // some initialization for generating workload
             if (detBufferSize == 0 && nonDetBufferSize == 0)
             {
-                if (numDetConsumer > 0) detBufferSize = detPercent * 100 * siloCPU / (4 * numDetConsumer);
-                if (numNonDetConsumer > 0) nonDetBufferSize = (100 - detPercent) * 100 * siloCPU / (4 * numNonDetConsumer);
+                if (numDetConsumer > 0)
+                {
+                    //detBufferSize = detPercent * 100 * siloCPU / (4 * numDetConsumer);
+                    detBufferSize = detPipeSize * 5;
+                }
+                if (numNonDetConsumer > 0)
+                {
+                    //nonDetBufferSize = (100 - detPercent) * 100 * siloCPU / (4 * numNonDetConsumer);
+                    nonDetBufferSize = nonDetPipeSize * 5;
+                }
             }
             Console.WriteLine($"detPercent = {detPercent}%, detBuffer = {detBufferSize}, nonDetBuffer = {nonDetBufferSize}");
             shared_requests = new Dictionary<int, Queue<Tuple<bool, RequestData>>>();   // <epoch, <producerID, <isDet, grainIDs>>>
@@ -517,7 +525,7 @@ namespace NewProcess
                 return;
             }
             if (config.mixture.Sum() > 0) throw new Exception("Exception: NewProcess only support MultiTransfer for SmallBankBenchmark");
-            var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * siloCPU / 4;
+            var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * 10 * siloCPU / 4;   // changed!!
             if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
             var numGrain = config.numAccounts / config.numAccountsPerGroup;
             var numGrainPerTxn = config.numGrainsMultiTransfer;

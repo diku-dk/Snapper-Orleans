@@ -12,6 +12,8 @@ using Microsoft.Extensions.Options;
 using Orleans.Transactions.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using System.IO;
+using Newtonsoft.Json;
 
 namespace OrleansSiloHost
 {
@@ -64,7 +66,11 @@ namespace OrleansSiloHost
 
         public ITransactionalStateStorage<TState> Create<TState>(string stateName, IGrainActivationContext context) where TState : class, new()
         {
-            return ActivatorUtilities.CreateInstance<MemoryTransactionalStateStorage<TState>>(context.ActivationServices);
+            var str = context.GrainIdentity.ToString();
+            var strs = str.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var partitionKey = strs[strs.Length - 1];
+            //Console.WriteLine($"file = {partitionKey}");
+            return ActivatorUtilities.CreateInstance<MemoryTransactionalStateStorage<TState>>(context.ActivationServices, partitionKey);
         }
 
         public void Participate(ISiloLifecycle lifecycle)
@@ -81,22 +87,26 @@ namespace OrleansSiloHost
     public class MemoryTransactionalStateStorage<TState> : ITransactionalStateStorage<TState>
         where TState : class, new()
     {
+        private string fileName = @"C:\Users\Administrator\Desktop\logorleans\";
         private string ETag = "default";
-        private long CommittedSequenceId = 0;
-        private TransactionalStateMetaData Metadata;
+        private KeyEntity key;
         private List<KeyValuePair<long, StateEntity>> states;
         private ISerializer serializer;
+        private readonly string partition;
+        private SemaphoreSlim instanceLock;
 
-        public MemoryTransactionalStateStorage()
+        public MemoryTransactionalStateStorage(string partition)
         {
+            fileName += partition;
+            key = new KeyEntity();
             states = new List<KeyValuePair<long, StateEntity>>();
             serializer = new MsgPackSerializer();
-            Metadata = new TransactionalStateMetaData();
+            instanceLock = new SemaphoreSlim(1);
         }
 
         public async Task<TransactionalStorageLoadResponse<TState>> Load()
         {
-            return new TransactionalStorageLoadResponse<TState>(ETag, new TState(), 0, Metadata, new List<PendingTransactionState<TState>>());
+            return new TransactionalStorageLoadResponse<TState>(ETag, new TState(), 0, new TransactionalStateMetaData(), new List<PendingTransactionState<TState>>());
             /*
             try
             {
@@ -179,100 +189,103 @@ namespace OrleansSiloHost
 
         public async Task<string> Store(string expectedETag, TransactionalStateMetaData metadata, List<PendingTransactionState<TState>> statesToPrepare, long? commitUpTo, long? abortAfter)
         {
-            /*
-            if (this.key.ETag != expectedETag)
-                throw new ArgumentException(nameof(expectedETag), "Etag does not match");
-
-            // assemble all storage operations into a single batch
-            // these operations must commit in sequence, but not necessarily atomically
-            // so we can split this up if needed
-            var batchOperation = new BatchOperation(logger, key, table);
-
-            // first, clean up aborted records
-            if (abortAfter.HasValue && states.Count != 0)
+            await instanceLock.WaitAsync();
+            FileStream file = null;
+            try
             {
-                while (states.Count > 0 && states[states.Count - 1].Key > abortAfter)
+                file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
+
+                if (ETag != expectedETag) throw new ArgumentException(nameof(expectedETag), "Etag does not match");
+
+                // assemble all storage operations into a single batch
+                // these operations must commit in sequence, but not necessarily atomically
+                // so we can split this up if needed
+                //var batchOperation = new BatchOperation(logger, key, table);
+
+                // first, clean up aborted records
+                if (abortAfter.HasValue && states.Count != 0)
                 {
-                    var entity = states[states.Count - 1].Value;
-                    await batchOperation.Add(TableOperation.Delete(entity)).ConfigureAwait(false);
-                    states.RemoveAt(states.Count - 1);
-
-                    if (logger.IsEnabled(LogLevel.Trace))
-                        logger.LogTrace($"{partition}.{entity.RowKey} Delete {entity.TransactionId}");
-                }
-            }
-
-            // second, persist non-obsolete prepare records
-            var obsoleteBefore = commitUpTo.HasValue ? commitUpTo.Value : key.CommittedSequenceId;
-            if (statesToPrepare != null)
-                foreach (var s in statesToPrepare)
-                    if (s.SequenceId >= obsoleteBefore)
+                    while (states.Count > 0 && states[states.Count - 1].Key > abortAfter)
                     {
-                        if (FindState(s.SequenceId, out var pos))
-                        {
-                            // overwrite with new pending state
-                            StateEntity existing = states[pos].Value;
-                            existing.TransactionId = s.TransactionId;
-                            existing.TransactionTimestamp = s.TimeStamp;
-                            existing.TransactionManager = JsonConvert.SerializeObject(s.TransactionManager, this.jsonSettings);
-                            existing.SetState(s.State, this.jsonSettings);
-                            await batchOperation.Add(TableOperation.Replace(existing)).ConfigureAwait(false);
-
-                            if (logger.IsEnabled(LogLevel.Trace))
-                                logger.LogTrace($"{partition}.{existing.RowKey} Update {existing.TransactionId}");
-                        }
-                        else
-                        {
-                            var entity = StateEntity.Create(this.jsonSettings, this.partition, s);
-                            await batchOperation.Add(TableOperation.Insert(entity)).ConfigureAwait(false);
-                            states.Insert(pos, new KeyValuePair<long, StateEntity>(s.SequenceId, entity));
-
-                            if (logger.IsEnabled(LogLevel.Trace))
-                                logger.LogTrace($"{partition}.{entity.RowKey} Insert {entity.TransactionId}");
-                        }
+                        var entity = states[states.Count - 1].Value;
+                        //await batchOperation.Add(TableOperation.Delete(entity)).ConfigureAwait(false);
+                        states.RemoveAt(states.Count - 1);
                     }
-
-            // third, persist metadata and commit position
-            key.Metadata = JsonConvert.SerializeObject(metadata, this.jsonSettings);
-            if (commitUpTo.HasValue && commitUpTo.Value > key.CommittedSequenceId)
-            {
-                key.CommittedSequenceId = commitUpTo.Value;
-            }
-            if (string.IsNullOrEmpty(this.key.ETag))
-            {
-                await batchOperation.Add(TableOperation.Insert(this.key)).ConfigureAwait(false);
-
-                if (logger.IsEnabled(LogLevel.Trace))
-                    logger.LogTrace($"{partition}.{KeyEntity.RK} Insert. v{this.key.CommittedSequenceId}, {metadata.CommitRecords.Count}c");
-            }
-            else
-            {
-                await batchOperation.Add(TableOperation.Replace(this.key)).ConfigureAwait(false);
-
-                if (logger.IsEnabled(LogLevel.Trace))
-                    logger.LogTrace($"{partition}.{KeyEntity.RK} Update. v{this.key.CommittedSequenceId}, {metadata.CommitRecords.Count}c");
-            }
-
-            // fourth, remove obsolete records
-            if (states.Count > 0 && states[0].Key < obsoleteBefore)
-            {
-                FindState(obsoleteBefore, out var pos);
-                for (int i = 0; i < pos; i++)
-                {
-                    await batchOperation.Add(TableOperation.Delete(states[i].Value)).ConfigureAwait(false);
-
-                    if (logger.IsEnabled(LogLevel.Trace))
-                        logger.LogTrace($"{partition}.{states[i].Value.RowKey} Delete {states[i].Value.TransactionId}");
                 }
-                states.RemoveRange(0, pos);
+
+                // second, persist non-obsolete prepare records
+                var obsoleteBefore = commitUpTo.HasValue ? commitUpTo.Value : key.CommittedSequenceId;
+                if (statesToPrepare != null)
+                    foreach (var s in statesToPrepare)
+                        if (s.SequenceId >= obsoleteBefore)
+                        {
+                            if (FindState(s.SequenceId, out var pos))
+                            {
+                                // overwrite with new pending state
+                                StateEntity existing = states[pos].Value;
+                                existing.TransactionId = s.TransactionId;
+                                existing.TransactionTimestamp = s.TimeStamp;
+                                existing.TransactionManager = JsonConvert.SerializeObject(s.TransactionManager);
+                                existing.state = JsonConvert.SerializeObject(s.State);
+                                //await batchOperation.Add(TableOperation.Replace(existing)).ConfigureAwait(false);
+
+                                var data1 = serializer.serialize(existing);
+                                var sizeBytes1 = BitConverter.GetBytes(data1.Length);
+                                await file.WriteAsync(sizeBytes1, 0, sizeBytes1.Length);
+                                await file.WriteAsync(data1, 0, data1.Length);
+                            }
+                            else
+                            {
+                                //var entity = StateEntity.Create(this.jsonSettings, this.partition, s);
+                                //await batchOperation.Add(TableOperation.Insert(entity)).ConfigureAwait(false);
+
+                                var entity = new StateEntity();
+                                entity.TransactionId = s.TransactionId;
+                                entity.TransactionTimestamp = s.TimeStamp;
+                                entity.TransactionManager = JsonConvert.SerializeObject(s.TransactionManager);
+                                entity.state = JsonConvert.SerializeObject(s.State);
+
+                                var data2 = serializer.serialize(entity);
+                                var sizeBytes2 = BitConverter.GetBytes(data2.Length);
+                                await file.WriteAsync(sizeBytes2, 0, sizeBytes2.Length);
+                                await file.WriteAsync(data2, 0, data2.Length);
+
+                                states.Insert(pos, new KeyValuePair<long, StateEntity>(s.SequenceId, entity));
+                            }
+                        }
+
+                // third, persist metadata and commit position
+                key.Metadata = JsonConvert.SerializeObject(metadata);
+                if (commitUpTo.HasValue && commitUpTo.Value > key.CommittedSequenceId) key.CommittedSequenceId = commitUpTo.Value;
+
+                //if (string.IsNullOrEmpty(ETag)) await batchOperation.Add(TableOperation.Insert(this.key)).ConfigureAwait(false);
+                //else await batchOperation.Add(TableOperation.Replace(this.key)).ConfigureAwait(false);
+
+                var data = serializer.serialize(key);
+                var sizeBytes = BitConverter.GetBytes(data.Length);
+                await file.WriteAsync(sizeBytes, 0, sizeBytes.Length);
+                await file.WriteAsync(data, 0, data.Length);
+
+                // fourth, remove obsolete records
+                if (states.Count > 0 && states[0].Key < obsoleteBefore)
+                {
+                    FindState(obsoleteBefore, out var pos);
+                    //for (int i = 0; i < pos; i++) await batchOperation.Add(TableOperation.Delete(states[i].Value)).ConfigureAwait(false);
+                    states.RemoveRange(0, pos);
+                }
+
+                //await batchOperation.Flush().ConfigureAwait(false);
+                await file.FlushAsync();
             }
-
-            await batchOperation.Flush().ConfigureAwait(false);
-
-            if (logger.IsEnabled(LogLevel.Debug))
-                logger.LogDebug($"{partition} Stored v{this.key.CommittedSequenceId} eTag={key.ETag}");
-            
-            return key.ETag;*/
+            catch (Exception e)
+            {
+                Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
+            }
+            finally
+            {
+                file.Close();
+            }
+            instanceLock.Release();
             return ETag;
         }
 
@@ -296,11 +309,17 @@ namespace OrleansSiloHost
         }
     }
 
-    internal class StateEntity
+    public class StateEntity
     {
         public string TransactionId;
         public DateTime TransactionTimestamp;
-        public byte[] TransactionManager;
-        public byte[] state;
+        public string TransactionManager;
+        public string state;
+    }
+
+    public class KeyEntity
+    {
+        public long CommittedSequenceId = 0;
+        public string Metadata;
     }
 }

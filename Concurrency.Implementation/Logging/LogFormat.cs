@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using Utilities;
 
 namespace Concurrency.Implementation.Logging
 {
@@ -28,5 +30,24 @@ namespace Concurrency.Implementation.Logging
             this.coordinatorKey = coordinatorKey;
             this.txn_id = txn_id;
         }
-    };
+    }
+
+    // if persist PACT input
+    [Serializable]
+    public class LogForPACT
+    {
+        public int sequenceNumber;
+
+        public int bid;
+        public Dictionary<int, DeterministicBatchSchedule> batchSchedule;
+        public Dictionary<int, Tuple<int, object>> inputs;
+
+        public LogForPACT(int sequenceNumber, int bid, Dictionary<int, DeterministicBatchSchedule> batchSchedule, Dictionary<int, Tuple<int, object>> inputs)
+        {
+            this.sequenceNumber = sequenceNumber;
+            this.bid = bid;
+            this.batchSchedule = batchSchedule;
+            this.inputs = inputs;
+        }
+    }
 }

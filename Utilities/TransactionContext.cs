@@ -6,6 +6,10 @@ namespace Utilities
     [Serializable]
     public class TransactionContext
     {
+        // if persist PACT input
+        public int grainID;  // the grain who starts the transaction
+        public object input;
+
         public int coordinatorKey;
         public bool isDeterministic;
         public int batchID { get; set; }

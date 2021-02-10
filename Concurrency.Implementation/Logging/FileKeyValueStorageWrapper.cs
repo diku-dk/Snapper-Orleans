@@ -39,10 +39,11 @@ namespace Concurrency.Implementation.Logging
                     var fileName = basePath + logName;
                     file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
                     fileLength = file.Length;
-                    var sizeBytes = BitConverter.GetBytes(fileLength);
+                    var sizeBytes = BitConverter.GetBytes(value.Length);
                     await file.WriteAsync(sizeBytes, 0, sizeBytes.Length);
                     await file.WriteAsync(value, 0, value.Length);
                     await file.FlushAsync();
+                    //Console.WriteLine($"write {sizeBytes.Length + value.Length} bytes");
                     success = true;
                 }
                 catch (Exception ex)
