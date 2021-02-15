@@ -16,8 +16,6 @@ namespace TPCC.Grains
         {
         }
 
-        private int order_local_count = 0;
-
         public async Task<FunctionResult> Init(FunctionInput fin)
         {
             var context = fin.context;
@@ -105,8 +103,7 @@ namespace TPCC.Grains
 
                     if (!hasExp)
                     {
-                        myState.district_info.D_NEXT_O_ID++;
-                        var O_ID = order_local_count++;
+                        var O_ID = myState.district_info.D_NEXT_O_ID++;
                         var neworder = new NewOrder(O_ID);
                         var order = new Order(O_ID, input.C_ID, input.O_ENTRY_D, null, input.ItemsToBuy.Count, all_local);
                         myState.neworder.Add(neworder);
@@ -151,7 +148,7 @@ namespace TPCC.Grains
 
         public async Task<FunctionResult> StockUpdate(FunctionInput fin)
         {
-            var remoteFlag = 0;
+            int remoteFlag;
             var context = fin.context;
             var ret = new FunctionResult();
             var input = (StockUpdateInput)fin.inputObject;
