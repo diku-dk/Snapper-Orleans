@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.5.4.27" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.5.4.29" />
     <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.4.1" />
     <PackageReference Include="Microsoft.Orleans.Core" Version="3.4.1" />
     <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="3.4.1">
@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
+    <ProjectReference Include="..\Persist.Interfaces\Persist.Interfaces.csproj" />
   </ItemGroup>
 
 </Project>

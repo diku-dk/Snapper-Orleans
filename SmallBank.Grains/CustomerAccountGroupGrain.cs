@@ -52,7 +52,6 @@ namespace SmallBank.Grains
             return accountID / numAccountPerGroup; //You can can also range/hash partition
         }
 
-
         public CustomerAccountGroupGrain() : base("SmallBank.Grains.CustomerAccountGroupGrain")
         {
         }

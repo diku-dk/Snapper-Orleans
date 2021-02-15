@@ -6,6 +6,11 @@ namespace Utilities
 {
     public static class Helper
     {
+        public static int GetPersistGrainID(int numPersistGrain, int myGrainID)
+        {
+            return myGrainID % numPersistGrain;
+        }
+
         public static int GetDistID(int I_ID)
         {
             return I_ID % Constants.NUM_D_PER_W;

@@ -66,6 +66,7 @@ namespace ExperimentController
             numCoordinators = int.Parse(snapperConfigSection["numCoordinators"]);
             var dataFormat = Enum.Parse<dataFormatType>(snapperConfigSection["dataFormat"]);
             var logStorage = Enum.Parse<StorageWrapperType>(snapperConfigSection["logStorage"]);
+            var usePersistGrain = bool.Parse(snapperConfigSection["usePersistGrain"]);
 
             //Parse workload specific configuration, assumes only one defined in file
             var benchmarkConfigSection = ConfigurationManager.GetSection("BenchmarkConfig") as NameValueCollection;
@@ -84,13 +85,10 @@ namespace ExperimentController
             switch (workload.benchmark)
             {
                 case BenchmarkType.SMALLBANK:
-                    exeConfig = new ExecutionGrainConfiguration("SmallBank.Grains.CustomerAccountGroupGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
+                    exeConfig = new ExecutionGrainConfiguration("SmallBank.Grains.CustomerAccountGroupGrain", new LoggingConfiguration(dataFormat, logStorage, usePersistGrain), new ConcurrencyConfiguration(nonDetCCType));
                     break;
                 case BenchmarkType.TPCC:
-                    exeConfig = new ExecutionGrainConfiguration("TPCC.Grains.WarehouseGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
-                    break;
-                case BenchmarkType.BIGTPCC:
-                    exeConfig = new ExecutionGrainConfiguration("TPCC.Grains.BigWarehouseGrain", new LoggingConfiguration(dataFormat, logStorage), new ConcurrencyConfiguration(nonDetCCType));
+                    exeConfig = new ExecutionGrainConfiguration("TPCC.Grains.WarehouseGrain", new LoggingConfiguration(dataFormat, logStorage, usePersistGrain), new ConcurrencyConfiguration(nonDetCCType));
                     break;
                 default:
                     throw new Exception($"Exception: Unknown benchmark {workload.benchmark}");
@@ -323,9 +321,6 @@ namespace ExperimentController
                 case BenchmarkType.TPCC:
                     numGrain = workload.numWarehouse * Constants.NUM_D_PER_W;
                     break;
-                case BenchmarkType.BIGTPCC:
-                    numGrain = workload.numWarehouse;
-                    break;
                 default:
                     throw new Exception($"Exception: Unknown benchmark. ");
             }
@@ -345,9 +340,6 @@ namespace ExperimentController
                         break;
                     case BenchmarkType.TPCC:
                         input = new FunctionInput(new Tuple<int, int>(i / Constants.NUM_D_PER_W, i % Constants.NUM_D_PER_W));
-                        break;
-                    case BenchmarkType.BIGTPCC:
-                        input = new FunctionInput(i);
                         break;
                     default:
                         throw new Exception($"Exception: Unknown benchmark. ");
@@ -381,11 +373,6 @@ namespace ExperimentController
                         else if (workload.benchmark == BenchmarkType.TPCC)
                         {
                             var sntxnGrain = client.GetGrain<IWarehouseGrain>(i);
-                            tasks.Add(sntxnGrain.StartTransaction("Init", input));
-                        }
-                        else if (workload.benchmark == BenchmarkType.BIGTPCC)
-                        {
-                            var sntxnGrain = client.GetGrain<IBigWarehouseGrain>(i);
                             tasks.Add(sntxnGrain.StartTransaction("Init", input));
                         }
                         else throw new Exception("Exception: Unknown benchmark.");
@@ -434,12 +421,13 @@ namespace ExperimentController
             workload.zipfianConstant = float.Parse(args[0]);
             workload.deterministicTxnPercent = float.Parse(args[1]);
             vCPU = int.Parse(args[2]);
-            workload.numAccounts = 5 * vCPU;
+            workload.numAccounts = 5000 * vCPU;
             coordConfig.numCoordinators = vCPU * 2;
             numCoordinators = coordConfig.numCoordinators;
             workload.numWarehouse = vCPU * Constants.NUM_W_PER_4CORE / 4;
             numWarehouse = workload.numWarehouse;
-            Console.WriteLine($"worker node = {workload.numWorkerNodes}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}");
+            exeConfig.logConfiguration.numPersistGrain = vCPU * 2;
+            Console.WriteLine($"worker node = {workload.numWorkerNodes}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}, numPersistGrain = {exeConfig.logConfiguration.numPersistGrain}");
 
             numWorkerNodes = workload.numWorkerNodes;
             ackedWorkers = new CountdownEvent(numWorkerNodes);

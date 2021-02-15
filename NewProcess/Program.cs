@@ -272,10 +272,6 @@ namespace NewProcess
                     benchmarks = new TPCCBenchmark[numDetConsumer + numNonDetConsumer];
                     for (int i = 0; i < numDetConsumer + numNonDetConsumer; i++) benchmarks[i] = new TPCCBenchmark();
                     break;
-                case BenchmarkType.BIGTPCC:
-                    benchmarks = new TPCCBenchmark[numDetConsumer + numNonDetConsumer];
-                    for (int i = 0; i < numDetConsumer + numNonDetConsumer; i++) benchmarks[i] = new TPCCBenchmark();
-                    break;
                 default:
                     throw new Exception("Exception: NewProcess only support SmallBank and TPCC benchmarks");
             }
@@ -312,9 +308,6 @@ namespace NewProcess
                 case BenchmarkType.TPCC:
                     InitializeTPCCWorkload();
                     break;
-                case BenchmarkType.BIGTPCC:
-                    InitializeBigTPCCWorkload();
-                    break;
                 default:
                     throw new Exception($"Exception: Unknown benchmark {config.benchmark}");
             }
@@ -323,89 +316,6 @@ namespace NewProcess
             await InitializeClients();
             InitializeConsumerThreads();
             initializationDone = true;
-        }
-
-        static List<int> total_grain;
-        private static void GenerateBigNewOrder(int epoch)
-        {
-            Console.WriteLine($"Generate Big TPCC workload for epoch {epoch}");
-
-            var numTxn = Constants.BASE_NUM_NEWORDER * siloCPU / 4;
-            if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) numTxn *= 3;
-
-            var wh_dist = new DiscreteUniform(0, config.numWarehouse - 1, new Random());
-            var district_dist_uni = new DiscreteUniform(0, Constants.NUM_D_PER_W - 1, new Random());
-            var ol_cnt_dist_uni = new DiscreteUniform(5, 15, new Random());
-            var rbk_dist_uni = new DiscreteUniform(1, 100, new Random());
-            var local_dist_uni = new DiscreteUniform(1, 100, new Random());
-            var quantity_dist_uni = new DiscreteUniform(1, 10, new Random());
-
-            for (int txn = 0; txn < numTxn; txn++)
-            {
-                int W_ID = wh_dist.Sample();
-                var grains = new List<int>();
-                grains.Add(W_ID);
-                var D_ID = district_dist_uni.Sample();
-                var C_ID = Helper.NURand(1023, 1, Constants.NUM_C_PER_D, 0) - 1;
-                var ol_cnt = ol_cnt_dist_uni.Sample();
-                var rbk = rbk_dist_uni.Sample();
-                var itemsToBuy = new Dictionary<int, Tuple<int, int>>();  // <I_ID, <supply_warehouse, quantity>>
-
-                for (int i = 0; i < ol_cnt; i++)
-                {
-                    int I_ID;
-
-                    if (i == ol_cnt - 1 && rbk == 1) I_ID = -1;
-                    else
-                    {
-                        do I_ID = Helper.NURand(8191, 1, Constants.NUM_I, 0) - 1;
-                        while (itemsToBuy.ContainsKey(I_ID));
-                    }
-
-                    var local = local_dist_uni.Sample() > 1;
-                    int supply_wh;
-                    if (local) supply_wh = W_ID;    // supply by home warehouse
-                    else                            // supply by remote warehouse
-                    {
-                        do supply_wh = wh_dist.Sample();
-                        while (supply_wh == W_ID);
-                    }
-                    var quantity = quantity_dist_uni.Sample();
-                    itemsToBuy.Add(I_ID, new Tuple<int, int>(supply_wh, quantity));
-
-                    if (I_ID != -1)
-                    {
-                        var grainID = supply_wh;
-                        if (!grains.Contains(grainID)) grains.Add(grainID);
-                    }
-                }
-
-                if (grains.Count != 2) txn--;
-                else
-                {
-                    var req = new RequestData(D_ID, C_ID, DateTime.Now, itemsToBuy);
-                    req.grains = grains;
-                    shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), req));
-                }
-            }
-        }
-
-        private static void InitializeBigTPCCWorkload()
-        {
-            switch (config.distribution)
-            {
-                case Distribution.UNIFORM:
-                    total_grain = new List<int>();
-                    Console.WriteLine($"Generate UNIFORM data for Big TPCC");
-                    for (int epoch = 0; epoch < config.numEpochs; epoch++) GenerateBigNewOrder(epoch);
-                    var count = 0;
-                    foreach (var num in total_grain) if (num > 1) count++;
-                    var MeanAndSd = ArrayStatistics.MeanStandardDeviation(total_grain.ToArray());
-                    Console.WriteLine($"ave = {MeanAndSd.Item1}, sd = {MeanAndSd.Item2}, multi-grain = {count * 100.0 / total_grain.Count}%");
-                    break;
-                default:
-                    throw new Exception($"Exception: Big TPCC does not support distribution {config.distribution}. ");
-            }
         }
 
         private static void GenerateNewOrder(int epoch)

@@ -8,16 +8,19 @@ namespace Concurrency.Interface
 {
     public class LoggingConfiguration
     {
+        public int numPersistGrain;
+        public bool usePersistGrain;
         public bool isLoggingEnabled;
         public dataFormatType dataFormat;
         public StorageWrapperType loggingStorageWrapper;
 
-        public LoggingConfiguration(dataFormatType dataFormat, StorageWrapperType loggingStorageWrapper)
+        public LoggingConfiguration(dataFormatType dataFormat, StorageWrapperType loggingStorageWrapper, bool usePersistGrain)
         {
             if (loggingStorageWrapper == StorageWrapperType.NOSTORAGE) isLoggingEnabled = false;
             else isLoggingEnabled = true;
             this.dataFormat = dataFormat;
             this.loggingStorageWrapper = loggingStorageWrapper;
+            this.usePersistGrain = usePersistGrain;
         }
     }
 

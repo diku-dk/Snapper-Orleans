@@ -2,6 +2,7 @@
 using Orleans;
 using Utilities;
 using System.Diagnostics;
+using Persist.Interfaces;
 using Concurrency.Interface;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -37,13 +38,21 @@ namespace Concurrency.Implementation
         {
             myID = (int)this.GetPrimaryKeyLong();
             var configTuple = await GrainFactory.GetGrain<IConfigurationManagerGrain>(0).GetConfiguration(myID);
-            // <ExecutionGrainConfiguration, coordinator ID>
+            // <ExecutionGrainConfiguration, coordinator ID, num_coords>
             coordID = configTuple.Item2;
             numCoord = configTuple.Item3;
             myCoordinator = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(coordID);
             state = new HybridState<TState>(configTuple.Item1.nonDetCCConfiguration.nonDetConcurrencyManager);
             var logConfig = configTuple.Item1.logConfiguration;
-            if (logConfig.isLoggingEnabled) log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, logConfig.dataFormat, logConfig.loggingStorageWrapper);
+            if (logConfig.isLoggingEnabled)
+            {
+                if (logConfig.usePersistGrain)
+                {
+                    var persistGrain = GrainFactory.GetGrain<IPersistGrain>(Helper.GetPersistGrainID(logConfig.numPersistGrain, myID));
+                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, logConfig.dataFormat, logConfig.loggingStorageWrapper, persistGrain);
+                } 
+                else log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, logConfig.dataFormat, logConfig.loggingStorageWrapper);
+            } 
 
             highestCommittedBid = -1;
             coordinatorMap = new Dictionary<int, int>();

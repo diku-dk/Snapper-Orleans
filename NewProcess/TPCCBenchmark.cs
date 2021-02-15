@@ -30,10 +30,6 @@ namespace NewProcess
                             var grain = client.GetGrain<IWarehouseGrain>(grainId);
                             if (isDet) return grain.StartTransaction(grainAccessInfo, functionName, input);
                             else return grain.StartTransaction(functionName, input);
-                        case BenchmarkType.BIGTPCC:
-                            var biggrain = client.GetGrain<IBigWarehouseGrain>(grainId);
-                            if (isDet) return biggrain.StartTransaction(grainAccessInfo, functionName, input);
-                            else return biggrain.StartTransaction(functionName, input);
                         default:
                             throw new Exception($"Exception: Unknown benchmark {config.benchmark}");
                     }
