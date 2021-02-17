@@ -207,7 +207,7 @@ namespace Concurrency.Implementation
             {
                 //Estimate a pre-allocation size based on moving average
                 var waitingTxns = nonDeterministicEmitSize[myEmitSequence];
-                numTransactionIdsPreAllocated = (int)(smoothingPreAllocationFactor * (float)waitingTxns + (1 - smoothingPreAllocationFactor) * (float)numTransactionIdsPreAllocated);
+                numTransactionIdsPreAllocated = (int)(smoothingPreAllocationFactor * waitingTxns + (1 - smoothingPreAllocationFactor) * numTransactionIdsPreAllocated);
                 numTransactionIdsReserved = numTransactionIdsPreAllocated;
                 Debug.Assert(nonDetEmitID.ContainsKey(myEmitSequence) == false);
                 nonDetEmitID.Add(myEmitSequence, token.lastTransactionID + 1);

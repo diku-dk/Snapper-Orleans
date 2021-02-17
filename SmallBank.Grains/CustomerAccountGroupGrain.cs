@@ -132,8 +132,9 @@ namespace SmallBank.Grains
                 }
                 myState.checkingAccount[id] += inputTuple.Item2;
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
                 ret.setException();
             }
             return ret;
@@ -183,8 +184,9 @@ namespace SmallBank.Grains
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
                 ret.setException();
             }
             return ret;

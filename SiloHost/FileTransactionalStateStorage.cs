@@ -1,5 +1,6 @@
 ﻿using System;
 using Orleans;
+using System.IO;
 using Newtonsoft.Json;
 using Orleans.Runtime;
 using System.Threading;
@@ -12,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace OrleansSiloHost
 {
-    public class MemoryTransactionalStateStorageFactory : ITransactionalStateStorageFactory, ILifecycleParticipant<ISiloLifecycle>
+    public class FileTransactionalStateStorageFactory : ITransactionalStateStorageFactory, ILifecycleParticipant<ISiloLifecycle>
     {
         private readonly string name;
         private readonly MyTransactionalStateOptions options;
@@ -20,10 +21,10 @@ namespace OrleansSiloHost
         public static ITransactionalStateStorageFactory Create(IServiceProvider services, string name)
         {
             var optionsMonitor = services.GetRequiredService<IOptionsMonitor<MyTransactionalStateOptions>>();
-            return ActivatorUtilities.CreateInstance<MemoryTransactionalStateStorageFactory>(services, name, optionsMonitor.Get(name));
+            return ActivatorUtilities.CreateInstance<FileTransactionalStateStorageFactory>(services, name, optionsMonitor.Get(name));
         }
 
-        public MemoryTransactionalStateStorageFactory(string name, MyTransactionalStateOptions options)
+        public FileTransactionalStateStorageFactory(string name, MyTransactionalStateOptions options)
         {
             this.name = name;
             this.options = options;
@@ -31,12 +32,15 @@ namespace OrleansSiloHost
 
         public ITransactionalStateStorage<TState> Create<TState>(string stateName, IGrainActivationContext context) where TState : class, new()
         {
-            return ActivatorUtilities.CreateInstance<MemoryTransactionalStateStorage<TState>>(context.ActivationServices);
+            var str = context.GrainIdentity.ToString();
+            var strs = str.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var partitionKey = strs[strs.Length - 1];    // use grainID as partitionKey
+            return ActivatorUtilities.CreateInstance<FileTransactionalStateStorage<TState>>(context.ActivationServices, partitionKey);
         }
 
         public void Participate(ISiloLifecycle lifecycle)
         {
-            lifecycle.Subscribe(OptionFormattingUtilities.Name<MemoryTransactionalStateStorageFactory>(name), options.InitStage, Init);
+            lifecycle.Subscribe(OptionFormattingUtilities.Name<FileTransactionalStateStorageFactory>(name), options.InitStage, Init);
         }
 
         private Task Init(CancellationToken cancellationToken)
@@ -45,21 +49,32 @@ namespace OrleansSiloHost
         }
     }
 
-    public class MemoryTransactionalStateStorage<TState> : ITransactionalStateStorage<TState> where TState : class, new()
+    public class FileTransactionalStateStorage<TState> : ITransactionalStateStorage<TState> where TState : class, new()
     {
+        private SemaphoreSlim fileLock;
+        private string fileName = @"C:\Users\Administrator\Desktop\logorleans\";
+
         private KeyEntity key;
         private List<KeyValuePair<long, StateEntity>> states;
 
-        public MemoryTransactionalStateStorage()
+        public FileTransactionalStateStorage(string partition)
         {
+            fileLock = new SemaphoreSlim(1);
+            fileName += partition;
+            var f1 = File.CreateText(fileName + "_key");
+            f1.Close();
+            var f2 = File.CreateText(fileName + "_state");
+            f2.Close();
         }
 
         public async Task<TransactionalStorageLoadResponse<TState>> Load()
         {
             try
             {
-                if (key == null) key = new KeyEntity();
-                if (states == null) states = new List<KeyValuePair<long, StateEntity>>();
+                var keyTask = ReadKey();
+                var statesTask = ReadStates();
+                key = await keyTask.ConfigureAwait(false);
+                states = await statesTask.ConfigureAwait(false);
 
                 if (string.IsNullOrEmpty(key.ETag)) return new TransactionalStorageLoadResponse<TState>();
                 else
@@ -82,10 +97,12 @@ namespace OrleansSiloHost
                         var kvp = states[i];
 
                         // pending states for already committed transactions can be ignored
-                        if (kvp.Key <= key.CommittedSequenceId) continue;
+                        if (kvp.Key <= key.CommittedSequenceId)
+                            continue;
 
                         // upon recovery, local non-committed transactions are considered aborted
-                        if (kvp.Value.TransactionManager == null) break;
+                        if (kvp.Value.TransactionManager == null)
+                            break;
 
                         var tm = JsonConvert.DeserializeObject<ParticipantId>(kvp.Value.TransactionManager);
 
@@ -149,13 +166,46 @@ namespace OrleansSiloHost
 
             // third, persist metadata and commit position
             key.Metadata = JsonConvert.SerializeObject(metadata);
-            if (commitUpTo.HasValue && commitUpTo.Value > key.CommittedSequenceId) key.CommittedSequenceId = commitUpTo.Value;
+            if (commitUpTo.HasValue && commitUpTo.Value > key.CommittedSequenceId)
+            {
+                key.CommittedSequenceId = commitUpTo.Value;
+            }
 
             // fourth, remove obsolete records
             if (states.Count > 0 && states[0].Key < obsoleteBefore)
             {
                 FindState(obsoleteBefore, out var pos);
                 states.RemoveRange(0, pos);
+            }
+
+            // re-write KeyEntity file and StateEntity file
+            try
+            {
+                await fileLock.WaitAsync();
+                var keyfile = fileName + "_key";
+                using (var f = new StreamWriter(keyfile, false))
+                {
+                    var str = JsonConvert.SerializeObject(key);
+                    f.WriteLine(str);
+                }
+
+                var statefile = fileName + "_state";
+                using (var f = new StreamWriter(statefile, false))
+                {
+                    foreach (var state in states)
+                    {
+                        var str = JsonConvert.SerializeObject(state);
+                        f.WriteLine(str);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
+            }
+            finally
+            {
+                fileLock.Release();
             }
 
             return key.ETag;
@@ -179,6 +229,57 @@ namespace OrleansSiloHost
                 }
             }
             return false;
+        }
+
+        private async Task<KeyEntity> ReadKey()
+        {
+            try
+            {
+                await fileLock.WaitAsync();
+                var file = fileName + "_key";
+
+                var str = File.ReadAllText(file);
+                if (str.Length == 0) return new KeyEntity();
+                return JsonConvert.DeserializeObject<KeyEntity>(str);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
+            }
+            finally
+            {
+                fileLock.Release();
+            }
+            return new KeyEntity();
+        }
+
+        private async Task<List<KeyValuePair<long, StateEntity>>> ReadStates()
+        {
+            try
+            {
+                await fileLock.WaitAsync();
+                var file = fileName + "_state";
+                var results = new List<KeyValuePair<long, StateEntity>>();
+                using (var f = new StreamReader(file))
+                {
+                    string line;
+                    var count = 0;
+                    while ((line = f.ReadLine()) != null)
+                    {
+                        var entity = JsonConvert.DeserializeObject<StateEntity>(line);
+                        results.Add(new KeyValuePair<long, StateEntity>(count++, entity));
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
+            }
+            finally
+            {
+                fileLock.Release();
+            }
+            return new List<KeyValuePair<long, StateEntity>>();
         }
     }
 }

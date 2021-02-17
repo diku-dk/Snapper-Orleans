@@ -309,7 +309,7 @@ namespace Concurrency.Implementation
         {
             var grainIDsInTransaction = result.grainsInNestedFunctions;
             var commitTasks = new List<Task>();
-            if (log != null) commitTasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));
+            if (log != null) commitTasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));   
             foreach (var grain in grainIDsInTransaction)
             {
                 if (grain == myID) commitTasks.Add(Commit(tid));

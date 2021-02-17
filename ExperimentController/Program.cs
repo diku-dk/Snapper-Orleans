@@ -426,7 +426,7 @@ namespace ExperimentController
             numCoordinators = coordConfig.numCoordinators;
             workload.numWarehouse = vCPU * Constants.NUM_W_PER_4CORE / 4;
             numWarehouse = workload.numWarehouse;
-            exeConfig.logConfiguration.numPersistGrain = vCPU * 2;
+            exeConfig.logConfiguration.numPersistGrain = 1;
             Console.WriteLine($"worker node = {workload.numWorkerNodes}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}, numPersistGrain = {exeConfig.logConfiguration.numPersistGrain}");
 
             numWorkerNodes = workload.numWorkerNodes;

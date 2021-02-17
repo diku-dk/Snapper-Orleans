@@ -18,6 +18,8 @@ namespace Persist.Grains
         private SemaphoreSlim instanceLock;
         private TaskCompletionSource<bool> waitFlush;
 
+        private IDisposable disposable;
+
         public PersistGrain()
         { 
         }
@@ -25,12 +27,13 @@ namespace Persist.Grains
         public override Task OnActivateAsync()
         {
             index = 0;
-            maxBufferSize = 1000;
+            maxBufferSize = 2000;
             buffer = new byte[maxBufferSize];
             myID = (int)this.GetPrimaryKeyLong();
             fileName = Constants.logPath + myID;
             instanceLock = new SemaphoreSlim(1);
             waitFlush = new TaskCompletionSource<bool>();
+            disposable = RegisterTimer(TryFlush, null, TimeSpan.FromMilliseconds(5), TimeSpan.FromMilliseconds(10));
             return base.OnActivateAsync();
         }
 
@@ -38,20 +41,34 @@ namespace Persist.Grains
         {
             await instanceLock.WaitAsync(); 
             var sizeBytes = BitConverter.GetBytes(value.Length);
-            if (index + sizeBytes.Length + value.Length > maxBufferSize) Flush();
+            if (index + sizeBytes.Length + value.Length > maxBufferSize)
+            {
+                //Console.WriteLine($"grain {myID} flush {index} bytes because buffer is full. ");
+                await Flush();
+            } 
             Buffer.BlockCopy(sizeBytes, 0, buffer, index, sizeBytes.Length);
             index += sizeBytes.Length;
             Buffer.BlockCopy(value, 0, buffer, index, value.Length);
             index += value.Length;
             instanceLock.Release();
             await waitFlush.Task;
+            //Console.WriteLine($"log size = {sizeBytes.Length + value.Length}");
         }
 
-        private void Flush()
+        private async Task TryFlush(object obj)
+        {
+            //Console.WriteLine($"grain {myID} flush {index} bytes because of timer. ");
+            await instanceLock.WaitAsync();
+            if (index > 0) await Flush();
+            instanceLock.Release();
+        }
+
+        private async Task Flush()
         {
             using (var file = new FileStream(fileName, FileMode.Append, FileAccess.Write))
             {
-                file.Write(buffer, 0, index);
+                await file.WriteAsync(buffer, 0, index);
+                await file.FlushAsync();
             }
             buffer = new byte[maxBufferSize];
             index = 0;

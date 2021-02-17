@@ -118,7 +118,7 @@ namespace Concurrency.Implementation.Nondeterministic
                 activeState = (TState)committedState.GetState().Clone();
                 return activeState;
             }
-            throw new DeadlockAvoidanceException($"txn {tid} is aborted to avoid deadlock. ");
+            throw new DeadlockAvoidanceException($"txn {tid} is aborted because txn {waitinglist.First().Key} is writing now. ");
         }
 
         public Task<bool> Prepare(int tid)

@@ -18,7 +18,7 @@ namespace OrleansSiloHost
     {
         static private int siloPort;
         static private int gatewayPort;
-        static readonly bool enableOrleansTxn = false;
+        static readonly bool enableOrleansTxn = true;
 
         public static int Main(string[] args)
         {
@@ -114,7 +114,7 @@ namespace OrleansSiloHost
                 .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .ConfigureServices(ConfigureServices);
-            //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
             if (enableOrleansTxn)
             {
@@ -128,12 +128,9 @@ namespace OrleansSiloHost
                 }
                 else
                 {
-                    builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
-                    /*
-                    builder.AddFileGrainStorage("File", opts =>
-                    {
-                        opts.RootDirectory = @"C:\Users\Administrator\Desktop\logorleans";
-                    });*/
+                    builder
+                        //.AddFileTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                        .AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
                 }
                  
                 builder
