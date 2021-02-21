@@ -162,7 +162,7 @@ namespace NewProcess
                         }
                         catch (Exception e)    // this exception is only related to OrleansTransaction
                         {
-                            Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
+                            //Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
                             noException = false;
                         }
                         if (noException)
@@ -208,7 +208,7 @@ namespace NewProcess
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine($"Exception: {e.Message}. ");
+                        //Console.WriteLine($"Exception: {e.Message}. ");
                         noException = false;
                     }
                     if (noException)
