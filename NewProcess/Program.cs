@@ -122,6 +122,10 @@ namespace NewProcess
             Console.WriteLine($"thread = {threadIndex}, isDet = {isDet}, pipe = {pipeSize}");
             for (int eIndex = 0; eIndex < config.numEpochs; eIndex++)
             {
+                // measure durability
+                var phase1 = new List<double>();
+                var phase2 = new List<double>();
+
                 int numEmit = 0;
                 int numDetCommit = 0;
                 int numNonDetCommit = 0;
@@ -183,6 +187,10 @@ namespace NewProcess
                                 {
                                     numNonDetCommit++;
                                     latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+
+                                    // measure durability
+                                    phase1.Add(task.Result.phase1);
+                                    phase2.Add(task.Result.phase2);
                                 }
                                 else if (task.Result.Exp_Serializable) numNotSerializable++;
                                 else if (task.Result.Exp_Deadlock) numDeadlock++;
@@ -248,6 +256,7 @@ namespace NewProcess
                     res = new WorkloadResults(numDetTransaction, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
                 else res = new WorkloadResults(numDetTransaction, numEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
                 res.setLatency(latencies, det_latencies);
+                res.setLogLatency(phase1, phase2);  // measure durability
                 results[threadIndex] = res;
                 threadAcks[eIndex].Signal();  //Signal the completion of epoch
             }
@@ -660,6 +669,17 @@ namespace NewProcess
             }
             var res = new WorkloadResults(aggNumDetTransactions, aggNumNonDetTransactions, aggNumDetCommitted, aggNumNonDetCommitted, aggStartTime, aggEndTime, aggNumNotSerializable, aggNumDeadlock);
             res.setLatency(aggLatencies, aggDetLatencies);
+
+            // measure durability
+            var aggPhase1 = new List<double>();
+            var aggPhase2 = new List<double>();
+            for (int i = 0; i < results.Length; i++)
+            {
+                aggPhase1.AddRange(results[i].phase1);
+                aggPhase2.AddRange(results[i].phase2);
+            }
+            res.setLogLatency(aggPhase1, aggPhase2);
+
             return res;
         }
 

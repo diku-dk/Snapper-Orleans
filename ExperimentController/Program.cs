@@ -102,6 +102,8 @@ namespace ExperimentController
             Trace.Assert(workload.numEpochs >= 1);
             Trace.Assert(numWorkerNodes >= 1);
             var aggLatencies = new List<double>();
+            var aggPhase1 = new List<double>();
+            var aggPhase2 = new List<double>();
             var aggDetLatencies = new List<double>();
             var detThroughPutAccumulator = new List<float>();
             var nonDetThroughPutAccumulator = new List<float>();
@@ -120,6 +122,8 @@ namespace ExperimentController
                 long aggStartTime = results[epochNumber, 0].startTime;
                 long aggEndTime = results[epochNumber, 0].endTime;
                 aggLatencies.AddRange(results[epochNumber, 0].latencies);
+                aggPhase1.AddRange(results[epochNumber, 0].phase1);
+                aggPhase2.AddRange(results[epochNumber, 0].phase2);
                 aggDetLatencies.AddRange(results[epochNumber, 0].det_latencies);
                 for (int workerNode = 1; workerNode < numWorkerNodes; workerNode++)
                 {
@@ -132,6 +136,8 @@ namespace ExperimentController
                     aggStartTime = (results[epochNumber, workerNode].startTime < aggStartTime) ? results[epochNumber, workerNode].startTime : aggStartTime;
                     aggEndTime = (results[epochNumber, workerNode].endTime < aggEndTime) ? results[epochNumber, workerNode].endTime : aggEndTime;
                     aggLatencies.AddRange(results[epochNumber, workerNode].latencies);
+                    aggPhase1.AddRange(results[epochNumber, workerNode].phase1);
+                    aggPhase2.AddRange(results[epochNumber, workerNode].phase2);
                     aggDetLatencies.AddRange(results[epochNumber, workerNode].det_latencies);
                 }
                 var time = aggEndTime - aggStartTime;
@@ -181,15 +187,18 @@ namespace ExperimentController
                     foreach (var percentile in workload.percentilesToCalculate)
                     {
                         var lat = ArrayStatistics.PercentileInplace(aggDetLatencies.ToArray(), percentile);
-                        file.Write($" {lat}");
+                        file.Write($"{lat} ");
                     }
                 }
                 if (workload.deterministicTxnPercent < 100)
                 {
+                    var phase1 = ArrayStatistics.MeanStandardDeviation(aggPhase1.ToArray());
+                    var phase2 = ArrayStatistics.MeanStandardDeviation(aggPhase2.ToArray());
+                    file.Write($"{phase1.Item1} {phase1.Item2} {phase2.Item1} {phase2.Item2} ");
                     foreach (var percentile in workload.percentilesToCalculate)
                     {
                         var lat = ArrayStatistics.PercentileInplace(aggLatencies.ToArray(), percentile);
-                        file.Write($" {lat}");
+                        file.Write($"{lat} ");
                     }
                 }
                 file.WriteLine();

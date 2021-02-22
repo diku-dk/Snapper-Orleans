@@ -30,6 +30,10 @@ namespace Utilities
         public bool Exp_Deadlock;
         public bool isDet = false;
 
+        // measure durability
+        public double phase1;
+        public double phase2;
+
         public TransactionResult(object res = null)
         {
             resultObject = res;

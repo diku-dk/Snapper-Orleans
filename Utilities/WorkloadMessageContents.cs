@@ -95,6 +95,10 @@ namespace Utilities
         public List<double> latencies;
         public List<double> det_latencies;
 
+        // measure durability
+        public List<double> phase1;
+        public List<double> phase2;
+
         public WorkloadResults(int numDetTxn, int numNonDetTxn, int numDetCommitted, int numNonDetCommitted, long startTime, long endTime, int numNotSerializable, int numDeadlock)
         {
             this.numDetTxn = numDetTxn;
@@ -111,6 +115,13 @@ namespace Utilities
         {
             this.latencies = latencies;
             this.det_latencies = det_latencies;
+        }
+
+        // measure durability
+        public void setLogLatency(List<double> phase1, List<double> phase2)
+        {
+            this.phase1 = phase1;
+            this.phase2 = phase2;
         }
     }
 }

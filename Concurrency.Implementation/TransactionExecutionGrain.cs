@@ -91,6 +91,12 @@ namespace Concurrency.Implementation
 
         public async Task<TransactionResult> StartTransaction(string startFunction, FunctionInput functionCallInput)
         {
+            // measure durability
+            var startPhase1 = DateTime.Now;
+            var endPhase1 = DateTime.Now;
+            var startPhase2 = DateTime.Now;
+            var endPhase2 = DateTime.Now;
+
             TransactionContext context = null;
             Task<FunctionResult> t1 = null;
             var canCommit = true;
@@ -109,17 +115,24 @@ namespace Concurrency.Implementation
                 if (canCommit)
                 {
                     canCommit = CheckSerializability(t1.Result);
-                    if (canCommit) canCommit = await Prepare_2PC(context.transactionID, myID, t1.Result);
+                    if (canCommit)
+                    {
+                        startPhase1 = DateTime.Now;
+                        canCommit = await Prepare_2PC(context.transactionID, myID, t1.Result);
+                        endPhase1 = DateTime.Now;
+                    } 
                     else res.Exp_Serializable = true;
                 }
                 else res.Exp_Deadlock |= t1.Result.Exp_Deadlock;  // when deadlock = false, exception may from RW conflict
 
+                startPhase2 = DateTime.Now;
                 if (canCommit) await Commit_2PC(context.transactionID, t1.Result);
                 else
                 {
                     res.exception = true;
                     await Abort_2PC(context.transactionID, t1.Result);
                 }
+                endPhase2 = DateTime.Now;
             }
             catch (Exception e)
             {
@@ -136,6 +149,8 @@ namespace Concurrency.Implementation
                     if (highestCommittedBid < new_bid) highestCommittedBid = new_bid;
                 }
             }
+            res.phase1 = (endPhase1 - startPhase1).TotalMilliseconds;
+            res.phase2 = (endPhase2 - startPhase2).TotalMilliseconds;
             return res;
         }
 
