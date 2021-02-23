@@ -121,7 +121,7 @@ namespace OrleansSiloHost
                 if (Constants.enableAzureClustering)
                 {
                     builder
-                        .AddAzureTableTransactionalStateStorage("TransactionStore", options =>
+                        .AddAzureTableTransactionalStateStorageAsDefault(options =>
                         {
                             options.ConnectionString = Constants.connectionString;
                         });
@@ -134,7 +134,7 @@ namespace OrleansSiloHost
                 }
                  
                 builder
-                    .Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(200))
+                    //.Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(200))
                     //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))
                     //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20))
                     .UseTransactions();

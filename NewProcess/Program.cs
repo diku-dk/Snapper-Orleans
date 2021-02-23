@@ -188,9 +188,12 @@ namespace NewProcess
                                     numNonDetCommit++;
                                     latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
 
-                                    // measure durability
-                                    phase1.Add(task.Result.phase1);
-                                    phase2.Add(task.Result.phase2);
+                                    if (config.grainImplementationType == ImplementationType.SNAPPER)
+                                    {
+                                        // measure durability
+                                        phase1.Add(task.Result.phase1);
+                                        phase2.Add(task.Result.phase2);
+                                    }
                                 }
                                 else if (task.Result.Exp_Serializable) numNotSerializable++;
                                 else if (task.Result.Exp_Deadlock) numDeadlock++;
@@ -237,6 +240,13 @@ namespace NewProcess
                             {
                                 numNonDetCommit++;
                                 latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+
+                                if (config.grainImplementationType == ImplementationType.SNAPPER)
+                                {
+                                    // measure durability
+                                    phase1.Add(task.Result.phase1);
+                                    phase2.Add(task.Result.phase2);
+                                }
                             }
                             else if (task.Result.Exp_Serializable) numNotSerializable++;
                             else if (task.Result.Exp_Deadlock) numDeadlock++;
@@ -267,7 +277,7 @@ namespace NewProcess
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
             numDetConsumer = siloCPU / 4;
-            numNonDetConsumer = siloCPU / 4;
+            numNonDetConsumer = siloCPU * 2;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 
