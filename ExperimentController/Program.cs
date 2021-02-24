@@ -16,6 +16,7 @@ using Concurrency.Interface.Logging;
 using System.Collections.Specialized;
 using Concurrency.Interface.Nondeterministic;
 using TPCC.Interfaces;
+using Persist.Interfaces;
 
 namespace ExperimentController
 {
@@ -40,9 +41,9 @@ namespace ExperimentController
         static int numCoordinators;
         static ISerializer serializer;
 
-        static int vCPU;
+        static int vCPU = 0;
         static int numWarehouse = 0;
-
+        
         private static void GenerateWorkLoadFromSettingsFile()
         {
             //Parse and initialize benchmarkframework section
@@ -110,6 +111,7 @@ namespace ExperimentController
             var abortRateAccumulator = new List<double>();
             var notSerializableRateAccumulator = new List<float>();
             var deadlockRateAccumulator = new List<float>();
+            var ioThroughputAccumulator = new List<float>();
             //Skip the epochs upto warm up epochs
             for (int epochNumber = numWarmupEpoch; epochNumber < workload.numEpochs; epochNumber++)
             {
@@ -159,6 +161,8 @@ namespace ExperimentController
                 detThroughPutAccumulator.Add(detCommittedTxnThroughput);
                 nonDetThroughPutAccumulator.Add(nonDetCommittedTxnThroughput);
                 abortRateAccumulator.Add(abortRate);
+
+                ioThroughputAccumulator.Add((float)IOcount[epochNumber] * 1000 / time);
             }
 
             //Compute statistics on the accumulators, maybe a better way is to maintain a sorted list
@@ -167,6 +171,7 @@ namespace ExperimentController
             var abortRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(abortRateAccumulator.ToArray());
             var notSerializableRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(notSerializableRateAccumulator.ToArray());
             var deadlockRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(deadlockRateAccumulator.ToArray());
+            var ioThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(ioThroughputAccumulator.ToArray());
             using (file = new System.IO.StreamWriter(filePath, true))
             {
                 file.Write($"numWarehouse={numWarehouse} siloCPU={vCPU} distribution={workload.distribution} benchmark={workload.benchmark} ");
@@ -181,6 +186,10 @@ namespace ExperimentController
                         var abortRWConflict = 100 - deadlockRateMeanAndSd.Item1 - notSerializableRateMeanAndSd.Item1;
                         file.Write($"{abortRWConflict}% {deadlockRateMeanAndSd.Item1}% {notSerializableRateMeanAndSd.Item1}% ");
                     }
+                }
+                if (workload.grainImplementationType == ImplementationType.SNAPPER)
+                {
+                    file.Write($"{ioThroughputMeanAndSd.Item1} {ioThroughputMeanAndSd.Item2} ");   // number of IOs per second
                 }
                 if (workload.deterministicTxnPercent > 0)
                 {
@@ -251,6 +260,14 @@ namespace ExperimentController
 
                 for (int i = 0; i < workload.numEpochs; i++)
                 {
+                    if (i > 0)
+                    {
+                        SetIOCount();
+                        while (!setCountFinish) Thread.Sleep(100);
+
+                        GetIOCount(i - 1);
+                        while (!getCountFinish) Thread.Sleep(100);
+                    }
                     //Send the command to run an epoch
                     Console.WriteLine($"Running Epoch {i} on {numWorkerNodes} worker nodes");
                     msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH);
@@ -258,7 +275,42 @@ namespace ExperimentController
                     WaitForWorkerAcksAndReset();
                     Console.WriteLine($"Finished running epoch {i} on {numWorkerNodes} worker nodes");
                 }
+
+                GetIOCount(workload.numEpochs - 1);
+                while (!getCountFinish) Thread.Sleep(100);
             }
+        }
+
+        static bool setCountFinish = false;
+        static bool getCountFinish = false;
+        static int numPersistGrain = 0;
+        static long[] IOcount;
+
+        static async void SetIOCount()
+        {
+            var tasks = new List<Task>();
+            for (int i = 0; i < numPersistGrain; i++)
+            {
+                var grain = client.GetGrain<IPersistGrain>(i);
+                tasks.Add(grain.SetIOCount());
+            }
+            await Task.WhenAll(tasks);
+            setCountFinish = true;
+        }
+
+        static async void GetIOCount(int epoch)
+        {
+            var tasks = new List<Task<long>>();
+            for (int i = 0; i < numPersistGrain; i++)
+            {
+                var grain = client.GetGrain<IPersistGrain>(i);
+                tasks.Add(grain.GetIOCount());
+            }
+            await Task.WhenAll(tasks);
+
+            IOcount[epoch] = 0;
+            foreach (var t in tasks) IOcount[epoch] += t.Result;
+            getCountFinish = true;
         }
 
         static void PullFromWorkers()
@@ -439,7 +491,8 @@ namespace ExperimentController
             numCoordinators = coordConfig.numCoordinators;
             workload.numWarehouse = vCPU * Constants.NUM_W_PER_4CORE / 4;
             numWarehouse = workload.numWarehouse;
-            exeConfig.logConfiguration.numPersistGrain = 1;
+            numPersistGrain = 1;
+            exeConfig.logConfiguration.numPersistGrain = numPersistGrain;
             Console.WriteLine($"worker node = {workload.numWorkerNodes}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}, numPersistGrain = {exeConfig.logConfiguration.numPersistGrain}");
 
             numWorkerNodes = workload.numWorkerNodes;

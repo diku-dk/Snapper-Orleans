@@ -18,6 +18,8 @@ namespace Persist.Grains
         private SemaphoreSlim instanceLock;
         private TaskCompletionSource<bool> waitFlush;
 
+        private long IOcount = 0;
+
         private IDisposable disposable;
 
         public PersistGrain()
@@ -35,6 +37,16 @@ namespace Persist.Grains
             waitFlush = new TaskCompletionSource<bool>();
             disposable = RegisterTimer(TryFlush, null, TimeSpan.FromMilliseconds(5), TimeSpan.FromMilliseconds(10));
             return base.OnActivateAsync();
+        }
+
+        public async Task<long> GetIOCount()
+        {
+            return IOcount;
+        }
+
+        public async Task SetIOCount()
+        {
+            IOcount = 0;
         }
 
         public async Task Write(byte[] value)
@@ -74,6 +86,7 @@ namespace Persist.Grains
             index = 0;
             waitFlush.SetResult(true);
             waitFlush = new TaskCompletionSource<bool>();
+            IOcount++;
         }
     }
 }

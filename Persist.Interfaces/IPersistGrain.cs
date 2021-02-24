@@ -8,5 +8,9 @@ namespace Persist.Interfaces
     {
         [AlwaysInterleave]
         Task Write(byte[] value);
+
+        Task<long> GetIOCount();
+
+        Task SetIOCount();
     }
 }

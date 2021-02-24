@@ -6,7 +6,7 @@ using System;
 namespace Concurrency.Interface.Logging
 {
     public enum dataFormatType { BINARY, JSON, MSGPACK };
-    public enum StorageWrapperType { NOSTORAGE, INMEMORY, FILESYSTEM, DYNAMODB };
+    public enum StorageWrapperType { NOSTORAGE, INMEMORY, FILESYSTEM, DYNAMODB};
     public interface ILoggingProtocol<TState>
     {
         Task HandleBeforePrepareIn2PC(int tid, int coordinatorKey, HashSet<int> grains);
