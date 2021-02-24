@@ -258,26 +258,24 @@ namespace ExperimentController
                 WaitForWorkerAcksAndReset();
                 Console.WriteLine($"Receive workload configuration ack from {numWorkerNodes} worker nodes");
 
+                IOcount = new long[workload.numEpochs];
                 for (int i = 0; i < workload.numEpochs; i++)
                 {
-                    if (i > 0)
-                    {
-                        SetIOCount();
-                        while (!setCountFinish) Thread.Sleep(100);
+                    SetIOCount();
+                    while (!setCountFinish) Thread.Sleep(100);
+                    setCountFinish = false;
 
-                        GetIOCount(i - 1);
-                        while (!getCountFinish) Thread.Sleep(100);
-                    }
                     //Send the command to run an epoch
                     Console.WriteLine($"Running Epoch {i} on {numWorkerNodes} worker nodes");
                     msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH);
                     workers.SendMoreFrame("RUN_EPOCH").SendFrame(serializer.serialize(msg));
                     WaitForWorkerAcksAndReset();
                     Console.WriteLine($"Finished running epoch {i} on {numWorkerNodes} worker nodes");
-                }
 
-                GetIOCount(workload.numEpochs - 1);
-                while (!getCountFinish) Thread.Sleep(100);
+                    GetIOCount(i);
+                    while (!getCountFinish) Thread.Sleep(100);
+                    getCountFinish = false;
+                }
             }
         }
 
@@ -486,7 +484,7 @@ namespace ExperimentController
             workload.zipfianConstant = float.Parse(args[0]);
             workload.deterministicTxnPercent = float.Parse(args[1]);
             vCPU = int.Parse(args[2]);
-            workload.numAccounts = 5000 * vCPU;
+            workload.numAccounts = 500 * vCPU;
             coordConfig.numCoordinators = vCPU * 2;
             numCoordinators = coordConfig.numCoordinators;
             workload.numWarehouse = vCPU * Constants.NUM_W_PER_4CORE / 4;

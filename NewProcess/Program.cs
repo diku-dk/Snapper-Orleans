@@ -277,7 +277,7 @@ namespace NewProcess
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
             numDetConsumer = siloCPU / 4;
-            numNonDetConsumer = siloCPU * 2;
+            numNonDetConsumer = siloCPU / 4;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 

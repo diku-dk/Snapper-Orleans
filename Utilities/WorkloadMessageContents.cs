@@ -22,13 +22,13 @@ namespace Utilities
         public const string TPCC_dataPath = @"C:\Users\Administrator\Desktop\data\tpcc\grainData\";
         public const string TPCC_workloadPath = @"C:\Users\Administrator\Desktop\data\tpcc\workload\";
 
-        public const bool enableAzureClustering = true;
+        public const bool enableAzureClustering = false;
         public const string connectionString = "DefaultEndpointsProtocol=https;AccountName=silo-membership-table;AccountKey=cyNmVPVYxlTeepACZWayOBtK4yuN5N733nBcaolrVtDjQd8Y04e263oZt8nKWLHNLAVPsMvyU6gO7dHUawmy3A==;TableEndpoint=https://silo-membership-table.table.cosmos.azure.com:443/;";   // primary connection string
 
         //public const string logPath = @"D:\log\";
         public const string logPath = @"C:\Users\Administrator\Desktop\log\";
-        //public const string dataPath = @"C:\Users\Administrator\Desktop\data\";
-        public const string dataPath = @"C:\Users\Yijian\Desktop\data\";    // only used for Azure
+        public const string dataPath = @"C:\Users\Administrator\Desktop\data\";
+        //public const string dataPath = @"C:\Users\Yijian\Desktop\data\";    // only used for Azure
 
         public const bool multiWorker = false;
         public const string controller_Local_SinkAddress = "@tcp://localhost:5558";
