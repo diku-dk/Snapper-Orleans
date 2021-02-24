@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading;
 using Persist.Interfaces;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace Persist.Grains
 {
@@ -13,14 +14,15 @@ namespace Persist.Grains
         private int myID;
         private int index;
         private byte[] buffer;
+        private int numWaitLog;
+        private FileStream file;
         private string fileName;
+        private int maxNumWaitLog;
         private int maxBufferSize;
         private SemaphoreSlim instanceLock;
         private TaskCompletionSource<bool> waitFlush;
 
         private long IOcount = 0;
-
-        private IDisposable disposable;
 
         public PersistGrain()
         { 
@@ -29,13 +31,15 @@ namespace Persist.Grains
         public override Task OnActivateAsync()
         {
             index = 0;
-            maxBufferSize = 2000;
+            numWaitLog = 0;
+            maxNumWaitLog = 3 * 64;   // 64 is the pipe size
+            maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
             buffer = new byte[maxBufferSize];
             myID = (int)this.GetPrimaryKeyLong();
             fileName = Constants.logPath + myID;
             instanceLock = new SemaphoreSlim(1);
             waitFlush = new TaskCompletionSource<bool>();
-            disposable = RegisterTimer(TryFlush, null, TimeSpan.FromMilliseconds(5), TimeSpan.FromMilliseconds(10));
+            file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
             return base.OnActivateAsync();
         }
 
@@ -51,42 +55,36 @@ namespace Persist.Grains
 
         public async Task Write(byte[] value)
         {
-            await instanceLock.WaitAsync(); 
+            await instanceLock.WaitAsync();
+
+            // STEP 1: add log to buffer
             var sizeBytes = BitConverter.GetBytes(value.Length);
-            if (index + sizeBytes.Length + value.Length > maxBufferSize)
-            {
-                //Console.WriteLine($"grain {myID} flush {index} bytes because buffer is full. ");
-                await Flush();
-            } 
+            Debug.Assert(index + sizeBytes.Length + value.Length <= maxBufferSize);
             Buffer.BlockCopy(sizeBytes, 0, buffer, index, sizeBytes.Length);
             index += sizeBytes.Length;
             Buffer.BlockCopy(value, 0, buffer, index, value.Length);
             index += value.Length;
+            numWaitLog++;
+
+            // STEP 2: check if need to flush
+            if (numWaitLog == maxNumWaitLog) await Flush();
+
             instanceLock.Release();
             await waitFlush.Task;
-            //Console.WriteLine($"log size = {sizeBytes.Length + value.Length}");
-        }
-
-        private async Task TryFlush(object obj)
-        {
-            //Console.WriteLine($"grain {myID} flush {index} bytes because of timer. ");
-            await instanceLock.WaitAsync();
-            if (index > 0) await Flush();
-            instanceLock.Release();
         }
 
         private async Task Flush()
         {
-            using (var file = new FileStream(fileName, FileMode.Append, FileAccess.Write))
-            {
-                await file.WriteAsync(buffer, 0, index);
-                await file.FlushAsync();
-            }
-            buffer = new byte[maxBufferSize];
+            await file.WriteAsync(buffer, 0, index);
+            await file.FlushAsync();
+
             index = 0;
+            IOcount++;
+            numWaitLog = 0;
+            buffer = new byte[maxBufferSize];
+            
             waitFlush.SetResult(true);
             waitFlush = new TaskCompletionSource<bool>();
-            IOcount++;
         }
     }
 }
