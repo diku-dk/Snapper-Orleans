@@ -1,15 +1,46 @@
 ﻿using System;
-using Orleans;
 using Utilities;
 using System.IO;
 using System.Threading;
 using Persist.Interfaces;
 using System.Diagnostics;
+using Orleans.Concurrency;
 using System.Threading.Tasks;
 
 namespace Persist.Grains
 {
-    public class PersistGrain : Grain, IPersistGrain
+    [Reentrant]
+    public class PersistSingletonGroup : IPersistSingletonGroup
+    {
+        private IPersistWorker[] persistWorkers;
+
+        public void Init(int numSingleton, int maxNumWaitLog)
+        {
+            persistWorkers = new IPersistWorker[numSingleton];
+            for (int i = 0; i < numSingleton; i++) persistWorkers[i] = new PersistWorker(i, maxNumWaitLog);
+        }
+
+        public IPersistWorker GetSingleton(int index)
+        {
+            return persistWorkers[index];
+        }
+
+        public long GetIOCount()
+        {
+            long count = 0;
+            for (int i = 0; i < persistWorkers.Length; i++) count += persistWorkers[i].GetIOCount();
+            return count;
+
+        }
+
+        public void SetIOCount()
+        {
+            for (int i = 0; i < persistWorkers.Length; i++) persistWorkers[i].SetIOCount();
+        }
+    }
+
+    [Reentrant]
+    public class PersistWorker : IPersistWorker
     {
         private int myID;
         private int index;
@@ -24,31 +55,26 @@ namespace Persist.Grains
 
         private long IOcount = 0;
 
-        public PersistGrain()
-        { 
-        }
-
-        public override Task OnActivateAsync()
+        public PersistWorker(int myID, int maxNumWaitLog)
         {
             index = 0;
             numWaitLog = 0;
-            maxNumWaitLog = 3 * 64;   // 64 is the pipe size
+            this.myID = myID;
             maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
             buffer = new byte[maxBufferSize];
-            myID = (int)this.GetPrimaryKeyLong();
+            this.maxNumWaitLog = maxNumWaitLog;
             fileName = Constants.logPath + myID;
             instanceLock = new SemaphoreSlim(1);
             waitFlush = new TaskCompletionSource<bool>();
             file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
-            return base.OnActivateAsync();
         }
 
-        public async Task<long> GetIOCount()
+        public long GetIOCount()
         {
             return IOcount;
         }
 
-        public async Task SetIOCount()
+        public void SetIOCount()
         {
             IOcount = 0;
         }
@@ -71,7 +97,7 @@ namespace Persist.Grains
             {
                 await Flush();
                 instanceLock.Release();
-            } 
+            }
             else
             {
                 instanceLock.Release();
@@ -88,7 +114,7 @@ namespace Persist.Grains
             IOcount++;
             numWaitLog = 0;
             buffer = new byte[maxBufferSize];
-            
+
             waitFlush.SetResult(true);
             waitFlush = new TaskCompletionSource<bool>();
         }

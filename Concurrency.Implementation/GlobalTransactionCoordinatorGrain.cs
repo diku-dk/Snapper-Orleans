@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
 using Concurrency.Implementation.Logging;
+using Persist.Interfaces;
 
 namespace Concurrency.Implementation
 {
@@ -26,6 +27,7 @@ namespace Concurrency.Implementation
         private Dictionary<int, int> coordEmitLastBatch;   // <bid, coordID who emit lastBid>
         private SortedList<int, DateTime> batchStartTime;
         private Dictionary<int, int> expectedAcksPerBatch;
+        private IPersistSingletonGroup persistSingletonGroup;
         private List<IGlobalTransactionCoordinatorGrain> coordList;
         private Dictionary<int, TaskCompletionSource<bool>> batchesWaitingForCommit;
         Dictionary<int, TaskCompletionSource<bool>> detEmitPromiseMap, nonDetEmitPromiseMap;
@@ -66,6 +68,11 @@ namespace Concurrency.Implementation
             deterministicTransactionRequests = new Dictionary<int, List<TransactionContext>>();
             batchSchedulePerGrain = new Dictionary<int, Dictionary<int, DeterministicBatchSchedule>>();
             return base.OnActivateAsync();
+        }
+
+        public GlobalTransactionCoordinatoGrain(IPersistSingletonGroup persistSingletonGroup)
+        {
+            this.persistSingletonGroup = persistSingletonGroup;
         }
 
         // if persist PACT input
@@ -372,7 +379,7 @@ namespace Concurrency.Implementation
             if (batchesWaitingForCommit.ContainsKey(bid)) batchesWaitingForCommit.Remove(bid);
         }
 
-        public Task SpawnCoordinator(string grainClassName, int numofCoordinators, int batchInterval, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs, dataFormatType dataFormat, StorageWrapperType logStorage)
+        public Task SpawnCoordinator(string grainClassName, int numofCoordinators, int batchInterval, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs, LoggingConfiguration loggingConfig)
         {
             Debug.Assert(deterministicTransactionRequests.Count == 0);
 
@@ -397,8 +404,27 @@ namespace Concurrency.Implementation
             Console.WriteLine($"coord {myID}: batchInterval = {batchInterval}");
             if (idleIntervalTillBackOffSecs > 3600) throw new Exception("Too high value for back off probing -> cannot exceed an 1 hour");
 
-            if (logStorage != StorageWrapperType.NOSTORAGE) log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, dataFormat, logStorage);
-            Console.WriteLine($"Coord {myID} initialize logging {logStorage}.");
+            switch (loggingConfig.loggingType)
+            {
+                case LoggingType.NOLOGGING:
+                    break;
+                case LoggingType.ONGRAIN:
+                    log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, loggingConfig);
+                    break;
+                case LoggingType.PERSISTGRAIN:
+                    var persistGrainID = Helper.MapGrainIDToPersistItemID(loggingConfig.numPersistItem, myID);
+                    var persistGrain = GrainFactory.GetGrain<IPersistGrain>(persistGrainID);
+                    log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, loggingConfig, persistGrain);
+                    break;
+                case LoggingType.PERSISTSINGLETON:
+                    var persistWorkerID = Helper.MapGrainIDToPersistItemID(loggingConfig.numPersistItem, myID);
+                    var persistWorker = persistSingletonGroup.GetSingleton(persistWorkerID);
+                    log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, loggingConfig, persistWorker);
+                    break;
+                default:
+                    throw new Exception($"Exception: Unknown loggingType {loggingConfig.loggingType}");
+            }
+            Console.WriteLine($"Coord {myID} initialize logging {loggingConfig.loggingType}.");
 
             return Task.CompletedTask;
         }

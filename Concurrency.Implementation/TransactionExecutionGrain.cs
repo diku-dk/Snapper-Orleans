@@ -16,7 +16,6 @@ namespace Concurrency.Implementation
     {
         private int myID;
         private int coordID;
-        public int numCoord;
         protected string grainClassName;
         private int highestCommittedBid;
         private TransactionScheduler myScheduler;
@@ -24,35 +23,47 @@ namespace Concurrency.Implementation
         private Dictionary<int, int> coordinatorMap;    // <act tid, grainID who starts the act>
         protected ILoggingProtocol<TState> log = null;
         private IGlobalTransactionCoordinatorGrain myCoordinator;
+        private readonly IPersistSingletonGroup persistSingletonGroup;
         private Dictionary<int, TaskCompletionSource<bool>> batchCommit;
         private TimeSpan deadlockTimeout = TimeSpan.FromMilliseconds(20);
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
         private Dictionary<int, IGlobalTransactionCoordinatorGrain> coordList;  // <coordID, coord>
 
-        public TransactionExecutionGrain(string grainClassName)
+        public TransactionExecutionGrain(IPersistSingletonGroup persistSingletonGroup, string grainClassName)
         {
+            this.persistSingletonGroup = persistSingletonGroup;
             this.grainClassName = grainClassName;
         }
 
         public async override Task OnActivateAsync()
         {
             myID = (int)this.GetPrimaryKeyLong();
-            var configTuple = await GrainFactory.GetGrain<IConfigurationManagerGrain>(0).GetConfiguration(myID);
-            // <ExecutionGrainConfiguration, coordinator ID, num_coords>
-            coordID = configTuple.Item2;
-            numCoord = configTuple.Item3;
+            var configTuple = await GrainFactory.GetGrain<IConfigurationManagerGrain>(0).GetConfiguration();
+            // <exeConfig, loggingConfig, numCoord>
+            coordID = Helper.MapGrainIDToCoordID(configTuple.Item3, myID);
             myCoordinator = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(coordID);
-            state = new HybridState<TState>(configTuple.Item1.nonDetCCConfiguration.nonDetConcurrencyManager);
-            var logConfig = configTuple.Item1.logConfiguration;
-            if (logConfig.isLoggingEnabled)
+            state = new HybridState<TState>(configTuple.Item1.nonDetCCType);
+            var loggingConfig = configTuple.Item2;
+            switch (loggingConfig.loggingType)
             {
-                if (logConfig.usePersistGrain)
-                {
-                    var persistGrain = GrainFactory.GetGrain<IPersistGrain>(Helper.GetPersistGrainID(logConfig.numPersistGrain, myID));
-                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, logConfig.dataFormat, logConfig.loggingStorageWrapper, persistGrain);
-                } 
-                else log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, logConfig.dataFormat, logConfig.loggingStorageWrapper);
-            } 
+                case LoggingType.NOLOGGING:
+                    break;
+                case LoggingType.ONGRAIN:
+                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, loggingConfig);
+                    break;
+                case LoggingType.PERSISTGRAIN:
+                    var persistGrainID = Helper.MapGrainIDToPersistItemID(loggingConfig.numPersistItem, myID);
+                    var persistGrain = GrainFactory.GetGrain<IPersistGrain>(persistGrainID);
+                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, loggingConfig, persistGrain);
+                    break;
+                case LoggingType.PERSISTSINGLETON:
+                    var persistWorkerID = Helper.MapGrainIDToPersistItemID(loggingConfig.numPersistItem, myID);
+                    var persistWorker = persistSingletonGroup.GetSingleton(persistWorkerID);
+                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, loggingConfig, persistWorker);
+                    break;
+                default:
+                    throw new Exception($"Exception: Unknown loggingType {loggingConfig.loggingType}");
+            }
 
             highestCommittedBid = -1;
             coordinatorMap = new Dictionary<int, int>();

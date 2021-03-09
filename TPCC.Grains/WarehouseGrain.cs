@@ -1,6 +1,7 @@
 ﻿using System;
 using Utilities;
 using TPCC.Interfaces;
+using Persist.Interfaces;
 using System.Threading.Tasks;
 using Orleans.CodeGeneration;
 using System.Collections.Generic;
@@ -12,7 +13,7 @@ namespace TPCC.Grains
 {
     public class WarehouseGrain : TransactionExecutionGrain<WarehouseData>, IWarehouseGrain
     {
-        public WarehouseGrain() : base("TPCC.Grains.WarehouseGrain")
+        public WarehouseGrain(IPersistSingletonGroup persistSingletonGroup) : base(persistSingletonGroup, "SmallBank.Grains.CustomerAccountGroupGrain")
         {
         }
 

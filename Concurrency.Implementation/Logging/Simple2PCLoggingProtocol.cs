@@ -1,6 +1,7 @@
 ﻿using System;
 using Utilities;
 using Persist.Interfaces;
+using System.Diagnostics;
 using Concurrency.Interface;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -15,48 +16,60 @@ namespace Concurrency.Implementation.Logging
         private ISerializer serializer;
         private IKeyValueStorageWrapper logStorage;
 
-        // use another grain to persist log
         private bool usePersistGrain = false;
         private IPersistGrain persistGrain;
+        private bool usePersistSingleton = false;
+        private IPersistWorker persistWorker;
 
-        public Simple2PCLoggingProtocol(string grainType, int grainID, dataFormatType dataFormat, StorageWrapperType storage, object persistGrain = null)
+        public Simple2PCLoggingProtocol(string grainType, int grainID, LoggingConfiguration loggingConfig, object persistItem = null)
         {
             this.grainID = grainID;
             sequenceNumber = 0;
 
-            if (persistGrain != null)
+            switch (loggingConfig.loggingType)
             {
-                usePersistGrain = true;
-                this.persistGrain = (IPersistGrain)persistGrain;
+                case LoggingType.NOLOGGING:
+                    break;
+                case LoggingType.ONGRAIN:
+                    switch (loggingConfig.storageType)
+                    {
+                        case StorageType.FILESYSTEM:
+                            logStorage = new FileKeyValueStorageWrapper(grainType, grainID);
+                            break;
+                        case StorageType.DYNAMODB:
+                            logStorage = new DynamoDBStorageWrapper(grainType, grainID);
+                            break;
+                        case StorageType.INMEMORY:
+                            logStorage = new InMemoryStorageWrapper();
+                            break;
+                        default:
+                            throw new Exception($"Exception: Unknown StorageWrapper {loggingConfig.storageType}");
+                    }
+                    break;
+                case LoggingType.PERSISTGRAIN:
+                    usePersistGrain = true;
+                    Debug.Assert(persistItem != null);
+                    persistGrain = (IPersistGrain)persistItem;
+                    break;
+                case LoggingType.PERSISTSINGLETON:
+                    usePersistSingleton = true;
+                    Debug.Assert(persistItem != null);
+                    persistWorker = (IPersistWorker)persistItem;
+                    break;
+                default:
+                    throw new Exception($"Exception: Unknown loggingType {loggingConfig.loggingType}");
             }
-            else
+
+            switch (loggingConfig.serializerType)
             {
-                switch (storage)
-                {
-                    case StorageWrapperType.FILESYSTEM:
-                        logStorage = new FileKeyValueStorageWrapper(grainType, grainID);
-                        break;
-                    case StorageWrapperType.DYNAMODB:
-                        logStorage = new DynamoDBStorageWrapper(grainType, grainID);
-                        break;
-                    case StorageWrapperType.INMEMORY:
-                        logStorage = new InMemoryStorageWrapper();
-                        break;
-                    default:
-                        throw new Exception($"Exception: Unknown StorageWrapper {storage}");
-                }
-            }
-            
-            switch (dataFormat)
-            {
-                case dataFormatType.BINARY:
+                case SerializerType.BINARY:
                     serializer = new BinarySerializer();
                     break;
-                case dataFormatType.MSGPACK:
+                case SerializerType.MSGPACK:
                     serializer = new MsgPackSerializer();
                     break;
                 default:
-                    throw new Exception($"Exception: Unknown serailizer {dataFormat}");
+                    throw new Exception($"Exception: Unknown serailizer {loggingConfig.serializerType}");
             }
         }
 
@@ -71,61 +84,76 @@ namespace Concurrency.Implementation.Logging
             return returnVal;
         }
 
-        async Task ILoggingProtocol<TState>.HandleBeforePrepareIn2PC(int tid, int coordinatorKey, HashSet<int> grains)
+        private async Task WriteLog(byte[] key, byte[] value)
         {
-            var logRecord = new LogParticipant(getSequenceNumber(), coordinatorKey, tid, grains);
-            if (!usePersistGrain) await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
-            else await persistGrain.Write(serializer.serialize(logRecord));
+            if (usePersistGrain) await persistGrain.Write(value);
+            else if (usePersistSingleton) await persistWorker.Write(value);
+            else await logStorage.Write(key, value);
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnAbortIn2PC(int tid, int coordinatorKey)
+        public async Task HandleBeforePrepareIn2PC(int tid, int coordinatorKey, HashSet<int> grains)
+        {
+            var logRecord = new LogParticipant(getSequenceNumber(), coordinatorKey, tid, grains);
+            var key = BitConverter.GetBytes(logRecord.sequenceNumber);
+            var value = serializer.serialize(logRecord);
+            await WriteLog(key, value);
+        }
+
+        public async Task HandleOnAbortIn2PC(int tid, int coordinatorKey)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.ABORT, coordinatorKey, tid);
-            if (!usePersistGrain) await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
-            else await persistGrain.Write(serializer.serialize(logRecord));
+            var key = BitConverter.GetBytes(logRecord.sequenceNumber);
+            var value = serializer.serialize(logRecord);
+            await WriteLog(key, value);
         }
 
         async Task ILoggingProtocol<TState>.HandleOnCommitIn2PC(int tid, int coordinatorKey)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.COMMIT, coordinatorKey, tid);
-            if (!usePersistGrain) await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
-            else await persistGrain.Write(serializer.serialize(logRecord));
+            var key = BitConverter.GetBytes(logRecord.sequenceNumber);
+            var value = serializer.serialize(logRecord);
+            await WriteLog(key, value);
         }
 
         async Task ILoggingProtocol<TState>.HandleOnPrepareIn2PC(ITransactionalState<TState> state, int tid, int coordinatorKey)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.PREPARE, coordinatorKey, tid, state.GetPreparedState(tid));
-            if (!usePersistGrain) await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
-            else await persistGrain.Write(serializer.serialize(logRecord));
+            var key = BitConverter.GetBytes(logRecord.sequenceNumber);
+            var value = serializer.serialize(logRecord);
+            await WriteLog(key, value);
         }
 
         async Task ILoggingProtocol<TState>.HandleOnCompleteInDeterministicProtocol(ITransactionalState<TState> state, int bid, int coordinatorKey)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMPLETE, coordinatorKey, bid, state.GetCommittedState(bid));
-            if (!usePersistGrain) await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
-            else await persistGrain.Write(serializer.serialize(logRecord));
+            var key = BitConverter.GetBytes(logRecord.sequenceNumber);
+            var value = serializer.serialize(logRecord);
+            await WriteLog(key, value);
         }
 
         async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, HashSet<int> grains)
         {
             var logRecord = new LogParticipant(getSequenceNumber(), grainID, bid, grains);
-            if (!usePersistGrain) await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
-            else await persistGrain.Write(serializer.serialize(logRecord));
+            var key = BitConverter.GetBytes(logRecord.sequenceNumber);
+            var value = serializer.serialize(logRecord);
+            await WriteLog(key, value);
         }
 
         async Task ILoggingProtocol<TState>.HandleOnCommitInDeterministicProtocol(int bid)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMMIT, grainID, bid);
-            if (!usePersistGrain) await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
-            else await persistGrain.Write(serializer.serialize(logRecord));
+            var key = BitConverter.GetBytes(logRecord.sequenceNumber);
+            var value = serializer.serialize(logRecord);
+            await WriteLog(key, value);
         }
 
         // if persist PACT input
         async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, Dictionary<int, DeterministicBatchSchedule> batchSchedule, Dictionary<int, Tuple<int, object>> inputs)
         {
             var logRecord = new LogForPACT(getSequenceNumber(), bid, batchSchedule, inputs);
-            if (!usePersistGrain) await logStorage.Write(BitConverter.GetBytes(logRecord.sequenceNumber), serializer.serialize(logRecord));
-            else await persistGrain.Write(serializer.serialize(logRecord));
+            var key = BitConverter.GetBytes(logRecord.sequenceNumber);
+            var value = serializer.serialize(logRecord);
+            await WriteLog(key, value);
         }
     }
 }

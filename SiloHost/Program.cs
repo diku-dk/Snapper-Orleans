@@ -2,8 +2,10 @@
 using Orleans;
 using Utilities;
 using System.Net;
+using Persist.Grains;
 using Orleans.Hosting;
 using Orleans.Runtime;
+using Persist.Interfaces;
 using Orleans.Configuration;
 using System.Threading.Tasks;
 using Orleans.Runtime.Placement;
@@ -151,6 +153,9 @@ namespace OrleansSiloHost
 
         private static void ConfigureServices(IServiceCollection services)
         {
+            // dependency injection
+            services.AddSingleton<IPersistSingletonGroup, PersistSingletonGroup>();
+
             services.AddSingletonNamedService<PlacementStrategy, CoordPlacementStrategy>(nameof(CoordPlacementStrategy));
             services.AddSingletonKeyedService<Type, IPlacementDirector, CoordPlacement>(typeof(CoordPlacementStrategy));
             services.AddSingletonNamedService<PlacementStrategy, GrainPlacementStrategy>(nameof(GrainPlacementStrategy));

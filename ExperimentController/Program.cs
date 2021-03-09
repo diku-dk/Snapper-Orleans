@@ -1,48 +1,49 @@
 ﻿using NetMQ;
 using System;
 using Orleans;
+using System.IO;
 using Utilities;
 using NewProcess;
 using NetMQ.Sockets;
+using TPCC.Interfaces;
 using System.Threading;
 using System.Diagnostics;
+using Persist.Interfaces;
 using System.Configuration;
 using SmallBank.Interfaces;
 using Concurrency.Interface;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using MathNet.Numerics.Statistics;
-using Concurrency.Interface.Logging;
 using System.Collections.Specialized;
 using Concurrency.Interface.Nondeterministic;
-using TPCC.Interfaces;
-using Persist.Interfaces;
 
 namespace ExperimentController
 {
     class Program
     {
+        static int vCPU = 0;
+        static string filePath;
+        static StreamWriter file;
+        static int batchInterval;
         static string sinkAddress;
-        static string workerAddress;
         static int numWorkerNodes;
         static int numWarmupEpoch;
-        static int batchInterval;
-        static IClusterClient client;
-        static volatile bool asyncInitializationDone = false;
-        static volatile bool loadingDone = false;
-        static CountdownEvent ackedWorkers;
-        static WorkloadConfiguration workload;
-        static ExecutionGrainConfiguration exeConfig;
-        static CoordinatorGrainConfiguration coordConfig;
-        static WorkloadResults[,] results;
-        static string filePath;
-        static System.IO.StreamWriter file;
-        static ConcurrencyType nonDetCCType;
         static int numCoordinators;
-        static ISerializer serializer;
-
-        static int vCPU = 0;
+        static string workerAddress;
         static int numWarehouse = 0;
+        static IClusterClient client;
+        static ISerializer serializer;
+        static WorkloadResults[,] results;
+        static CountdownEvent ackedWorkers;
+        static ConcurrencyType nonDetCCType;
+        static WorkloadConfiguration workload;
+        static volatile bool loadingDone = false;
+        static LoggingConfiguration loggingConfig;
+        static ExecutionGrainConfiguration exeConfig;
+        static IConfigurationManagerGrain configGrain;
+        static CoordinatorGrainConfiguration coordConfig;
+        static volatile bool asyncInitializationDone = false;
         
         private static void GenerateWorkLoadFromSettingsFile()
         {
@@ -65,9 +66,11 @@ namespace ExperimentController
             var idleIntervalTillBackOffSecs = int.Parse(snapperConfigSection["idleIntervalTillBackOffSecs"]);
             var backoffIntervalMsecs = int.Parse(snapperConfigSection["backoffIntervalMsecs"]);
             numCoordinators = int.Parse(snapperConfigSection["numCoordinators"]);
-            var dataFormat = Enum.Parse<dataFormatType>(snapperConfigSection["dataFormat"]);
-            var logStorage = Enum.Parse<StorageWrapperType>(snapperConfigSection["logStorage"]);
-            var usePersistGrain = bool.Parse(snapperConfigSection["usePersistGrain"]);
+            var loggingType = Enum.Parse<LoggingType>(snapperConfigSection["loggingType"]);
+            var storageType = Enum.Parse<StorageType>(snapperConfigSection["storageType"]);
+            var serializerType = Enum.Parse<SerializerType>(snapperConfigSection["serializerType"]);
+            numPersistItem = int.Parse(snapperConfigSection["numPersistItem"]);
+            var loggingBatchSize = int.Parse(snapperConfigSection["loggingBatchSize"]);
 
             //Parse workload specific configuration, assumes only one defined in file
             var benchmarkConfigSection = ConfigurationManager.GetSection("BenchmarkConfig") as NameValueCollection;
@@ -86,15 +89,16 @@ namespace ExperimentController
             switch (workload.benchmark)
             {
                 case BenchmarkType.SMALLBANK:
-                    exeConfig = new ExecutionGrainConfiguration("SmallBank.Grains.CustomerAccountGroupGrain", new LoggingConfiguration(dataFormat, logStorage, usePersistGrain), new ConcurrencyConfiguration(nonDetCCType));
+                    exeConfig = new ExecutionGrainConfiguration("SmallBank.Grains.CustomerAccountGroupGrain", nonDetCCType);
                     break;
                 case BenchmarkType.TPCC:
-                    exeConfig = new ExecutionGrainConfiguration("TPCC.Grains.WarehouseGrain", new LoggingConfiguration(dataFormat, logStorage, usePersistGrain), new ConcurrencyConfiguration(nonDetCCType));
+                    exeConfig = new ExecutionGrainConfiguration("TPCC.Grains.WarehouseGrain", nonDetCCType);
                     break;
                 default:
                     throw new Exception($"Exception: Unknown benchmark {workload.benchmark}");
             }
             coordConfig = new CoordinatorGrainConfiguration(batchInterval, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
+            loggingConfig = new LoggingConfiguration(loggingType, storageType, serializerType, numPersistItem, loggingBatchSize);
             Console.WriteLine("Generated workload configuration");
         }
 
@@ -281,33 +285,40 @@ namespace ExperimentController
 
         static bool setCountFinish = false;
         static bool getCountFinish = false;
-        static int numPersistGrain = 0;
+        static int numPersistItem = 0;
         static long[] IOcount;
 
         static async void SetIOCount()
         {
-            var tasks = new List<Task>();
-            for (int i = 0; i < numPersistGrain; i++)
+            if (loggingConfig.loggingType == LoggingType.PERSISTSINGLETON) await configGrain.SetIOCount();
+            if (loggingConfig.loggingType == LoggingType.PERSISTGRAIN)
             {
-                var grain = client.GetGrain<IPersistGrain>(i);
-                tasks.Add(grain.SetIOCount());
+                var tasks = new List<Task>();
+                for (int i = 0; i < numPersistItem; i++)
+                {
+                    var grain = client.GetGrain<IPersistGrain>(i);
+                    tasks.Add(grain.SetIOCount());
+                }
+                await Task.WhenAll(tasks);
             }
-            await Task.WhenAll(tasks);
             setCountFinish = true;
         }
 
         static async void GetIOCount(int epoch)
         {
-            var tasks = new List<Task<long>>();
-            for (int i = 0; i < numPersistGrain; i++)
-            {
-                var grain = client.GetGrain<IPersistGrain>(i);
-                tasks.Add(grain.GetIOCount());
-            }
-            await Task.WhenAll(tasks);
-
             IOcount[epoch] = 0;
-            foreach (var t in tasks) IOcount[epoch] += t.Result;
+            if (loggingConfig.loggingType == LoggingType.PERSISTSINGLETON) IOcount[epoch] = await configGrain.GetIOCount();
+            if (loggingConfig.loggingType == LoggingType.PERSISTGRAIN)
+            {
+                var tasks = new List<Task<long>>();
+                for (int i = 0; i < numPersistItem; i++)
+                {
+                    var grain = client.GetGrain<IPersistGrain>(i);
+                    tasks.Add(grain.GetIOCount());
+                }
+                await Task.WhenAll(tasks);
+                foreach (var t in tasks) IOcount[epoch] += t.Result;
+            }
             getCountFinish = true;
         }
 
@@ -364,9 +375,10 @@ namespace ExperimentController
 
             if (workload.grainImplementationType == ImplementationType.SNAPPER)
             {
-                var configGrain = client.GetGrain<IConfigurationManagerGrain>(0);
-                await configGrain.UpdateNewConfiguration(exeConfig);     // must set exeConfig first!!!!!!
-                await configGrain.UpdateNewConfiguration(coordConfig);
+                configGrain = client.GetGrain<IConfigurationManagerGrain>(0);
+                await configGrain.UpdateConfiguration(loggingConfig);
+                await configGrain.UpdateConfiguration(exeConfig);    // must initialize exeConfig first because of grainClassName
+                await configGrain.UpdateConfiguration(coordConfig);
                 Console.WriteLine("Spawned the configuration grain.");
             }
             asyncInitializationDone = true;
@@ -489,9 +501,7 @@ namespace ExperimentController
             numCoordinators = coordConfig.numCoordinators;
             workload.numWarehouse = vCPU * Constants.NUM_W_PER_4CORE / 4;
             numWarehouse = workload.numWarehouse;
-            numPersistGrain = 1;
-            exeConfig.logConfiguration.numPersistGrain = numPersistGrain;
-            Console.WriteLine($"worker node = {workload.numWorkerNodes}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}, numPersistGrain = {exeConfig.logConfiguration.numPersistGrain}");
+            Console.WriteLine($"worker node = {workload.numWorkerNodes}, detPercent = {workload.deterministicTxnPercent}%, silo_vCPU = {vCPU}, num_coord = {numCoordinators}, numWarehouse = {numWarehouse}, numPersistItem = {numPersistItem}");
 
             numWorkerNodes = workload.numWorkerNodes;
             ackedWorkers = new CountdownEvent(numWorkerNodes);

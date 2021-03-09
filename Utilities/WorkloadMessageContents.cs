@@ -6,6 +6,9 @@ namespace Utilities
     public enum BenchmarkType { SMALLBANK, TPCC };
     public enum Distribution { ZIPFIAN, UNIFORM, HOTRECORD }
     public enum ImplementationType { SNAPPER, ORLEANSEVENTUAL, ORLEANSTXN };
+    public enum LoggingType { NOLOGGING, ONGRAIN, PERSISTGRAIN, PERSISTSINGLETON };
+    public enum StorageType { INMEMORY, FILESYSTEM, DYNAMODB };
+    public enum SerializerType { BINARY, MSGPACK, JSON };
 
     public class Constants
     {

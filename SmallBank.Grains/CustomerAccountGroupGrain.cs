@@ -4,6 +4,7 @@ using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Implementation;
+using Persist.Interfaces;
 
 namespace SmallBank.Grains
 {
@@ -52,7 +53,7 @@ namespace SmallBank.Grains
             return accountID / numAccountPerGroup; //You can can also range/hash partition
         }
 
-        public CustomerAccountGroupGrain() : base("SmallBank.Grains.CustomerAccountGroupGrain")
+        public CustomerAccountGroupGrain(IPersistSingletonGroup persistSingletonGroup) : base(persistSingletonGroup, "SmallBank.Grains.CustomerAccountGroupGrain")
         {
         }
 
