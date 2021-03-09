@@ -62,7 +62,7 @@ namespace Persist.Grains
             this.myID = myID;
             maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
             buffer = new byte[maxBufferSize];
-            this.maxNumWaitLog = maxNumWaitLog;
+            this.maxNumWaitLog = 1;
             fileName = Constants.logPath + myID;
             instanceLock = new SemaphoreSlim(1);
             waitFlush = new TaskCompletionSource<bool>();
@@ -76,6 +76,7 @@ namespace Persist.Grains
 
         public void SetIOCount()
         {
+            maxNumWaitLog = 1;   // maxNumWaitLog
             IOcount = 0;
         }
 

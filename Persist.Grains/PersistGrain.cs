@@ -5,10 +5,12 @@ using System.IO;
 using System.Threading;
 using Persist.Interfaces;
 using System.Diagnostics;
+using Orleans.Concurrency;
 using System.Threading.Tasks;
 
 namespace Persist.Grains
 {
+    [Reentrant]
     public class PersistGrain : Grain, IPersistGrain
     {
         private int myID;
@@ -16,7 +18,6 @@ namespace Persist.Grains
         private byte[] buffer;
         private int numWaitLog;
         private FileStream file;
-        private string fileName;
         private int maxNumWaitLog;
         private int maxBufferSize;
         private SemaphoreSlim instanceLock;
@@ -24,21 +25,17 @@ namespace Persist.Grains
 
         private long IOcount = 0;
 
-        public PersistGrain()
-        { 
-        }
-
         public override Task OnActivateAsync()
         {
             index = 0;
             numWaitLog = 0;
-            maxNumWaitLog = 3 * 64;   // 64 is the pipe size
+            maxNumWaitLog = 1;   // 64 is the pipe size
             maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
             buffer = new byte[maxBufferSize];
             myID = (int)this.GetPrimaryKeyLong();
-            fileName = Constants.logPath + myID;
             instanceLock = new SemaphoreSlim(1);
             waitFlush = new TaskCompletionSource<bool>();
+            var fileName = Constants.logPath + myID;
             file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
             return base.OnActivateAsync();
         }
@@ -50,6 +47,7 @@ namespace Persist.Grains
 
         public async Task SetIOCount()
         {
+            maxNumWaitLog = 8;
             IOcount = 0;
         }
 
@@ -71,7 +69,7 @@ namespace Persist.Grains
             {
                 await Flush();
                 instanceLock.Release();
-            } 
+            }
             else
             {
                 instanceLock.Release();
@@ -88,7 +86,7 @@ namespace Persist.Grains
             IOcount++;
             numWaitLog = 0;
             buffer = new byte[maxBufferSize];
-            
+
             waitFlush.SetResult(true);
             waitFlush = new TaskCompletionSource<bool>();
         }
