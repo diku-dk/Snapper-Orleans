@@ -2,16 +2,16 @@
 using System;
 using Orleans;
 using Utilities;
+using System.IO;
 using System.Linq;
 using NetMQ.Sockets;
 using System.Threading;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using MathNet.Numerics.Statistics;
 using System.Collections.Concurrent;
 using MathNet.Numerics.Distributions;
-using System.IO;
-using MathNet.Numerics.Statistics;
 
 namespace NewProcess
 {
@@ -129,7 +129,6 @@ namespace NewProcess
                 int numEmit = 0;
                 int numDetCommit = 0;
                 int numNonDetCommit = 0;
-                int numDetTransaction = 0;
                 int numNonDetTransaction = 0;
                 int numDeadlock = 0;
                 int numNotSerializable = 0;
@@ -143,16 +142,20 @@ namespace NewProcess
                 //Wait for all threads to arrive at barrier point
                 barriers[eIndex].SignalAndWait();
                 globalWatch.Restart();
-                var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                long startTime = 0;
                 do
                 {
                     while (tasks.Count < pipeSize && queue.TryDequeue(out txn))
                     {
+                        if (numEmit == 1999) startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, txn);
                         numEmit++;
-                        reqs.Add(newTask, asyncReqStartTime);
-                        tasks.Add(newTask);
+                        if (numEmit >= 2000)
+                        {
+                            reqs.Add(newTask, asyncReqStartTime);
+                            tasks.Add(newTask);
+                        }
                     }
                     if (tasks.Count != 0)
                     {
@@ -173,12 +176,9 @@ namespace NewProcess
                         {
                             if (task.Result.isDet)   // for det
                             {
-                                numDetTransaction++;
-                                if (!task.Result.exception)
-                                {
-                                    numDetCommit++;
-                                    det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
-                                }
+                                Debug.Assert(!task.Result.exception);
+                                numDetCommit++;
+                                det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
                             }
                             else    // for non-det + eventual + orleans txn
                             {
@@ -206,7 +206,7 @@ namespace NewProcess
                 //while (numEmit < numTxn);
                 while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs && (queue.Count != 0 || !isProducerFinish[eIndex]));
                 isEpochFinish[eIndex] = true;   // which means producer doesn't need to produce more requests
-
+                /*
                 //Wait for the tasks exceeding epoch time and also count them into results
                 while (tasks.Count != 0)
                 {
@@ -254,17 +254,14 @@ namespace NewProcess
                     }
                     tasks.Remove(task);
                     reqs.Remove(task);
-                }
+                }*/
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
                 Console.WriteLine($"thread_requests[{eIndex}][{threadIndex}] has {thread_requests[eIndex][threadIndex].Count} txn remaining");
                 thread_requests[eIndex].Remove(threadIndex);
-                if (isDet) Console.WriteLine($"total_num_det = {numDetTransaction}, det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
+                if (isDet) Console.WriteLine($"det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
                 else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}");
-                WorkloadResults res;
-                if (config.grainImplementationType == ImplementationType.SNAPPER)
-                    res = new WorkloadResults(numDetTransaction, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
-                else res = new WorkloadResults(numDetTransaction, numEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
+                var res = new WorkloadResults(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
                 res.setLatency(latencies, det_latencies);
                 res.setLogLatency(phase1, phase2);  // measure durability
                 results[threadIndex] = res;
