@@ -76,7 +76,7 @@ namespace Persist.Grains
 
         public void SetIOCount()
         {
-            maxNumWaitLog = 1;   // maxNumWaitLog
+            maxNumWaitLog = 64;   // maxNumWaitLog
             IOcount = 0;
         }
 

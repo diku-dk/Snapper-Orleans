@@ -21,7 +21,7 @@ $detPipe = 0
 $nonDetPipe = 64
 $cpu = 4
 
-for ($j = 1; $j -le 1; $j++)
+for ($j = 3; $j -le 3; $j++)
 {
     $zipf = $zipF[$j]
     for ($i = 4; $i -le 4; $i++)

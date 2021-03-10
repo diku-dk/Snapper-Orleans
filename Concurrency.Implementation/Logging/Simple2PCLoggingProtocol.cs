@@ -87,7 +87,18 @@ namespace Concurrency.Implementation.Logging
         private async Task WriteLog(byte[] key, byte[] value)
         {
             if (usePersistGrain) await persistGrain.Write(value);
-            else if (usePersistSingleton) await persistWorker.Write(value);
+            else if (usePersistSingleton)
+            {
+                //await persistWorker.Write(value);
+
+                // use external task
+                var t = Task.Run(async () =>
+                {
+                    // This code runs on the thread pool scheduler, not on Orleans task scheduler
+                    await persistWorker.Write(value);
+                });
+                await t;
+            }
             else await logStorage.Write(key, value);
         }
 

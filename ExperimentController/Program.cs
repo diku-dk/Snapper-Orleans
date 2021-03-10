@@ -205,12 +205,13 @@ namespace ExperimentController
                 }
                 if (workload.deterministicTxnPercent < 100)
                 {
+                    /*
                     if (workload.grainImplementationType == ImplementationType.SNAPPER)
                     {
                         var phase1 = ArrayStatistics.MeanStandardDeviation(aggPhase1.ToArray());
                         var phase2 = ArrayStatistics.MeanStandardDeviation(aggPhase2.ToArray());
                         file.Write($"{phase1.Item1} {phase1.Item2} {phase2.Item1} {phase2.Item2} ");
-                    }
+                    }*/
                     foreach (var percentile in workload.percentilesToCalculate)
                     {
                         var lat = ArrayStatistics.PercentileInplace(aggLatencies.ToArray(), percentile);
@@ -401,8 +402,9 @@ namespace ExperimentController
 
             Console.WriteLine($"Load grains, benchmark {workload.benchmark}, numGrains = {numGrain}");
             var tasks = new List<Task<TransactionResult>>();
-            var sequence = true;   // If you want to load the grains in sequence instead of all concurrent
+            var sequence = false;   // load the grains in sequence instead of all concurrent
             if (workload.benchmark == BenchmarkType.TPCC) sequence = true;
+            if (loggingConfig.loggingType != LoggingType.NOLOGGING) sequence = true;
             var start = DateTime.Now;
             for (int i = 0; i < numGrain; i++)
             {

@@ -505,6 +505,7 @@ namespace NewProcess
                     break;
                 case Distribution.ZIPFIAN:    // read data from file
                     var zipf = config.zipfianConstant;
+                    var txnSize = config.numGrainsMultiTransfer;
                     Console.WriteLine($"read data from files, txnsize = {numGrainPerTxn}, zipf = {zipf}");
                     var prefix = Constants.dataPath + $@"MultiTransfer\{numGrainPerTxn}\zipf{zipf}_";
 
@@ -517,7 +518,7 @@ namespace NewProcess
                         while ((line = file.ReadLine()) != null)
                         {
                             var grainsPerTxn = new List<int>();
-                            for (int i = 0; i < config.numGrainsMultiTransfer; i++)
+                            for (int i = 0; i < txnSize; i++)
                             {
                                 if (i > 0) line = file.ReadLine();  // the 0th line has been read by while() loop
                                 var id = int.Parse(line);
