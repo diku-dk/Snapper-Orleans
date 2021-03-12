@@ -42,9 +42,6 @@ namespace Concurrency.Implementation
         private int numTransactionIdsReserved;
         private int tidToAllocate;
 
-        // if persist PACT input    <bid, <tid, <grainID, input>>>
-        private Dictionary<int, Dictionary<int, Tuple<int, object>>> pactLogInfo = new Dictionary<int, Dictionary<int, Tuple<int, object>>>();
-
         public override Task OnActivateAsync()
         {
             detEmitSeq = 0;
@@ -73,29 +70,6 @@ namespace Concurrency.Implementation
         public GlobalTransactionCoordinatoGrain(IPersistSingletonGroup persistSingletonGroup)
         {
             this.persistSingletonGroup = persistSingletonGroup;
-        }
-
-        // if persist PACT input
-        public async Task<TransactionContext> NewTransaction(Dictionary<int, int> grainAccessInformation, int grainID, object input)
-        {
-            var myEmitSeq = detEmitSeq;
-            var context = new TransactionContext(grainAccessInformation);
-
-            // if persist PACT input
-            context.grainID = grainID;
-            context.input = input;
-
-            if (deterministicTransactionRequests.ContainsKey(myEmitSeq) == false)
-            {
-                deterministicTransactionRequests.Add(myEmitSeq, new List<TransactionContext>());
-                detEmitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
-                batchStartTime.Add(myEmitSeq, DateTime.Now);
-            }
-            deterministicTransactionRequests[myEmitSeq].Add(context);
-            var emitting = detEmitPromiseMap[myEmitSeq].Task;
-            if (emitting.IsCompleted != true) await emitting;
-            context.highestBatchIdCommitted = highestCommittedBatchID;
-            return context;
         }
 
         // for PACT
@@ -253,10 +227,6 @@ namespace Concurrency.Implementation
                     grainSchedule[item.Key].AddNewTransaction(context.transactionID, item.Value);
                 }
                 context.grainAccessInformation.Clear();
-
-                // if persist PACT input
-                if (!pactLogInfo.ContainsKey(curBatchID)) pactLogInfo.Add(curBatchID, new Dictionary<int, Tuple<int, object>>());
-                pactLogInfo[curBatchID].Add(context.transactionID, new Tuple<int, object>(context.grainID, context.input));
             }
 
             var curScheduleMap = batchSchedulePerGrain[curBatchID];
@@ -297,24 +267,13 @@ namespace Concurrency.Implementation
         private async Task EmitBatch(int curBatchID)
         {
             var curScheduleMap = batchSchedulePerGrain[curBatchID];
-            /*
+            
             if (log != null)
             {
                 var participants = new HashSet<int>();
                 participants.UnionWith(curScheduleMap.Keys);
                 await log.HandleOnPrepareInDeterministicProtocol(curBatchID, participants);
-            }*/
-
-            // if persist PACT input
-            try
-            {
-                if (log != null) await log.HandleOnPrepareInDeterministicProtocol(curBatchID, curScheduleMap, pactLogInfo[curBatchID]);
             }
-            catch (Exception e)
-            {
-                Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
-            }
-            
             foreach (var item in curScheduleMap)
             {
                 var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, grainClassName);

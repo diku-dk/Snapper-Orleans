@@ -143,19 +143,23 @@ namespace NewProcess
                 barriers[eIndex].SignalAndWait();
                 globalWatch.Restart();
                 long startTime = 0;
+                startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 do
                 {
                     while (tasks.Count < pipeSize && queue.TryDequeue(out txn))
                     {
-                        if (numEmit == 1999) startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                        //if (numEmit == 1999) startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, txn);
                         numEmit++;
+                        /*
                         if (numEmit >= 2000)
                         {
                             reqs.Add(newTask, asyncReqStartTime);
                             tasks.Add(newTask);
-                        }
+                        }*/
+                        reqs.Add(newTask, asyncReqStartTime);
+                        tasks.Add(newTask);
                     }
                     if (tasks.Count != 0)
                     {
@@ -206,7 +210,7 @@ namespace NewProcess
                 //while (numEmit < numTxn);
                 while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs && (queue.Count != 0 || !isProducerFinish[eIndex]));
                 isEpochFinish[eIndex] = true;   // which means producer doesn't need to produce more requests
-                /*
+                
                 //Wait for the tasks exceeding epoch time and also count them into results
                 while (tasks.Count != 0)
                 {
@@ -226,12 +230,9 @@ namespace NewProcess
                     {
                         if (task.Result.isDet)   // for det
                         {
-                            numDetTransaction++;
-                            if (!task.Result.exception)
-                            {
-                                numDetCommit++;
-                                det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
-                            }
+                            Debug.Assert(!task.Result.exception);
+                            numDetCommit++;
+                            det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
                         }
                         else    // for non-det + eventual + orleans txn
                         {
@@ -254,7 +255,7 @@ namespace NewProcess
                     }
                     tasks.Remove(task);
                     reqs.Remove(task);
-                }*/
+                }
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
                 Console.WriteLine($"thread_requests[{eIndex}][{threadIndex}] has {thread_requests[eIndex][threadIndex].Count} txn remaining");

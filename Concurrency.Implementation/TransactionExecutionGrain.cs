@@ -81,10 +81,7 @@ namespace Concurrency.Implementation
          */
         public async Task<TransactionResult> StartTransaction(Dictionary<int, int> grainAccessInformation, string startFunction, FunctionInput inputs)
         {
-            // if persist PACT input
-            var context = await myCoordinator.NewTransaction(grainAccessInformation, myID, inputs.inputObject);
-
-            //var context = await myCoordinator.NewTransaction(grainAccessInformation);
+            var context = await myCoordinator.NewTransaction(grainAccessInformation);
             if (highestCommittedBid < context.highestBatchIdCommitted) highestCommittedBid = context.highestBatchIdCommitted;
             inputs.context = context;
             var c1 = new FunctionCall(GetType(), startFunction, inputs);
