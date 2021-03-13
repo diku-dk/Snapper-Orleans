@@ -20,7 +20,7 @@ namespace OrleansSiloHost
     {
         static private int siloPort;
         static private int gatewayPort;
-        static readonly bool enableOrleansTxn = false;
+        static readonly bool enableOrleansTxn = true;
 
         public static int Main(string[] args)
         {
@@ -116,7 +116,7 @@ namespace OrleansSiloHost
                 .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .ConfigureServices(ConfigureServices);
-                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+            //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
             if (enableOrleansTxn)
             {
@@ -131,10 +131,15 @@ namespace OrleansSiloHost
                 else
                 {
                     builder
-                        //.AddFileTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
-                        .AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                        .AddFileTransactionalStateStorageAsDefault(opts =>
+                        {
+                            opts.InitStage = ServiceLifecycleStage.ApplicationServices;
+                            opts.numSingleton = 1;
+                            opts.maxNumWaitLog = 1;
+                        });
+                    //.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
                 }
-                 
+
                 builder
                     //.Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(200))
                     //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))

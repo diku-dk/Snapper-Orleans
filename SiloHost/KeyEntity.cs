@@ -5,10 +5,11 @@ namespace OrleansSiloHost
 {
     public class KeyEntity
     {
-        public string ETag = "default";
+        public string ETag;
 
-        public KeyEntity()
+        public KeyEntity(string partitionKey)
         {
+            ETag = partitionKey;
             CommittedSequenceId = 0;
             Metadata = JsonConvert.SerializeObject(new TransactionalStateMetaData());
         }

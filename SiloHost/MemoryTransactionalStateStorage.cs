@@ -58,7 +58,7 @@ namespace OrleansSiloHost
         {
             try
             {
-                if (key == null) key = new KeyEntity();
+                if (key == null) key = new KeyEntity("default");
                 if (states == null) states = new List<KeyValuePair<long, StateEntity>>();
 
                 if (string.IsNullOrEmpty(key.ETag)) return new TransactionalStorageLoadResponse<TState>();

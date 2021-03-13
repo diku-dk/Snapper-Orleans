@@ -148,16 +148,17 @@ namespace NewProcess
                 {
                     while (tasks.Count < pipeSize && queue.TryDequeue(out txn))
                     {
-                        //if (numEmit == 1999) startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                        //if (numEmit == 99) startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, txn);
                         numEmit++;
                         /*
-                        if (numEmit >= 2000)
+                        if (numEmit >= 100)
                         {
                             reqs.Add(newTask, asyncReqStartTime);
                             tasks.Add(newTask);
                         }*/
+                        
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);
                     }
