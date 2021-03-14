@@ -8,5 +8,8 @@ namespace SmallBank.Interfaces
     {
         [Transaction(TransactionOption.CreateOrJoin)]
         Task<TransactionResult> StartTransaction(string startFunction, FunctionInput inputs);
+
+        Task SetIOCount();
+        Task<long> GetIOCount();
     }
 }

@@ -1,11 +1,12 @@
 ﻿using System;
 using Utilities;
+using System.Diagnostics;
+using Persist.Interfaces;
+using Orleans.Concurrency;
 using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Orleans.Transactions.Abstractions;
-using Orleans.Concurrency;
-using System.Diagnostics;
 
 namespace SmallBank.Grains
 {
@@ -22,17 +23,29 @@ namespace SmallBank.Grains
     [Reentrant]
     class OrleansTransactionalAccountGroupGrain : Orleans.Grain, IOrleansTransactionalAccountGroupGrain
     {
+        private readonly IPersistSingletonGroup persistSingletonGroup;
         public int numAccountPerGroup = 1;
         private readonly ITransactionalState<CustomerAccountGroup> state;
 
-        public OrleansTransactionalAccountGroupGrain([TransactionalState("state")] ITransactionalState<CustomerAccountGroup> state)
+        public OrleansTransactionalAccountGroupGrain(IPersistSingletonGroup persistSingletonGroup, [TransactionalState("state")] ITransactionalState<CustomerAccountGroup> state)
         {
+            this.persistSingletonGroup = persistSingletonGroup;
             this.state = state ?? throw new ArgumentNullException(nameof(state));
         }
 
         private int MapCustomerIdToGroup(int accountID)
         {
             return accountID / numAccountPerGroup;  // You can can also range/hash partition
+        }
+
+        public async Task SetIOCount()
+        {
+            persistSingletonGroup.SetIOCount();
+        }
+
+        public async Task<long> GetIOCount()
+        {
+            return persistSingletonGroup.GetIOCount();
         }
 
         private async Task<TransactionResult> Balance(FunctionInput fin)

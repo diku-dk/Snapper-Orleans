@@ -291,16 +291,25 @@ namespace ExperimentController
 
         static async void SetIOCount()
         {
-            if (loggingConfig.loggingType == LoggingType.PERSISTSINGLETON) await configGrain.SetIOCount();
-            if (loggingConfig.loggingType == LoggingType.PERSISTGRAIN)
+            switch (workload.grainImplementationType)
             {
-                var tasks = new List<Task>();
-                for (int i = 0; i < numPersistItem; i++)
-                {
-                    var grain = client.GetGrain<IPersistGrain>(i);
-                    tasks.Add(grain.SetIOCount());
-                }
-                await Task.WhenAll(tasks);
+                case ImplementationType.SNAPPER:
+                    if (loggingConfig.loggingType == LoggingType.PERSISTSINGLETON) await configGrain.SetIOCount();
+                    if (loggingConfig.loggingType == LoggingType.PERSISTGRAIN)
+                    {
+                        var tasks = new List<Task>();
+                        for (int i = 0; i < numPersistItem; i++)
+                        {
+                            var grain = client.GetGrain<IPersistGrain>(i);
+                            tasks.Add(grain.SetIOCount());
+                        }
+                        await Task.WhenAll(tasks);
+                    }
+                    break;
+                case ImplementationType.ORLEANSTXN:
+                    var txngrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(0);
+                    if (loggingConfig.loggingType == LoggingType.PERSISTSINGLETON) await txngrain.SetIOCount();
+                    break;
             }
             setCountFinish = true;
         }
@@ -308,18 +317,29 @@ namespace ExperimentController
         static async void GetIOCount(int epoch)
         {
             IOcount[epoch] = 0;
-            if (loggingConfig.loggingType == LoggingType.PERSISTSINGLETON) IOcount[epoch] = await configGrain.GetIOCount();
-            if (loggingConfig.loggingType == LoggingType.PERSISTGRAIN)
+            switch (workload.grainImplementationType)
             {
-                var tasks = new List<Task<long>>();
-                for (int i = 0; i < numPersistItem; i++)
-                {
-                    var grain = client.GetGrain<IPersistGrain>(i);
-                    tasks.Add(grain.GetIOCount());
-                }
-                await Task.WhenAll(tasks);
-                foreach (var t in tasks) IOcount[epoch] += t.Result;
+                case ImplementationType.SNAPPER:
+                    if (loggingConfig.loggingType == LoggingType.PERSISTSINGLETON) IOcount[epoch] = await configGrain.GetIOCount();
+                    if (loggingConfig.loggingType == LoggingType.PERSISTGRAIN)
+                    {
+                        var tasks = new List<Task<long>>();
+                        for (int i = 0; i < numPersistItem; i++)
+                        {
+                            var grain = client.GetGrain<IPersistGrain>(i);
+                            tasks.Add(grain.GetIOCount());
+                        }
+                        await Task.WhenAll(tasks);
+                        foreach (var t in tasks) IOcount[epoch] += t.Result;
+                    }
+                    break;
+                case ImplementationType.ORLEANSEVENTUAL:
+                    var txngrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(0);
+                    Debug.Assert(loggingConfig.loggingType == LoggingType.PERSISTSINGLETON);
+                    await txngrain.GetIOCount();
+                    break;
             }
+            
             getCountFinish = true;
         }
 

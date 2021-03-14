@@ -129,6 +129,7 @@ namespace NewProcess
                 int numEmit = 0;
                 int numDetCommit = 0;
                 int numNonDetCommit = 0;
+                int numOrleansTxnEmit = 0;
                 int numNonDetTransaction = 0;
                 int numDeadlock = 0;
                 int numNotSerializable = 0;
@@ -174,9 +175,10 @@ namespace NewProcess
                         }
                         catch (Exception e)    // this exception is only related to OrleansTransaction
                         {
-                            //Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
+                            Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
                             noException = false;
                         }
+                        numOrleansTxnEmit++;
                         if (noException)
                         {
                             if (task.Result.isDet)   // for det
@@ -227,6 +229,7 @@ namespace NewProcess
                         //Console.WriteLine($"Exception: {e.Message}. ");
                         noException = false;
                     }
+                    numOrleansTxnEmit++;
                     if (noException)
                     {
                         if (task.Result.isDet)   // for det
@@ -262,8 +265,14 @@ namespace NewProcess
                 Console.WriteLine($"thread_requests[{eIndex}][{threadIndex}] has {thread_requests[eIndex][threadIndex].Count} txn remaining");
                 thread_requests[eIndex].Remove(threadIndex);
                 if (isDet) Console.WriteLine($"det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
-                else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}");
-                var res = new WorkloadResults(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
+                else
+                {
+                    if (config.grainImplementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}");
+                    else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}");
+                } 
+                WorkloadResults res;
+                if (config.grainImplementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResults(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
+                else res = new WorkloadResults(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
                 res.setLatency(latencies, det_latencies);
                 res.setLogLatency(phase1, phase2);  // measure durability
                 results[threadIndex] = res;
