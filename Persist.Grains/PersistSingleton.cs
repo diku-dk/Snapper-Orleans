@@ -12,14 +12,21 @@ namespace Persist.Grains
     [Reentrant]
     public class PersistSingletonGroup : IPersistSingletonGroup
     {
+        private bool initialized = false;
         private IPersistWorker[] persistWorkers;
 
         public void Init(int numSingleton, int maxNumWaitLog)
         {
+            initialized = true;
             persistWorkers = new IPersistWorker[numSingleton];
             for (int i = 0; i < numSingleton; i++) persistWorkers[i] = new PersistWorker(i, maxNumWaitLog);
         }
 
+        public bool IsInitialized()
+        {
+            return initialized;
+        }
+        
         public IPersistWorker GetSingleton(int index)
         {
             return persistWorkers[index];
@@ -76,7 +83,7 @@ namespace Persist.Grains
 
         public void SetIOCount()
         {
-            maxNumWaitLog = 64;   // maxNumWaitLog
+            maxNumWaitLog = 1;   // maxNumWaitLog
             IOcount = 0;
         }
 
