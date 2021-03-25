@@ -6,28 +6,24 @@ namespace Utilities
 {
     public static class Helper
     {
+        public static int GetStockGrain(int W_ID, int I_ID)
+        {
+            return W_ID * Constants.NUM_StockGrain_PER_W + I_ID % Constants.NUM_StockGrain_PER_W;
+        }
+
+        public static int GetOrderGrain(int W_ID, int D_ID, int C_ID)
+        {
+            return W_ID * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D + D_ID * Constants.NUM_OrderGrain_PER_D + C_ID % Constants.NUM_OrderGrain_PER_D;
+        }
+
         public static int MapGrainIDToPersistItemID(int numPersistItem, int grainID)
         {
             return grainID % numPersistItem;
         }
 
-
         public static int MapGrainIDToCoordID(int numCoord, int grainID)
         {
             return grainID % numCoord;
-        }
-
-        public static int GetDistID(int I_ID)
-        {
-            return I_ID % Constants.NUM_D_PER_W;
-        }
-
-        public static int GetGrainID(int W_ID, int id, bool isDist)
-        {
-            int D_ID;
-            if (isDist) D_ID = id;
-            else D_ID = id % Constants.NUM_D_PER_W;
-            return W_ID * Constants.NUM_D_PER_W + D_ID;
         }
 
         public static int NURand(int A, int x, int y, int C)

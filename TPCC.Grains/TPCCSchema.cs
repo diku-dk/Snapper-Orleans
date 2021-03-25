@@ -43,9 +43,9 @@ namespace TPCC.Grains
         public string D_ZIP;
         public float D_TAX;
         public float D_YTD;
-        public int D_NEXT_O_ID;
+        public long D_NEXT_O_ID;
 
-        public District(int D_ID, string D_NAME, string D_STREET_1, string D_STREET_2, string D_CITY, string D_STATE, string D_ZIP, float D_TAX, float D_YTD, int D_NEXT_O_ID)
+        public District(int D_ID, string D_NAME, string D_STREET_1, string D_STREET_2, string D_CITY, string D_STATE, string D_ZIP, float D_TAX, float D_YTD, long D_NEXT_O_ID)
         {
             this.D_ID = D_ID;
             this.D_NAME = D_NAME;
@@ -109,6 +109,25 @@ namespace TPCC.Grains
     }
 
     [Serializable]
+    public class Item
+    {
+        public int I_ID;   // primary key
+        public int I_IM_ID;
+        public string I_NAME;
+        public float I_PRICE;
+        public string I_DATA;
+
+        public Item(int I_ID, int I_IM_ID, string I_NAME, float I_PRICE, string I_DATA)
+        {
+            this.I_ID = I_ID;
+            this.I_IM_ID = I_IM_ID;
+            this.I_NAME = I_NAME;
+            this.I_PRICE = I_PRICE;
+            this.I_DATA = I_DATA;
+        }
+    }
+
+    [Serializable]
     public class History
     {
         // no primary key
@@ -137,9 +156,9 @@ namespace TPCC.Grains
     [Serializable]
     public class NewOrder
     {
-        public int NO_O_ID;  // primary key
+        public long NO_O_ID;  // primary key
 
-        public NewOrder(int NO_O_ID)
+        public NewOrder(long NO_O_ID)
         {
             this.NO_O_ID = NO_O_ID;
         }
@@ -148,7 +167,7 @@ namespace TPCC.Grains
     [Serializable]
     public class Order
     {
-        public int O_ID;  // primary key
+        public long O_ID;  // primary key
 
         public int O_C_ID;
         public DateTime O_ENTRY_D;
@@ -156,7 +175,7 @@ namespace TPCC.Grains
         public int O_OL_CNT;
         public bool O_ALL_LOCAL;
 
-        public Order(int O_ID, int O_C_ID, DateTime O_ENTRY_D, object O_CARRIER_ID, int O_OL_CNT, bool O_ALL_LOCAL)
+        public Order(long O_ID, int O_C_ID, DateTime O_ENTRY_D, object O_CARRIER_ID, int O_OL_CNT, bool O_ALL_LOCAL)
         {
             this.O_ID = O_ID;
             this.O_C_ID = O_C_ID;
@@ -171,8 +190,8 @@ namespace TPCC.Grains
     public class OrderLine
     {
         // primary key
-        public int OL_O_ID;
-        public int OL_NUMBER;  // ???????
+        public long OL_O_ID;
+        public int OL_NUMBER;
 
         public int OL_I_ID;
         public int OL_SUPPLY_W_ID;
@@ -181,7 +200,7 @@ namespace TPCC.Grains
         public float OL_AMOUNT;
         public string OL_DIST_INFO;
 
-        public OrderLine(int OL_O_ID, int OL_NUMBER, int OL_I_ID, int OL_SUPPLY_W_ID, object OL_DELIVERY_D, int OL_QUANTITY, float OL_AMOUNT, string OL_DIST_INFO)
+        public OrderLine(long OL_O_ID, int OL_NUMBER, int OL_I_ID, int OL_SUPPLY_W_ID, object OL_DELIVERY_D, int OL_QUANTITY, float OL_AMOUNT, string OL_DIST_INFO)
         {
             this.OL_O_ID = OL_O_ID;
             this.OL_NUMBER = OL_NUMBER;
@@ -191,25 +210,6 @@ namespace TPCC.Grains
             this.OL_QUANTITY = OL_QUANTITY;
             this.OL_AMOUNT = OL_AMOUNT;
             this.OL_DIST_INFO = OL_DIST_INFO;
-        }
-    }
-
-    [Serializable]
-    public class Item
-    {
-        public int I_ID;   // primary key
-        public int I_IM_ID;
-        public string I_NAME;
-        public float I_PRICE;
-        public string I_DATA;
-
-        public Item(int I_ID, int I_IM_ID, string I_NAME, float I_PRICE, string I_DATA)
-        {
-            this.I_ID = I_ID;
-            this.I_IM_ID = I_IM_ID;
-            this.I_NAME = I_NAME;
-            this.I_PRICE = I_PRICE;
-            this.I_DATA = I_DATA;
         }
     }
 
@@ -234,93 +234,6 @@ namespace TPCC.Grains
             this.S_ORDER_CNT = S_ORDER_CNT;
             this.S_REMOTE_CNT = S_REMOTE_CNT;
             this.S_DATA = S_DATA;
-        }
-    }
-
-    [Serializable]
-    public class WarehouseData : ICloneable
-    {
-        public Warehouse warehouse_info;
-        public District district_info;
-        public Dictionary<int, Customer> customer_table;                // key: C_ID
-        public List<History> history;
-        public List<NewOrder> neworder;
-        public Dictionary<int, Order> order_table;                      // key: O_ID
-        public Dictionary<Tuple<int, int>, OrderLine> orderline_table;  // key: <O_ID, NUMBER>
-        public Dictionary<int, Item> item_table;                        // key: I_ID
-        public Dictionary<int, Stock> stock_table;                      // key: I_ID
-
-        public WarehouseData()
-        {
-            customer_table = new Dictionary<int, Customer>();
-            history = new List<History>();
-            neworder = new List<NewOrder>();
-            order_table = new Dictionary<int, Order>();
-            orderline_table = new Dictionary<Tuple<int, int>, OrderLine>();
-            item_table = new Dictionary<int, Item>();
-            stock_table = new Dictionary<int, Stock>();
-        }
-
-        public WarehouseData(WarehouseData warehouse)
-        {
-            warehouse_info = warehouse.warehouse_info;
-            district_info = warehouse.district_info;
-            customer_table = warehouse.customer_table;
-            history = warehouse.history;
-            neworder = warehouse.neworder;
-            order_table = warehouse.order_table;
-            orderline_table = warehouse.orderline_table;
-            item_table = warehouse.item_table;
-            stock_table = warehouse.stock_table;
-        }
-
-        object ICloneable.Clone()
-        {
-            return new WarehouseData(this);
-        }
-    }
-
-    [Serializable]
-    public class BigWarehouseData : ICloneable
-    {
-        public Warehouse warehouse_info;
-        public Dictionary<int, District> district_table;                // key: D_ID
-        public Dictionary<int, Customer> customer_table;                // key: C_ID
-        public List<History> history;
-        public List<NewOrder> neworder;
-        public Dictionary<int, Order> order_table;                      // key: O_ID
-        public Dictionary<Tuple<int, int>, OrderLine> orderline_table;  // key: <O_ID, NUMBER>
-        public Dictionary<int, Item> item_table;                        // key: I_ID
-        public Dictionary<int, Stock> stock_table;                      // key: I_ID
-
-        public BigWarehouseData()
-        {
-            district_table = new Dictionary<int, District>();
-            customer_table = new Dictionary<int, Customer>();
-            history = new List<History>();
-            neworder = new List<NewOrder>();
-            order_table = new Dictionary<int, Order>();
-            orderline_table = new Dictionary<Tuple<int, int>, OrderLine>();
-            item_table = new Dictionary<int, Item>();
-            stock_table = new Dictionary<int, Stock>();
-        }
-
-        public BigWarehouseData(BigWarehouseData warehouse)
-        {
-            warehouse_info = warehouse.warehouse_info;
-            district_table = warehouse.district_table;
-            customer_table = warehouse.customer_table;
-            history = warehouse.history;
-            neworder = warehouse.neworder;
-            order_table = warehouse.order_table;
-            orderline_table = warehouse.orderline_table;
-            item_table = warehouse.item_table;
-            stock_table = warehouse.stock_table;
-        }
-
-        object ICloneable.Clone()
-        {
-            return new BigWarehouseData(this);
         }
     }
 }

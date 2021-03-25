@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 
 namespace TPCC.Interfaces
 {
-    public interface IWarehouseGrain : ITransactionExecutionGrain
+    public interface ICustomerGrain : ITransactionExecutionGrain
     {
         Task<FunctionResult> Init(FunctionInput functionInput);
-        Task<FunctionResult> GetWTax(FunctionInput functionInput);
+        Task<FunctionResult> NewOrder(FunctionInput functionInput);
     }
 }

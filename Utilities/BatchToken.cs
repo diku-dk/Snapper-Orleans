@@ -9,7 +9,7 @@ namespace Utilities
         public int lastCoordID;
         public int lastBatchID { get; set; }
         public int lastTransactionID { get; set; }
-        public Dictionary<int, int> lastBatchPerGrain { get; set; }   // <grainID, bid>
+        public Dictionary<string, Dictionary<int, int>> lastBatchPerGrain { get; set; }   // <grain namespace, grainID, bid>
         public int highestCommittedBatchID = -1;
 
         // token back off mechanism
@@ -24,7 +24,7 @@ namespace Utilities
             lastTransactionID = tid;
             idleToken = false;
             backoff = true;
-            lastBatchPerGrain = new Dictionary<int, int>();
+            lastBatchPerGrain = new Dictionary<string, Dictionary<int, int>>();
         }
     }
 }

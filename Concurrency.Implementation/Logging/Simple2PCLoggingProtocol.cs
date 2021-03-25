@@ -102,7 +102,7 @@ namespace Concurrency.Implementation.Logging
             else await logStorage.Write(key, value);
         }
 
-        public async Task HandleBeforePrepareIn2PC(int tid, int coordinatorKey, HashSet<int> grains)
+        public async Task HandleBeforePrepareIn2PC(int tid, int coordinatorKey, Dictionary<string, HashSet<int>> grains)
         {
             var logRecord = new LogParticipant(getSequenceNumber(), coordinatorKey, tid, grains);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
@@ -142,7 +142,7 @@ namespace Concurrency.Implementation.Logging
             await WriteLog(key, value);
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, HashSet<int> grains)
+        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, Dictionary<string, HashSet<int>> grains)
         {
             var logRecord = new LogParticipant(getSequenceNumber(), grainID, bid, grains);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);

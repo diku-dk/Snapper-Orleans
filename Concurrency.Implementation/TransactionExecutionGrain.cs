@@ -39,10 +39,10 @@ namespace Concurrency.Implementation
         {
             myID = (int)this.GetPrimaryKeyLong();
             var configTuple = await GrainFactory.GetGrain<IConfigurationManagerGrain>(0).GetConfiguration();
-            // <exeConfig, loggingConfig, numCoord>
+            // <nonDetCCType, loggingConfig, numCoord>
             coordID = Helper.MapGrainIDToCoordID(configTuple.Item3, myID);
             myCoordinator = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(coordID);
-            state = new HybridState<TState>(configTuple.Item1.nonDetCCType);
+            state = new HybridState<TState>(configTuple.Item1);
             var loggingConfig = configTuple.Item2;
             switch (loggingConfig.loggingType)
             {
@@ -79,7 +79,7 @@ namespace Concurrency.Implementation
          * On receiving the returned transaction context, start the execution of a transaction.
          * 
          */
-        public async Task<TransactionResult> StartTransaction(Dictionary<int, int> grainAccessInformation, string startFunction, FunctionInput inputs)
+        public async Task<TransactionResult> StartTransaction(Dictionary<int, Tuple<string, int>> grainAccessInformation, string startFunction, FunctionInput inputs)
         {
             var context = await myCoordinator.NewTransaction(grainAccessInformation);
             if (highestCommittedBid < context.highestBatchIdCommitted) highestCommittedBid = context.highestBatchIdCommitted;
@@ -99,12 +99,6 @@ namespace Concurrency.Implementation
 
         public async Task<TransactionResult> StartTransaction(string startFunction, FunctionInput functionCallInput)
         {
-            // measure durability
-            var startPhase1 = DateTime.Now;
-            var endPhase1 = DateTime.Now;
-            var startPhase2 = DateTime.Now;
-            var endPhase2 = DateTime.Now;
-
             TransactionContext context = null;
             Task<FunctionResult> t1 = null;
             var canCommit = true;
@@ -119,28 +113,26 @@ namespace Concurrency.Implementation
                 t1 = Execute(c1);
                 await t1;
                 canCommit = !t1.Result.hasException();
-                Debug.Assert(t1.Result.grainsInNestedFunctions.Contains(myID));
+                Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(grainClassName) && t1.Result.grainsInNestedFunctions[grainClassName].ContainsKey(myID));
                 if (canCommit)
                 {
-                    canCommit = CheckSerializability(t1.Result);
-                    if (canCommit)
+                    var result = CheckSerializability(t1.Result);
+                    canCommit = result.Item1;
+                    if (canCommit) canCommit = await Prepare_2PC(context.transactionID, myID, t1.Result);
+                    else
                     {
-                        startPhase1 = DateTime.Now;
-                        canCommit = await Prepare_2PC(context.transactionID, myID, t1.Result);
-                        endPhase1 = DateTime.Now;
+                        if (result.Item2) res.Exp_Serializable = true;
+                        else res.Exp_NotSureSerializable = true;
                     } 
-                    else res.Exp_Serializable = true;
                 }
                 else res.Exp_Deadlock |= t1.Result.Exp_Deadlock;  // when deadlock = false, exception may from RW conflict
 
-                startPhase2 = DateTime.Now;
                 if (canCommit) await Commit_2PC(context.transactionID, t1.Result);
                 else
                 {
                     res.exception = true;
                     await Abort_2PC(context.transactionID, t1.Result);
                 }
-                endPhase2 = DateTime.Now;
             }
             catch (Exception e)
             {
@@ -157,8 +149,6 @@ namespace Concurrency.Implementation
                     if (highestCommittedBid < new_bid) highestCommittedBid = new_bid;
                 }
             }
-            res.phase1 = (endPhase1 - startPhase1).TotalMilliseconds;
-            res.phase2 = (endPhase2 - startPhase2).TotalMilliseconds;
             return res;
         }
 
@@ -253,7 +243,10 @@ namespace Concurrency.Implementation
 
         private void updateExecutionResult(FunctionResult invokeRet)
         {
-            if (!invokeRet.grainsInNestedFunctions.Contains(myID)) invokeRet.grainsInNestedFunctions.Add(myID);
+            if (invokeRet.grainsInNestedFunctions.ContainsKey(grainClassName) == false)
+                invokeRet.grainsInNestedFunctions.Add(grainClassName, new Dictionary<int, bool>());
+            if (invokeRet.grainsInNestedFunctions[grainClassName].ContainsKey(myID) == false)
+                invokeRet.grainsInNestedFunctions[grainClassName].Add(myID, true);
         }
 
         //Update the metadata of the execution results, including accessed grains, before/after set, etc.
@@ -264,7 +257,10 @@ namespace Concurrency.Implementation
             int maxBeforeBid, minAfterBid;
             bool isBeforeAfterConsecutive;
 
-            if (!invokeRet.grainsInNestedFunctions.Contains(myID)) invokeRet.grainsInNestedFunctions.Add(myID);
+            if (invokeRet.grainsInNestedFunctions.ContainsKey(grainClassName) == false)
+                invokeRet.grainsInNestedFunctions.Add(grainClassName, new Dictionary<int, bool>());
+            if (invokeRet.grainsInNestedFunctions[grainClassName].ContainsKey(myID) == false)
+                invokeRet.grainsInNestedFunctions[grainClassName].Add(myID, invokeRet.isReadOnlyOnGrain);
 
             var beforeSet = myScheduler.getBeforeSet(tid, out maxBeforeBid);
             var afterSet = myScheduler.getAfterSet(maxBeforeBid, out minAfterBid);
@@ -289,18 +285,25 @@ namespace Concurrency.Implementation
             return t.Result;
         }
 
-        public bool CheckSerializability(FunctionResult result)
+        // serializable or not, sure or not sure
+        public Tuple<bool, bool> CheckSerializability(FunctionResult result)   
         {
-            if (result.beforeSet.Count == 0) return true;
-            if (result.maxBeforeBid <= highestCommittedBid) return true;
-            if (result.isBeforeAfterConsecutive && result.maxBeforeBid < result.minAfterBid) return true;
-            if (result.maxBeforeBid >= result.minAfterBid) return false;
-            return false;
+            if (result.beforeSet.Count == 0) return new Tuple<bool, bool>(true, true);
+            if (result.maxBeforeBid <= highestCommittedBid) return new Tuple<bool, bool>(true, true);
+            if (result.isBeforeAfterConsecutive && result.maxBeforeBid < result.minAfterBid) return new Tuple<bool, bool>(true, true);
+            if (result.maxBeforeBid >= result.minAfterBid) return new Tuple<bool, bool>(false, true);
+            return new Tuple<bool, bool>(false, false);
         }
 
         private async Task<bool> Prepare_2PC(int tid, int coordinatorKey, FunctionResult result)
         {
-            var grainIDsInTransaction = result.grainsInNestedFunctions;
+            var grainIDsInTransaction = new Dictionary<string, HashSet<int>>();
+            foreach (var grains_in_namespace in result.grainsInNestedFunctions)
+            {
+                var the_namespace = grains_in_namespace.Key;
+                grainIDsInTransaction.Add(the_namespace, new HashSet<int>());
+                grainIDsInTransaction[the_namespace].UnionWith(grains_in_namespace.Value.Keys);
+            }
             var hasException = result.hasException();
             var canCommit = !hasException;
             if (!hasException)
@@ -309,12 +312,16 @@ namespace Concurrency.Implementation
                 if (log != null) logTask = log.HandleBeforePrepareIn2PC(tid, coordinatorKey, grainIDsInTransaction);
 
                 var prepareResult = new List<Task<bool>>();
-                foreach (var grain in grainIDsInTransaction)
+                foreach (var grains_in_namespace in result.grainsInNestedFunctions)
                 {
-                    if (grain == myID) prepareResult.Add(Prepare(tid));
-                    else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grain, grainClassName).Prepare(tid));
+                    var the_namespace = grains_in_namespace.Key;
+                    foreach (var grain in grains_in_namespace.Value)
+                    {
+                        var grainID = grain.Key;
+                        if (the_namespace == grainClassName && grainID == myID) prepareResult.Add(Prepare(tid, !grain.Value));
+                        else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, the_namespace).Prepare(tid, !grain.Value));
+                    }
                 }
-
                 await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
                 foreach (var vote in prepareResult)
                 {
@@ -330,26 +337,34 @@ namespace Concurrency.Implementation
 
         private async Task Commit_2PC(int tid, FunctionResult result)
         {
-            var grainIDsInTransaction = result.grainsInNestedFunctions;
             var commitTasks = new List<Task>();
-            if (log != null) commitTasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));   
-            foreach (var grain in grainIDsInTransaction)
+            if (log != null) commitTasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));
+            foreach (var grains_in_namespace in result.grainsInNestedFunctions)
             {
-                if (grain == myID) commitTasks.Add(Commit(tid));
-                else commitTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grain, grainClassName).Commit(tid));
+                var the_namespace = grains_in_namespace.Key;
+                foreach (var grain in grains_in_namespace.Value)
+                {
+                    var grainID = grain.Key;
+                    if (the_namespace == grainClassName && grainID == myID) commitTasks.Add(Commit(tid, !grain.Value));
+                    else commitTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, the_namespace).Commit(tid, !grain.Value));
+                }
             }
             await Task.WhenAll(commitTasks);
         }
 
         private async Task Abort_2PC(int tid, FunctionResult result)
         {
-            var grainIDsInTransaction = result.grainsInNestedFunctions;
             var abortTasks = new List<Task>();
             //Presume Abort
-            foreach (var grain in grainIDsInTransaction)
+            foreach (var grains_in_namespace in result.grainsInNestedFunctions)
             {
-                if (grain == myID) abortTasks.Add(Abort(tid));
-                else abortTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grain, grainClassName).Abort(tid));
+                var the_namespace = grains_in_namespace.Key;
+                foreach (var grain in grains_in_namespace.Value)
+                {
+                    var grainID = grain.Key;
+                    if (the_namespace == grainClassName && grainID == myID) abortTasks.Add(Abort(tid));
+                    else abortTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, the_namespace).Abort(tid));
+                }
             }
             await Task.WhenAll(abortTasks);
         }
@@ -359,31 +374,27 @@ namespace Concurrency.Implementation
             if (state == null) return;
             var tasks = new List<Task>();
             tasks.Add(state.Abort(tid));
-
-            //Presume Abort
-            //if (log != null)
-            //tasks.Add(log.HandleOnAbortIn2PC(state, tid, coordinatorMap[tid]));
             myScheduler.ackComplete((int)tid);
             Cleanup(tid);
             await Task.WhenAll(tasks);
         }
 
-        public async Task Commit(int tid)
+        public async Task Commit(int tid, bool doLogging)
         {
             if (state == null) return;
             var tasks = new List<Task>();
             tasks.Add(state.Commit(tid));
-            if (log != null) tasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));
+            if (log != null && doLogging) tasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));
             myScheduler.ackComplete(tid);
             Cleanup(tid);
             await Task.WhenAll(tasks);
         }
 
-        public async Task<bool> Prepare(int tid)
+        public async Task<bool> Prepare(int tid, bool doLogging)
         {
             if (state == null) return true;  // Stateless grain always vote "yes" for 2PC
             var prepareResult = await state.Prepare(tid);
-            if (prepareResult && log != null) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
+            if (prepareResult && log != null && doLogging) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
             return prepareResult;
         }
 

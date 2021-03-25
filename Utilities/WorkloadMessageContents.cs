@@ -18,13 +18,13 @@ namespace Utilities
         public const int BASE_NUM_MULTITRANSFER = 150000;
         public const int BASE_NUM_NEWORDER = 50000;
 
-        public const int NUM_W_PER_4CORE = 10;
+        public const int NUM_W_PER_4CORE = 2;
         public const int NUM_D_PER_W = 10;
         public const int NUM_C_PER_D = 3000;
         public const int NUM_I = 100000;
-        public const string TPCC_dataPath = @"C:\Users\Administrator\Desktop\data\tpcc\grainData\";
-        public const string TPCC_workloadPath = @"C:\Users\Administrator\Desktop\data\tpcc\workload\";
-
+        public const int NUM_OrderGrain_PER_D = 300;
+        public const int NUM_StockGrain_PER_W = 2000;
+        
         public const bool enableAzureClustering = false;
         public const string connectionString = "DefaultEndpointsProtocol=https;AccountName=silo-membership-table;AccountKey=cyNmVPVYxlTeepACZWayOBtK4yuN5N733nBcaolrVtDjQd8Y04e263oZt8nKWLHNLAVPsMvyU6gO7dHUawmy3A==;TableEndpoint=https://silo-membership-table.table.cosmos.azure.com:443/;";   // primary connection string
 
@@ -77,12 +77,18 @@ namespace Utilities
         // SmallBank specific configurations
         public int numAccounts;
         public int numAccountsPerGroup;
-        public int[] mixture;//{getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
+        public int[] mixture;                  // {getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
         public int numAccountsMultiTransfer;
         public int numGrainsMultiTransfer;
 
         // TPCC specific configurations
         public int numWarehouse;
+        public int numItemGrain;
+        public int numOrderGrain;
+        public int numStockGrain;
+        public int numCustomerGrain;
+        public int numDistrictGrain;
+        public int numWarehouseGrain;
     }
 
     [Serializable]
@@ -90,6 +96,7 @@ namespace Utilities
     {
         public int numDeadlock;
         public int numNotSerializable;
+        public int numNotSureSerializable;
         public int numDetCommitted;
         public int numNonDetCommitted;
         public int numDetTxn;
@@ -99,11 +106,7 @@ namespace Utilities
         public List<double> latencies;
         public List<double> det_latencies;
 
-        // measure durability
-        public List<double> phase1;
-        public List<double> phase2;
-
-        public WorkloadResults(int numDetTxn, int numNonDetTxn, int numDetCommitted, int numNonDetCommitted, long startTime, long endTime, int numNotSerializable, int numDeadlock)
+        public WorkloadResults(int numDetTxn, int numNonDetTxn, int numDetCommitted, int numNonDetCommitted, long startTime, long endTime, int numNotSerializable, int numNotSureSerializable, int numDeadlock)
         {
             this.numDetTxn = numDetTxn;
             this.numNonDetTxn = numNonDetTxn;
@@ -112,6 +115,7 @@ namespace Utilities
             this.startTime = startTime;
             this.endTime = endTime;
             this.numNotSerializable = numNotSerializable;
+            this.numNotSureSerializable = numNotSureSerializable;
             this.numDeadlock = numDeadlock;
         }
 
@@ -119,13 +123,6 @@ namespace Utilities
         {
             this.latencies = latencies;
             this.det_latencies = det_latencies;
-        }
-
-        // measure durability
-        public void setLogLatency(List<double> phase1, List<double> phase2)
-        {
-            this.phase1 = phase1;
-            this.phase2 = phase2;
         }
     }
 }

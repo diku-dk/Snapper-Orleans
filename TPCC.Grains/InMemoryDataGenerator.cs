@@ -10,91 +10,24 @@ namespace TPCC.Grains
         const string numbers = "0123456789";
         const string alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
-        public static void GenerateSimpleData(int W_ID, int D_ID, WarehouseData data)
+        public static Dictionary<int, Item> GenerateItemTable()
         {
-            var random = new Random();
-
-            // generate data for Warehouse table
-            var W_NAME = "".PadRight(10, 'a');
-            var W_STREET_1 = "".PadRight(20, 'a');
-            var W_STREET_2 = "".PadRight(20, 'a');
-            var W_CITY = "".PadRight(20, 'a');
-            var W_STATE = "".PadRight(2, 'a');
-            var W_ZIP = "".PadRight(9, 'a');
-            var W_TAX = numeric(4, 4, true);
-            var W_YTD = 0;
-            data.warehouse_info = new Warehouse(W_ID, W_NAME, W_STREET_1, W_STREET_2, W_CITY, W_STATE, W_ZIP, W_TAX, W_YTD);
-
-            // generate data for District table
-            string D_NAME = "".PadRight(10, 'a');
-            var D_STREET_1 = "".PadRight(20, 'a');
-            var D_STREET_2 = "".PadRight(20, 'a');
-            var D_CITY = "".PadRight(20, 'a');
-            var D_STATE = "".PadRight(2, 'a');
-            var D_ZIP = "".PadRight(9, 'a');
-            var D_TAX = numeric(4, 4, true);
-            var D_YTD = 0;
-            var D_NEXT_O_ID = 0;
-            data.district_info = new District(D_ID, D_NAME, D_STREET_1, D_STREET_2, D_CITY, D_STATE, D_ZIP, D_TAX, D_YTD, D_NEXT_O_ID);
-
-            // generate data for Customer table
-            for (int i = 0; i < Constants.NUM_C_PER_D; i++)
-            {
-                var C_ID = i;
-                var C_FIRST = "".PadRight(16, 'a');
-                var C_MIDDLE = "".PadRight(2, 'a');
-                var C_LAST = "".PadRight(16, 'a');
-                var C_STREET_1 = "".PadRight(20, 'a');
-                var C_STREET_2 = "".PadRight(20, 'a');
-                var C_CITY = "".PadRight(20, 'a');
-                var C_STATE = "".PadRight(2, 'a');
-                var C_ZIP = "".PadRight(9, 'a');
-                var C_PHONE = "".PadRight(16, 'a');
-                var C_SINCE = DateTime.Now;
-                var C_CREDIT = "".PadRight(2, 'a');
-                var C_CREDIT_LIM = numeric(12, 2, true);
-                var C_DISCOUNT = numeric(4, 4, true);
-                var C_BALANCE = numeric(12, 2, true);
-                var C_YTD_PAYMENT = numeric(12, 2, true);
-                var C_PAYMENT_CNT = numeric(4, false);
-                var C_DELIVERY_CNT = numeric(4, false);
-                var C_DATA = "".PadRight(500, 'a');
-                data.customer_table.Add(C_ID, new Customer(C_ID, C_FIRST, C_MIDDLE, C_LAST, C_STREET_1, C_STREET_2, C_CITY, C_STATE, C_ZIP, C_PHONE, C_SINCE, C_CREDIT, C_CREDIT_LIM, C_DISCOUNT, C_BALANCE, C_YTD_PAYMENT, C_PAYMENT_CNT, C_DELIVERY_CNT, C_DATA));
-            }
-
-            // TODO: every grain has a full copy of item table and they are the same
-            // generate data for Item table
+            // TODO: every ItemGrain should have the same item table
+            var items = new Dictionary<int, Item>();
             for (int i = 0; i < Constants.NUM_I; i++)
             {
                 var I_ID = i;
                 var I_IM_ID = I_ID;
-                var I_NAME = "".PadRight(24, 'a');
+                var I_NAME = RandomString(24, alphanumeric);
                 var I_PRICE = numeric(5, 2, false);
-                var I_DATA = "".PadRight(50, 'a');
-                data.item_table.Add(I_ID, new Item(I_ID, I_IM_ID, I_NAME, I_PRICE, I_DATA));
+                var I_DATA = RandomString(50, alphanumeric);
+                items.Add(I_ID, new Item(I_ID, I_IM_ID, I_NAME, I_PRICE, I_DATA));
             }
-
-            // generate data for Stock table
-            var NUM_I_PER_D = Constants.NUM_I / Constants.NUM_D_PER_W;
-            for (int i = 0; i < NUM_I_PER_D; i++)
-            {
-                var S_I_ID = i * Constants.NUM_D_PER_W + D_ID;
-                var S_QUANTITY = numeric(4, true);
-                var S_DIST = new Dictionary<int, string>();
-                for (int d = 0; d < Constants.NUM_D_PER_W; d++) S_DIST.Add(d, RandomString(24, alphanumeric));
-                var S_YTD = numeric(8, false);
-                var S_ORDER_CNT = numeric(4, false);
-                var S_REMOTE_CNT = numeric(4, false);
-                var S_DATA = "".PadRight(50, 'a');
-                data.stock_table.Add(S_I_ID, new Stock(S_I_ID, S_QUANTITY, S_DIST, S_YTD, S_ORDER_CNT, S_REMOTE_CNT, S_DATA));
-            }
+            return items;
         }
 
-        public static void GenerateData(int W_ID, int D_ID, WarehouseData data)
+        public static Warehouse GenerateWarehouseInfo(int W_ID)
         {
-            var random = new Random();
-
-            // generate data for Warehouse table
             var W_NAME = RandomString(10, alphanumeric);
             var W_STREET_1 = RandomString(20, alphanumeric);
             var W_STREET_2 = RandomString(20, alphanumeric);
@@ -103,9 +36,11 @@ namespace TPCC.Grains
             var W_ZIP = RandomString(9, alphanumeric);
             var W_TAX = numeric(4, 4, true);
             var W_YTD = 0;
-            data.warehouse_info = new Warehouse(W_ID, W_NAME, W_STREET_1, W_STREET_2, W_CITY, W_STATE, W_ZIP, W_TAX, W_YTD);
+            return new Warehouse(W_ID, W_NAME, W_STREET_1, W_STREET_2, W_CITY, W_STATE, W_ZIP, W_TAX, W_YTD);
+        }
 
-            // generate data for District table
+        public static District GenerateDistrictInfo(int D_ID)
+        {
             string D_NAME = RandomString(10, alphanumeric);
             var D_STREET_1 = RandomString(20, alphanumeric);
             var D_STREET_2 = RandomString(20, alphanumeric);
@@ -115,9 +50,12 @@ namespace TPCC.Grains
             var D_TAX = numeric(4, 4, true);
             var D_YTD = 0;
             var D_NEXT_O_ID = 0;
-            data.district_info = new District(D_ID, D_NAME, D_STREET_1, D_STREET_2, D_CITY, D_STATE, D_ZIP, D_TAX, D_YTD, D_NEXT_O_ID);
+            return new District(D_ID, D_NAME, D_STREET_1, D_STREET_2, D_CITY, D_STATE, D_ZIP, D_TAX, D_YTD, D_NEXT_O_ID);
+        }
 
-            // generate data for Customer table
+        public static Dictionary<int, Customer> GenerateCustomerTable()
+        {
+            var customer_table = new Dictionary<int, Customer>();
             for (int i = 0; i < Constants.NUM_C_PER_D; i++)
             {
                 var C_ID = i;
@@ -139,26 +77,19 @@ namespace TPCC.Grains
                 var C_PAYMENT_CNT = numeric(4, false);
                 var C_DELIVERY_CNT = numeric(4, false);
                 var C_DATA = RandomString(500, alphanumeric);
-                data.customer_table.Add(C_ID, new Customer(C_ID, C_FIRST, C_MIDDLE, C_LAST, C_STREET_1, C_STREET_2, C_CITY, C_STATE, C_ZIP, C_PHONE, C_SINCE, C_CREDIT, C_CREDIT_LIM, C_DISCOUNT, C_BALANCE, C_YTD_PAYMENT, C_PAYMENT_CNT, C_DELIVERY_CNT, C_DATA));
+                customer_table.Add(C_ID, new Customer(C_ID, C_FIRST, C_MIDDLE, C_LAST, C_STREET_1, C_STREET_2, C_CITY, C_STATE, C_ZIP, C_PHONE, C_SINCE, C_CREDIT, C_CREDIT_LIM, C_DISCOUNT, C_BALANCE, C_YTD_PAYMENT, C_PAYMENT_CNT, C_DELIVERY_CNT, C_DATA));
             }
+            return customer_table;
+        }
 
-            // TODO: every grain has a full copy of item table and they are the same
-            // generate data for Item table
-            for (int i = 0; i < Constants.NUM_I; i++)
+        public static Dictionary<int, Stock> GenerateStockTable(int numPartition_per_w, int partitionID)
+        {
+            var stock = new Dictionary<int, Stock>();
+            var NUM_I_PER_PARTITION = Constants.NUM_I / numPartition_per_w;
+            var minID = NUM_I_PER_PARTITION * partitionID;
+            for (int i = 0; i < NUM_I_PER_PARTITION; i++)
             {
-                var I_ID = i;
-                var I_IM_ID = I_ID;
-                var I_NAME = RandomString(24, alphanumeric);
-                var I_PRICE = numeric(5, 2, false);
-                var I_DATA = RandomString(50, alphanumeric);
-                data.item_table.Add(I_ID, new Item(I_ID, I_IM_ID, I_NAME, I_PRICE, I_DATA));
-            }
-
-            // generate data for Stock table
-            var NUM_I_PER_D = Constants.NUM_I / Constants.NUM_D_PER_W;
-            for (int i = 0; i < NUM_I_PER_D; i++)
-            {
-                var S_I_ID = i * Constants.NUM_D_PER_W + D_ID;
+                var S_I_ID = minID + i;
                 var S_QUANTITY = numeric(4, true);
                 var S_DIST = new Dictionary<int, string>();
                 for (int d = 0; d < Constants.NUM_D_PER_W; d++) S_DIST.Add(d, RandomString(24, alphanumeric));
@@ -166,8 +97,9 @@ namespace TPCC.Grains
                 var S_ORDER_CNT = numeric(4, false);
                 var S_REMOTE_CNT = numeric(4, false);
                 var S_DATA = RandomString(50, alphanumeric);
-                data.stock_table.Add(S_I_ID, new Stock(S_I_ID, S_QUANTITY, S_DIST, S_YTD, S_ORDER_CNT, S_REMOTE_CNT, S_DATA));
+                stock.Add(S_I_ID, new Stock(S_I_ID, S_QUANTITY, S_DIST, S_YTD, S_ORDER_CNT, S_REMOTE_CNT, S_DATA));
             }
+            return stock;
         }
 
         private static string RandomString(int length, string chars)

@@ -1,5 +1,5 @@
 ﻿using System;
-using TPCC.Interfaces;
+using TPCC.Grains;
 using System.Collections.Generic;
 
 namespace NewProcess
@@ -8,7 +8,9 @@ namespace NewProcess
     public class RequestData
     {
         public List<int> grains;           // for SmallBank
+
         public NewOrderInput tpcc_input;
+        public HashSet<Tuple<int, string>> grains_in_namespace;    // for TPCC
 
         public RequestData(List<int> grains)
         {
@@ -16,15 +18,9 @@ namespace NewProcess
         }
 
         // for TPCC
-        public RequestData(int C_ID, DateTime O_ENTRY_D, Dictionary<int, Tuple<int, int>> items)
+        public RequestData(int C_ID, Dictionary<int, Tuple<int, int>> items)
         {
-            tpcc_input = new NewOrderInput(C_ID, O_ENTRY_D, items);
-        }
-
-        // for big TPCC
-        public RequestData(int D_ID, int C_ID, DateTime O_ENTRY_D, Dictionary<int, Tuple<int, int>> items)
-        {
-            tpcc_input = new NewOrderInput(D_ID, C_ID, O_ENTRY_D, items);
+            tpcc_input = new NewOrderInput(C_ID, items);
         }
     }
 }

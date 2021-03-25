@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 
 namespace TPCC.Interfaces
 {
-    public interface IWarehouseGrain : ITransactionExecutionGrain
+    public interface IItemGrain : ITransactionExecutionGrain
     {
         Task<FunctionResult> Init(FunctionInput functionInput);
-        Task<FunctionResult> GetWTax(FunctionInput functionInput);
+        Task<FunctionResult> GetItemsPrice(FunctionInput functionInput);   // an invalid I_ID get price -1
     }
 }

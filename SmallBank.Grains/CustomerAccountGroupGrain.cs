@@ -1,10 +1,10 @@
 ﻿using System;
 using Utilities;
+using Persist.Interfaces;
 using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Implementation;
-using Persist.Interfaces;
 
 namespace SmallBank.Grains
 {
@@ -88,6 +88,7 @@ namespace SmallBank.Grains
         {
             TransactionContext context = fin.context;
             FunctionResult ret = new FunctionResult(-1);
+            ret.isReadOnlyOnGrain = true;
             try
             {
                 var myState = await state.Read(context);

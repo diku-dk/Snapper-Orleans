@@ -4,7 +4,6 @@ using Utilities;
 using Orleans.Concurrency;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Concurrency.Interface.Logging;
 
 namespace Concurrency.Interface
 {
@@ -18,11 +17,10 @@ namespace Concurrency.Interface
         /// </summary>
         /// 
         [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction(Dictionary<int, int> grainAccessInformation);
+        Task<TransactionContext> NewTransaction(Dictionary<int, Tuple<string, int>> grainAccessInformation);
 
         /// <summary>
         /// Client calls this function to submit a new non-deterministic transaction
-        /// TODO: should it be interleaved?
         /// </summary>
         /// 
         [AlwaysInterleave]
@@ -40,7 +38,7 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task PassToken(BatchToken token);
 
-        Task SpawnCoordinator(string grainClassName, int numOfCoordinators, int batchInterval, int backOffIntervalMSecs, int idleIntervalTillBackOffSecs, LoggingConfiguration loggingConfig);
+        Task SpawnCoordinator(int numOfCoordinators, int batchInterval, int backOffIntervalMSecs, int idleIntervalTillBackOffSecs, LoggingConfiguration loggingConfig);
 
         /// <summary>
         /// Actors call this function to notify coordinator that a transaction has been completed locally. 

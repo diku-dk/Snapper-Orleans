@@ -9,7 +9,7 @@ namespace Utilities
         public object inputObject;
         public TransactionContext context;
 
-        public FunctionInput(FunctionInput input, object data)
+        public FunctionInput(FunctionInput input, object data = null)
         {
             context = input.context;
             inputObject = data;
@@ -27,18 +27,16 @@ namespace Utilities
         public bool exception;
         public object resultObject;
         public bool Exp_Serializable;
+        public bool Exp_NotSureSerializable;
         public bool Exp_Deadlock;
         public bool isDet = false;
-
-        // measure durability
-        public double phase1;
-        public double phase2;
 
         public TransactionResult(object res = null)
         {
             resultObject = res;
             exception = false;
             Exp_Serializable = false;
+            Exp_NotSureSerializable = false;
             Exp_Deadlock = false;
         }
 
@@ -47,6 +45,7 @@ namespace Utilities
             resultObject = res;
             exception = exp;
             Exp_Serializable = false;
+            Exp_NotSureSerializable = false;
             Exp_Deadlock = false;
         }
     }
@@ -61,14 +60,16 @@ namespace Utilities
         public object resultObject;
         public HashSet<int> afterSet;
         public HashSet<int> beforeSet;
+        public bool isReadOnlyOnGrain;
         public bool isBeforeAfterConsecutive;
         public int grainWithHighestBeforeBid;
-        public HashSet<int> grainsInNestedFunctions;
+        public Dictionary<string, Dictionary<int, bool>> grainsInNestedFunctions;   // <namespace, grainID, isReadonly>
 
         public FunctionResult(object resultObject = null)
         {
             exception = false;
             Exp_Deadlock = false;
+            isReadOnlyOnGrain = false;
             minAfterBid = int.MaxValue;
             maxBeforeBid = int.MinValue;
             afterSet = new HashSet<int>();
@@ -76,15 +77,25 @@ namespace Utilities
             grainWithHighestBeforeBid = -1;
             isBeforeAfterConsecutive = false;
             this.resultObject = resultObject;
-            grainsInNestedFunctions = new HashSet<int>();
+            grainsInNestedFunctions = new Dictionary<string, Dictionary<int, bool>>();
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
         {
             Exp_Deadlock |= r.Exp_Deadlock;
             exception |= r.exception;
-            foreach (var grain in r.grainsInNestedFunctions)
-                if (grainsInNestedFunctions.Contains(grain) == false) grainsInNestedFunctions.Add(grain);
+            foreach (var grains_in_namespace in r.grainsInNestedFunctions)
+            {
+                var the_namespace = grains_in_namespace.Key;
+                if (grainsInNestedFunctions.ContainsKey(the_namespace) == false)
+                    grainsInNestedFunctions.Add(the_namespace, new Dictionary<int, bool>());
+                foreach (var grain in grains_in_namespace.Value)
+                {
+                    if (grainsInNestedFunctions[the_namespace].ContainsKey(grain.Key) == false)
+                        grainsInNestedFunctions[the_namespace].Add(grain.Key, grain.Value);
+                    else grainsInNestedFunctions[the_namespace][grain.Key] |= grain.Value;
+                }
+            }
 
             if (beforeSet.Count == 0 && afterSet.Count == 0)
             {

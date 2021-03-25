@@ -5,6 +5,7 @@ using Persist.Interfaces;
 using Concurrency.Interface;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using Concurrency.Interface.Nondeterministic;
 
 namespace Concurrency.Implementation
 {
@@ -12,9 +13,8 @@ namespace Concurrency.Implementation
     {
         private int numCoord;
         private bool tokenEnabled;
-        private string grainClassName;
+        private ConcurrencyType nonDetCCType;
         private LoggingConfiguration loggingConfig;
-        private ExecutionGrainConfiguration exeConfig;
         private readonly IPersistSingletonGroup persistSingletonGroup;
 
         public override Task OnActivateAsync()
@@ -22,7 +22,6 @@ namespace Concurrency.Implementation
             numCoord = 0;
             tokenEnabled = false;
             loggingConfig = null;
-            exeConfig = null;
             return base.OnActivateAsync();
         }
 
@@ -53,12 +52,9 @@ namespace Concurrency.Implementation
             return Task.CompletedTask;
         }
 
-        public Task UpdateConfiguration(ExecutionGrainConfiguration config)
+        public Task UpdateConfiguration(ConcurrencyType nonDetCCType)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
-
-            exeConfig = config;
-            grainClassName = config.grainClassName;
+            this.nonDetCCType = nonDetCCType;
             return Task.CompletedTask;
         }
 
@@ -71,7 +67,7 @@ namespace Concurrency.Implementation
             for (int i = 0; i < numCoord; i++)
             {
                 var grain = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(i);
-                tasks.Add(grain.SpawnCoordinator(grainClassName, numCoord, config.batchInterval, config.backoffIntervalMSecs, config.idleIntervalTillBackOffSecs, loggingConfig));
+                tasks.Add(grain.SpawnCoordinator(numCoord, config.batchInterval, config.backoffIntervalMSecs, config.idleIntervalTillBackOffSecs, loggingConfig));
             }
             await Task.WhenAll(tasks);
 
@@ -85,12 +81,11 @@ namespace Concurrency.Implementation
             }
         }
 
-        public async Task<Tuple<ExecutionGrainConfiguration, LoggingConfiguration, int>> GetConfiguration()
+        public async Task<Tuple<ConcurrencyType, LoggingConfiguration, int>> GetConfiguration()
         {
             if (numCoord == 0) throw new ArgumentException(nameof(numCoord));
-            if (exeConfig == null) throw new ArgumentNullException(nameof(exeConfig));
             await Task.CompletedTask;
-            return new Tuple<ExecutionGrainConfiguration, LoggingConfiguration, int>(exeConfig, loggingConfig, numCoord);
+            return new Tuple<ConcurrencyType, LoggingConfiguration, int>(nonDetCCType, loggingConfig, numCoord);
         }
     }
 }

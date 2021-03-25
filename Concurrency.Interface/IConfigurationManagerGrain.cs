@@ -32,12 +32,10 @@ namespace Concurrency.Interface
 
     public class ExecutionGrainConfiguration
     {
-        public string grainClassName;
         public ConcurrencyType nonDetCCType;
 
-        public ExecutionGrainConfiguration(string grainClassName, ConcurrencyType nonDetCCType)
+        public ExecutionGrainConfiguration(ConcurrencyType nonDetCCType)
         {
-            this.grainClassName = grainClassName;
             this.nonDetCCType = nonDetCCType;
         }
     }
@@ -61,9 +59,9 @@ namespace Concurrency.Interface
     public interface IConfigurationManagerGrain : IGrainWithIntegerKey
     {
         Task UpdateConfiguration(LoggingConfiguration config);
-        Task UpdateConfiguration(ExecutionGrainConfiguration config);
+        Task UpdateConfiguration(ConcurrencyType nonDetCCType);
         Task UpdateConfiguration(CoordinatorGrainConfiguration config);
-        Task<Tuple<ExecutionGrainConfiguration, LoggingConfiguration, int>> GetConfiguration();
+        Task<Tuple<ConcurrencyType, LoggingConfiguration, int>> GetConfiguration();
 
         Task SetIOCount();
         Task<long> GetIOCount();

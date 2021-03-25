@@ -122,10 +122,6 @@ namespace NewProcess
             Console.WriteLine($"thread = {threadIndex}, isDet = {isDet}, pipe = {pipeSize}");
             for (int eIndex = 0; eIndex < config.numEpochs; eIndex++)
             {
-                // measure durability
-                var phase1 = new List<double>();
-                var phase2 = new List<double>();
-
                 int numEmit = 0;
                 int numDetCommit = 0;
                 int numNonDetCommit = 0;
@@ -133,6 +129,7 @@ namespace NewProcess
                 int numNonDetTransaction = 0;
                 int numDeadlock = 0;
                 int numNotSerializable = 0;
+                int numNotSureSerializable = 0;
                 var latencies = new List<double>();
                 var det_latencies = new List<double>();
                 var tasks = new List<Task<TransactionResult>>();
@@ -183,7 +180,7 @@ namespace NewProcess
                         {
                             if (task.Result.isDet)   // for det
                             {
-                                Debug.Assert(!task.Result.exception);
+                                if (config.benchmark == BenchmarkType.SMALLBANK) Debug.Assert(!task.Result.exception);
                                 numDetCommit++;
                                 det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
                             }
@@ -194,15 +191,9 @@ namespace NewProcess
                                 {
                                     numNonDetCommit++;
                                     latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
-
-                                    if (config.grainImplementationType == ImplementationType.SNAPPER)
-                                    {
-                                        // measure durability
-                                        phase1.Add(task.Result.phase1);
-                                        phase2.Add(task.Result.phase2);
-                                    }
                                 }
                                 else if (task.Result.Exp_Serializable) numNotSerializable++;
+                                else if (task.Result.Exp_NotSureSerializable) numNotSureSerializable++;
                                 else if (task.Result.Exp_Deadlock) numDeadlock++;
                             }
                         }
@@ -245,15 +236,9 @@ namespace NewProcess
                             {
                                 numNonDetCommit++;
                                 latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
-
-                                if (config.grainImplementationType == ImplementationType.SNAPPER)
-                                {
-                                    // measure durability
-                                    phase1.Add(task.Result.phase1);
-                                    phase2.Add(task.Result.phase2);
-                                }
                             }
                             else if (task.Result.Exp_Serializable) numNotSerializable++;
+                            else if (task.Result.Exp_NotSureSerializable) numNotSureSerializable++;
                             else if (task.Result.Exp_Deadlock) numDeadlock++;
                         }
                     }
@@ -271,12 +256,11 @@ namespace NewProcess
                     else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}");
                 } 
                 WorkloadResults res;
-                if (config.grainImplementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResults(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
-                else res = new WorkloadResults(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numDeadlock);
+                if (config.grainImplementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResults(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
+                else res = new WorkloadResults(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
                 res.setLatency(latencies, det_latencies);
-                res.setLogLatency(phase1, phase2);  // measure durability
                 results[threadIndex] = res;
-                threadAcks[eIndex].Signal();  //Signal the completion of epoch
+                threadAcks[eIndex].Signal();  // Signal the completion of epoch
             }
         }
 
@@ -314,13 +298,13 @@ namespace NewProcess
             {
                 if (numDetConsumer > 0)
                 {
-                    //detBufferSize = detPercent * 100 * siloCPU / (4 * numDetConsumer);
-                    detBufferSize = detPipeSize * 5;
+                    detBufferSize = detPercent * 100 * siloCPU / (4 * numDetConsumer);
+                    //detBufferSize = detPipeSize * 5;
                 }
                 if (numNonDetConsumer > 0)
                 {
-                    //nonDetBufferSize = (100 - detPercent) * 100 * siloCPU / (4 * numNonDetConsumer);
-                    nonDetBufferSize = nonDetPipeSize * 5;
+                    nonDetBufferSize = (100 - detPercent) * 100 * siloCPU / (4 * numNonDetConsumer);
+                    //nonDetBufferSize = nonDetPipeSize * 5;
                 }
             }
             Console.WriteLine($"detPercent = {detPercent}%, detBuffer = {detBufferSize}, nonDetBuffer = {nonDetBufferSize}");
@@ -367,10 +351,14 @@ namespace NewProcess
                 for (int txn = 0; txn < Constants.BASE_NUM_NEWORDER; txn++)
                 {
                     int W_ID = wh_dist.Sample();
-                    var grains = new List<int>();
+                    var grains = new HashSet<Tuple<int, string>>();
                     var D_ID = district_dist_uni.Sample();
-                    grains.Add(W_ID * Constants.NUM_D_PER_W + D_ID);
                     var C_ID = Helper.NURand(1023, 1, Constants.NUM_C_PER_D, 0) - 1;
+                    grains.Add(new Tuple<int, string>(W_ID, "TPCC.Grains.ItemGrain"));
+                    grains.Add(new Tuple<int, string>(W_ID, "TPCC.Grains.WarehouseGrain"));
+                    grains.Add(new Tuple<int, string>(W_ID * Constants.NUM_D_PER_W + D_ID, "TPCC.Grains.CustomerGrain"));
+                    grains.Add(new Tuple<int, string>(W_ID * Constants.NUM_D_PER_W + D_ID, "TPCC.Grains.DistrictGrain"));
+                    grains.Add(new Tuple<int, string>(Helper.GetOrderGrain(W_ID, D_ID, C_ID), "TPCC.Grains.OrderGrain"));
                     var ol_cnt = ol_cnt_dist_uni.Sample();
                     var rbk = rbk_dist_uni.Sample();
                     var itemsToBuy = new Dictionary<int, Tuple<int, int>>();  // <I_ID, <supply_warehouse, quantity>>
@@ -402,14 +390,14 @@ namespace NewProcess
 
                         if (I_ID != -1)
                         {
-                            var grainID = Helper.GetGrainID(supply_wh, I_ID, false);
-                            if (!grains.Contains(grainID)) grains.Add(grainID);
+                            var grainID = Helper.GetStockGrain(supply_wh, I_ID);
+                            if (!grains.Contains(Tuple.Create(grainID, "TPCC.Grains.StockGrain"))) grains.Add(new Tuple<int, string>(grainID, "TPCC.Grains.StockGrain"));
                         }
                     }
                     if (remote_flag) remote_count++;
                     txn_size.Add(grains.Count);
-                    var req = new RequestData(C_ID, DateTime.Now, itemsToBuy);
-                    req.grains = grains;
+                    var req = new RequestData(C_ID, itemsToBuy);
+                    req.grains_in_namespace = grains;
                     shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), req));
                 }
             }
@@ -666,6 +654,7 @@ namespace NewProcess
             int aggNumDetTransactions = results[0].numDetTxn;
             int aggNumNonDetTransactions = results[0].numNonDetTxn;
             int aggNumNotSerializable = results[0].numNotSerializable;
+            int aggNumNotSureSerializable = results[0].numNotSerializable;
             int aggNumDeadlock = results[0].numDeadlock;
             long aggStartTime = results[0].startTime;
             long aggEndTime = results[0].endTime;
@@ -680,25 +669,15 @@ namespace NewProcess
                 aggNumDetTransactions += results[i].numDetTxn;
                 aggNumNonDetTransactions += results[i].numNonDetTxn;
                 aggNumNotSerializable += results[i].numNotSerializable;
+                aggNumNotSureSerializable += results[i].numNotSureSerializable;
                 aggNumDeadlock += results[i].numDeadlock;
                 aggStartTime = (results[i].startTime < aggStartTime) ? results[i].startTime : aggStartTime;
                 aggEndTime = (results[i].endTime < aggEndTime) ? results[i].endTime : aggEndTime;
                 aggLatencies.AddRange(results[i].latencies);
                 aggDetLatencies.AddRange(results[i].det_latencies);
             }
-            var res = new WorkloadResults(aggNumDetTransactions, aggNumNonDetTransactions, aggNumDetCommitted, aggNumNonDetCommitted, aggStartTime, aggEndTime, aggNumNotSerializable, aggNumDeadlock);
+            var res = new WorkloadResults(aggNumDetTransactions, aggNumNonDetTransactions, aggNumDetCommitted, aggNumNonDetCommitted, aggStartTime, aggEndTime, aggNumNotSerializable, aggNumNotSureSerializable, aggNumDeadlock);
             res.setLatency(aggLatencies, aggDetLatencies);
-
-            // measure durability
-            var aggPhase1 = new List<double>();
-            var aggPhase2 = new List<double>();
-            for (int i = 0; i < results.Length; i++)
-            {
-                aggPhase1.AddRange(results[i].phase1);
-                aggPhase2.AddRange(results[i].phase2);
-            }
-            res.setLogLatency(aggPhase1, aggPhase2);
-
             return res;
         }
 
