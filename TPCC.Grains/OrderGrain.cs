@@ -56,6 +56,7 @@ namespace TPCC.Grains
 
         public async Task<FunctionResult> Init(FunctionInput fin)
         {
+            _ = await state.Read(fin.context);
             return new FunctionResult();
         }
 

@@ -431,7 +431,7 @@ namespace ExperimentController
         {
             Debug.Assert(workload.grainImplementationType == ImplementationType.SNAPPER);
             Console.WriteLine($"Load grains, benchmark {workload.benchmark}. ");
-            var sequence = false;   // load the grains in sequence instead of all concurrent
+            var sequence = true;   // load the grains in sequence instead of all concurrent
             var start = DateTime.Now;
 
             // load ItemGrain
@@ -476,7 +476,7 @@ namespace ExperimentController
                 tasks.Add(grain.StartTransaction("Init", new FunctionInput(i % Constants.NUM_StockGrain_PER_W)));
                 if (sequence && tasks.Count == Environment.ProcessorCount)
                 {
-                    Console.WriteLine($"Load {Environment.ProcessorCount} StockGrains, i = {i}");
+                    //Console.WriteLine($"Load {Environment.ProcessorCount} StockGrains, i = {i}");
                     await Task.WhenAll(tasks);
                     tasks.Clear();
                 }
@@ -492,7 +492,7 @@ namespace ExperimentController
                 tasks.Add(grain.StartTransaction("Init", new FunctionInput()));
                 if (sequence && tasks.Count == Environment.ProcessorCount)
                 {
-                    Console.WriteLine($"Load {Environment.ProcessorCount} OrderGrains, i = {i}");
+                    //Console.WriteLine($"Load {Environment.ProcessorCount} OrderGrains, i = {i}");
                     await Task.WhenAll(tasks);
                     tasks.Clear();
                 }

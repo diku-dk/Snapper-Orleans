@@ -1,4 +1,5 @@
 ﻿using System;
+using static Utilities.Helper;
 using System.Collections.Generic;
 
 namespace Utilities
@@ -9,7 +10,7 @@ namespace Utilities
         public int lastCoordID;
         public int lastBatchID { get; set; }
         public int lastTransactionID { get; set; }
-        public Dictionary<string, Dictionary<int, int>> lastBatchPerGrain { get; set; }   // <grain namespace, grainID, bid>
+        public Dictionary<Tuple<int, string>, int> lastBatchPerGrain { get; set; }   // <grainID, namespace>, bid
         public int highestCommittedBatchID = -1;
 
         // token back off mechanism
@@ -24,7 +25,7 @@ namespace Utilities
             lastTransactionID = tid;
             idleToken = false;
             backoff = true;
-            lastBatchPerGrain = new Dictionary<string, Dictionary<int, int>>();
+            lastBatchPerGrain = new Dictionary<Tuple<int, string>, int>();
         }
     }
 }

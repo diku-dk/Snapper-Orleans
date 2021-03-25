@@ -9,9 +9,9 @@ namespace Concurrency.Implementation.Logging
         public int txn_id;
         public int sequenceNumber;
         public int coordinatorKey;
-        public Dictionary<string, HashSet<int>> participants;
+        public HashSet<Tuple<int, string>> participants;
 
-        public LogParticipant(int sequenceNumber, int coordinatorKey, int txn_id, Dictionary<string, HashSet<int>> grains)
+        public LogParticipant(int sequenceNumber, int coordinatorKey, int txn_id, HashSet<Tuple<int, string>> grains)
         {
             this.sequenceNumber = sequenceNumber;
             this.coordinatorKey = coordinatorKey;

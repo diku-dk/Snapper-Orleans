@@ -17,7 +17,7 @@ namespace Concurrency.Interface
         /// </summary>
         /// 
         [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction(Dictionary<int, Tuple<string, int>> grainAccessInformation);
+        Task<TransactionContext> NewTransaction(Dictionary<Tuple<int, string>, int> grainAccessInformation);
 
         /// <summary>
         /// Client calls this function to submit a new non-deterministic transaction

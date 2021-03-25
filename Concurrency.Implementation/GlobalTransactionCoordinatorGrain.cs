@@ -30,8 +30,8 @@ namespace Concurrency.Implementation
         private List<IGlobalTransactionCoordinatorGrain> coordList;
         private Dictionary<int, TaskCompletionSource<bool>> batchesWaitingForCommit;
         Dictionary<int, TaskCompletionSource<bool>> detEmitPromiseMap, nonDetEmitPromiseMap;
-        // <bid, namespace, grainID, batch schedule>
-        private Dictionary<int, Dictionary<string, Dictionary<int, DeterministicBatchSchedule>>> batchSchedulePerGrain;
+        // <bid, GrainID, batch schedule>
+        private Dictionary<int, Dictionary<Tuple<int, string>, DeterministicBatchSchedule>> batchSchedulePerGrain;
 
         Dictionary<int, int> nonDetEmitID;
         Dictionary<int, int> nonDeterministicEmitSize;
@@ -63,7 +63,8 @@ namespace Concurrency.Implementation
             nonDetEmitPromiseMap = new Dictionary<int, TaskCompletionSource<bool>>();
             batchesWaitingForCommit = new Dictionary<int, TaskCompletionSource<bool>>();
             deterministicTransactionRequests = new Dictionary<int, List<TransactionContext>>();
-            batchSchedulePerGrain = new Dictionary<int, Dictionary<string, Dictionary<int, DeterministicBatchSchedule>>>();
+            // <bid, GrainID, batch schedule>
+            batchSchedulePerGrain = new Dictionary<int, Dictionary<Tuple<int, string>, DeterministicBatchSchedule>>();
             return base.OnActivateAsync();
         }
 
@@ -73,7 +74,7 @@ namespace Concurrency.Implementation
         }
 
         // for PACT
-        public async Task<TransactionContext> NewTransaction(Dictionary<int, Tuple<string, int>> grainAccessInformation)
+        public async Task<TransactionContext> NewTransaction(Dictionary<Tuple<int, string>, int> grainAccessInformation)
         {
             var myEmitSeq = detEmitSeq;
             var context = new TransactionContext(grainAccessInformation);
@@ -217,18 +218,14 @@ namespace Concurrency.Implementation
                 context.batchID = curBatchID;
                 context.transactionID = ++token.lastTransactionID;
                 if (batchSchedulePerGrain.ContainsKey(context.batchID) == false)
-                    batchSchedulePerGrain.Add(context.batchID, new Dictionary<string, Dictionary<int, DeterministicBatchSchedule>>());
+                    batchSchedulePerGrain.Add(context.batchID, new Dictionary<Tuple<int, string>, DeterministicBatchSchedule>());
                 // update the schedule for each grain accessed by this transaction
                 var grainSchedule = batchSchedulePerGrain[context.batchID];
                 foreach (var item in context.grainAccessInformation)
                 {
-                    var grain_namespace = item.Value.Item1;
-                    if (grainSchedule.ContainsKey(grain_namespace) == false)
-                        grainSchedule.Add(grain_namespace, new Dictionary<int, DeterministicBatchSchedule>());
-
-                    if (grainSchedule[grain_namespace].ContainsKey(item.Key) == false)
-                        grainSchedule[grain_namespace].Add(item.Key, new DeterministicBatchSchedule(context.batchID));
-                    grainSchedule[grain_namespace][item.Key].AddNewTransaction(context.transactionID, item.Value.Item2);
+                    if (grainSchedule.ContainsKey(item.Key) == false)
+                        grainSchedule.Add(item.Key, new DeterministicBatchSchedule(context.batchID));
+                    grainSchedule[item.Key].AddNewTransaction(context.transactionID, item.Value);
                 }
                 context.grainAccessInformation.Clear();
             }
@@ -237,28 +234,13 @@ namespace Concurrency.Implementation
             expectedAcksPerBatch.Add(curBatchID, curScheduleMap.Count);
 
             // update the last batch ID for each grain accessed by this batch
-            foreach (var grains_in_namespace in curScheduleMap)
+            foreach (var grain in curScheduleMap)
             {
-                var the_namespace = grains_in_namespace.Key;
-                foreach (var grainIDs in grains_in_namespace.Value)
-                {
-                    var grain = grainIDs.Key;
-                    var schedule = grainIDs.Value;
-                    if (token.lastBatchPerGrain.ContainsKey(the_namespace))
-                    {
-                        if (token.lastBatchPerGrain[the_namespace].ContainsKey(grain))
-                            schedule.lastBatchID = token.lastBatchPerGrain[the_namespace][grain];
-                        else schedule.lastBatchID = -1;
-                        token.lastBatchPerGrain[the_namespace][grain] = schedule.batchID;
-                    }
-                    else
-                    {
-                        schedule.lastBatchID = -1;
-                        token.lastBatchPerGrain.Add(the_namespace, new Dictionary<int, int>());
-                        token.lastBatchPerGrain[the_namespace].Add(grain, schedule.batchID);
-                    }
-                    Debug.Assert(schedule.batchID > schedule.lastBatchID);
-                }
+                var schedule = grain.Value;
+                if (token.lastBatchPerGrain.ContainsKey(grain.Key)) schedule.lastBatchID = token.lastBatchPerGrain[grain.Key];
+                else schedule.lastBatchID = -1;
+                Debug.Assert(schedule.batchID > schedule.lastBatchID);
+                token.lastBatchPerGrain[grain.Key] = schedule.batchID;
             }
             lastBatchIDMap.Add(curBatchID, token.lastBatchID);
             if (token.lastBatchID > -1) coordEmitLastBatch.Add(curBatchID, token.lastCoordID);
@@ -268,17 +250,10 @@ namespace Concurrency.Implementation
             // garbage collection
             if (highestCommittedBatchID > token.highestCommittedBatchID)
             {
-                var expiredGrains = new List<int>();
-                foreach (var grains_in_namespace in token.lastBatchPerGrain)
-                {
-                    var the_namespace = grains_in_namespace.Key;
-                    foreach (var item in grains_in_namespace.Value)
-                        // only when last batch is already committed, the next emmitted batch can have its lastBid = -1 again
-                        // item.Key: grainID in this namespace
-                        // item.Value: bid
-                        if (item.Value <= highestCommittedBatchID) expiredGrains.Add(item.Key);
-                    foreach (var grain in expiredGrains) token.lastBatchPerGrain[the_namespace].Remove(grain);
-                }
+                var expiredGrains = new List<Tuple<int, string>>();
+                foreach (var item in token.lastBatchPerGrain)  // only when last batch is already committed, the next emmitted batch can have its lastBid = -1 again
+                    if (item.Value <= highestCommittedBatchID) expiredGrains.Add(item.Key);
+                foreach (var item in expiredGrains) token.lastBatchPerGrain.Remove(item);
             }
             detEmitPromiseMap[myEmitSequence].SetResult(true);
             deterministicTransactionRequests.Remove(myEmitSequence);
@@ -294,27 +269,17 @@ namespace Concurrency.Implementation
             
             if (log != null)
             {
-                var participants = new Dictionary<string, HashSet<int>>();  // <grain namespace, grainIDs>
-                foreach (var grains_in_namespace in curScheduleMap)
-                {
-                    var the_namespace = grains_in_namespace.Key;
-                    participants.Add(the_namespace, new HashSet<int>());
-                    participants[the_namespace].UnionWith(curScheduleMap[the_namespace].Keys);
-                }
+                var participants = new HashSet<Tuple<int, string>>();  // <grain namespace, grainIDs>
+                participants.UnionWith(curScheduleMap.Keys);
                 await log.HandleOnPrepareInDeterministicProtocol(curBatchID, participants);
             }
-            foreach (var grains_in_namespace in curScheduleMap)
+            foreach (var item in curScheduleMap)
             {
-                var the_namespace = grains_in_namespace.Key;
-                foreach (var item in grains_in_namespace.Value)
-                {
-                    var grainID = item.Key;
-                    var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, the_namespace);
-                    var schedule = item.Value;
-                    schedule.globalCoordinator = myID;
-                    schedule.highestCommittedBatchId = highestCommittedBatchID;
-                    _ = dest.ReceiveBatchSchedule(schedule);
-                }
+                var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key.Item1, item.Key.Item2);
+                var schedule = item.Value;
+                schedule.globalCoordinator = myID;
+                schedule.highestCommittedBatchId = highestCommittedBatchID;
+                _ = dest.ReceiveBatchSchedule(schedule);
             }
         }
 
@@ -355,14 +320,10 @@ namespace Concurrency.Implementation
 
         private async Task NotifyGrains(int bid)
         {
-            foreach (var grains_in_namespace in batchSchedulePerGrain[bid])
+            foreach (var item in batchSchedulePerGrain[bid])
             {
-                var the_name_space = grains_in_namespace.Key;
-                foreach (var item in grains_in_namespace.Value)
-                {
-                    var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, the_name_space);
-                    _ = dest.AckBatchCommit(bid);
-                }
+                var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key.Item1, item.Key.Item2);
+                _ = dest.AckBatchCommit(bid);
             }
             await Task.CompletedTask;
         }

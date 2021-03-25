@@ -15,7 +15,7 @@ namespace Utilities
         public int batchID { get; set; }
         public int highestBatchIdCommitted;
         public int transactionID { get; set; }
-        public Dictionary<int, Tuple<string, int>> grainAccessInformation;  // <grainID, access this grian how many times>
+        public Dictionary<Tuple<int, string>, int> grainAccessInformation;  // <grainID, access this grian how many times>
 
         public TransactionContext(int tid)
         {
@@ -24,7 +24,7 @@ namespace Utilities
             highestBatchIdCommitted = -1;
         }
 
-        public TransactionContext(Dictionary<int, Tuple<string, int>> grainAccessInformation)
+        public TransactionContext(Dictionary<Tuple<int, string>, int> grainAccessInformation)
         {
             this.grainAccessInformation = grainAccessInformation;
             isDeterministic = true;

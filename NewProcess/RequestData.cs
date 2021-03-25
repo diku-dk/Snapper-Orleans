@@ -7,10 +7,14 @@ namespace NewProcess
     [Serializable]
     public class RequestData
     {
-        public List<int> grains;           // for SmallBank
+        // for SmallBank
+        public List<int> grains; 
 
+
+        // for TPCC
+        public int firstGrainID;
         public NewOrderInput tpcc_input;
-        public HashSet<Tuple<int, string>> grains_in_namespace;    // for TPCC
+        public HashSet<Tuple<int, string>> grains_in_namespace; 
 
         public RequestData(List<int> grains)
         {
@@ -18,8 +22,9 @@ namespace NewProcess
         }
 
         // for TPCC
-        public RequestData(int C_ID, Dictionary<int, Tuple<int, int>> items)
+        public RequestData(int firstGrainID, int C_ID, Dictionary<int, Tuple<int, int>> items)
         {
+            this.firstGrainID = firstGrainID;
             tpcc_input = new NewOrderInput(C_ID, items);
         }
     }

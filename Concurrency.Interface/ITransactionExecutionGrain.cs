@@ -12,7 +12,7 @@ namespace Concurrency.Interface
          * Client calls this function to submit a determinictic transaction to the transaction coordinator.
          */
         [AlwaysInterleave]
-        Task<TransactionResult> StartTransaction(Dictionary<int, Tuple<string, int>> grainAccessInformation, string startFunction, FunctionInput inputs);
+        Task<TransactionResult> StartTransaction(Dictionary<Tuple<int, string>, int> grainAccessInformation, string startFunction, FunctionInput inputs);
 
         /*  
          * Client calls this function to submit a non-determinictic transaction to the transaction coordinator.

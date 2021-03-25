@@ -62,8 +62,8 @@ namespace Utilities
         public HashSet<int> beforeSet;
         public bool isReadOnlyOnGrain;
         public bool isBeforeAfterConsecutive;
-        public int grainWithHighestBeforeBid;
-        public Dictionary<string, Dictionary<int, bool>> grainsInNestedFunctions;   // <namespace, grainID, isReadonly>
+        public Tuple<int, string> grainWithHighestBeforeBid;
+        public Dictionary<Tuple<int, string>, bool> grainsInNestedFunctions;   // <namespace, grainID, isReadonly>
 
         public FunctionResult(object resultObject = null)
         {
@@ -74,27 +74,21 @@ namespace Utilities
             maxBeforeBid = int.MinValue;
             afterSet = new HashSet<int>();
             beforeSet = new HashSet<int>();
-            grainWithHighestBeforeBid = -1;
             isBeforeAfterConsecutive = false;
             this.resultObject = resultObject;
-            grainsInNestedFunctions = new Dictionary<string, Dictionary<int, bool>>();
+            grainWithHighestBeforeBid = new Tuple<int, string>(-1, "");
+            grainsInNestedFunctions = new Dictionary<Tuple<int, string>, bool>();
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
         {
             Exp_Deadlock |= r.Exp_Deadlock;
             exception |= r.exception;
-            foreach (var grains_in_namespace in r.grainsInNestedFunctions)
+            foreach (var item in r.grainsInNestedFunctions)
             {
-                var the_namespace = grains_in_namespace.Key;
-                if (grainsInNestedFunctions.ContainsKey(the_namespace) == false)
-                    grainsInNestedFunctions.Add(the_namespace, new Dictionary<int, bool>());
-                foreach (var grain in grains_in_namespace.Value)
-                {
-                    if (grainsInNestedFunctions[the_namespace].ContainsKey(grain.Key) == false)
-                        grainsInNestedFunctions[the_namespace].Add(grain.Key, grain.Value);
-                    else grainsInNestedFunctions[the_namespace][grain.Key] |= grain.Value;
-                }
+                if (grainsInNestedFunctions.ContainsKey(item.Key) == false)
+                    grainsInNestedFunctions.Add(item.Key, item.Value);
+                else grainsInNestedFunctions[item.Key] |= item.Value;
             }
 
             if (beforeSet.Count == 0 && afterSet.Count == 0)
@@ -119,12 +113,12 @@ namespace Utilities
             }
         }
 
-        public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, bool consecutive, int coordID)
+        public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, bool consecutive, Tuple<int, string> id)
         {
             if (this.maxBeforeBid < maxBeforeBid)
             {
                 this.maxBeforeBid = maxBeforeBid;
-                grainWithHighestBeforeBid = coordID;
+                grainWithHighestBeforeBid = id;
             }
             this.minAfterBid = (this.minAfterBid > minAfterBid) ? minAfterBid : this.minAfterBid;
             isBeforeAfterConsecutive &= consecutive;

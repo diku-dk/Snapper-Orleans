@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using MathNet.Numerics.Statistics;
 using System.Collections.Concurrent;
 using MathNet.Numerics.Distributions;
+using static Utilities.Helper;
 
 namespace NewProcess
 {
@@ -268,8 +269,8 @@ namespace NewProcess
         {
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = siloCPU / 4;
-            numNonDetConsumer = siloCPU / 4;
+            numDetConsumer = siloCPU / 2;
+            numNonDetConsumer = siloCPU / 2;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 
@@ -353,12 +354,13 @@ namespace NewProcess
                     int W_ID = wh_dist.Sample();
                     var grains = new HashSet<Tuple<int, string>>();
                     var D_ID = district_dist_uni.Sample();
-                    var C_ID = Helper.NURand(1023, 1, Constants.NUM_C_PER_D, 0) - 1;
+                    var C_ID = NURand(1023, 1, Constants.NUM_C_PER_D, 0) - 1;
+                    var firstGrainID = W_ID * Constants.NUM_D_PER_W + D_ID;
                     grains.Add(new Tuple<int, string>(W_ID, "TPCC.Grains.ItemGrain"));
                     grains.Add(new Tuple<int, string>(W_ID, "TPCC.Grains.WarehouseGrain"));
-                    grains.Add(new Tuple<int, string>(W_ID * Constants.NUM_D_PER_W + D_ID, "TPCC.Grains.CustomerGrain"));
+                    grains.Add(new Tuple<int, string>(firstGrainID, "TPCC.Grains.CustomerGrain"));
                     grains.Add(new Tuple<int, string>(W_ID * Constants.NUM_D_PER_W + D_ID, "TPCC.Grains.DistrictGrain"));
-                    grains.Add(new Tuple<int, string>(Helper.GetOrderGrain(W_ID, D_ID, C_ID), "TPCC.Grains.OrderGrain"));
+                    grains.Add(new Tuple<int, string>(GetOrderGrain(W_ID, D_ID, C_ID), "TPCC.Grains.OrderGrain"));
                     var ol_cnt = ol_cnt_dist_uni.Sample();
                     var rbk = rbk_dist_uni.Sample();
                     var itemsToBuy = new Dictionary<int, Tuple<int, int>>();  // <I_ID, <supply_warehouse, quantity>>
@@ -372,7 +374,7 @@ namespace NewProcess
                         if (i == ol_cnt - 1 && rbk == 1) I_ID = -1;
                         else
                         {
-                            do I_ID = Helper.NURand(8191, 1, Constants.NUM_I, 0) - 1;
+                            do I_ID = NURand(8191, 1, Constants.NUM_I, 0) - 1;
                             while (itemsToBuy.ContainsKey(I_ID));
                         }
 
@@ -390,13 +392,14 @@ namespace NewProcess
 
                         if (I_ID != -1)
                         {
-                            var grainID = Helper.GetStockGrain(supply_wh, I_ID);
-                            if (!grains.Contains(Tuple.Create(grainID, "TPCC.Grains.StockGrain"))) grains.Add(new Tuple<int, string>(grainID, "TPCC.Grains.StockGrain"));
+                            var grainID = GetStockGrain(supply_wh, I_ID);
+                            var id = new Tuple<int, string>(grainID, "TPCC.Grains.StockGrain");
+                            if (!grains.Contains(id)) grains.Add(id);
                         }
                     }
                     if (remote_flag) remote_count++;
                     txn_size.Add(grains.Count);
-                    var req = new RequestData(C_ID, itemsToBuy);
+                    var req = new RequestData(firstGrainID, C_ID, itemsToBuy);
                     req.grains_in_namespace = grains;
                     shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), req));
                 }

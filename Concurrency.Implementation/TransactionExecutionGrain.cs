@@ -16,8 +16,8 @@ namespace Concurrency.Implementation
     {
         private int myID;
         private int coordID;
-        protected string grainClassName;
         private int highestCommittedBid;
+        protected readonly Tuple<int, string> myGrainID;
         private TransactionScheduler myScheduler;
         protected ITransactionalState<TState> state;
         private Dictionary<int, int> coordinatorMap;    // <act tid, grainID who starts the act>
@@ -32,7 +32,7 @@ namespace Concurrency.Implementation
         public TransactionExecutionGrain(IPersistSingletonGroup persistSingletonGroup, string grainClassName)
         {
             this.persistSingletonGroup = persistSingletonGroup;
-            this.grainClassName = grainClassName;
+            myGrainID = new Tuple<int, string>(myID, grainClassName);
         }
 
         public async override Task OnActivateAsync()
@@ -79,7 +79,7 @@ namespace Concurrency.Implementation
          * On receiving the returned transaction context, start the execution of a transaction.
          * 
          */
-        public async Task<TransactionResult> StartTransaction(Dictionary<int, Tuple<string, int>> grainAccessInformation, string startFunction, FunctionInput inputs)
+        public async Task<TransactionResult> StartTransaction(Dictionary<Tuple<int, string>, int> grainAccessInformation, string startFunction, FunctionInput inputs)
         {
             var context = await myCoordinator.NewTransaction(grainAccessInformation);
             if (highestCommittedBid < context.highestBatchIdCommitted) highestCommittedBid = context.highestBatchIdCommitted;
@@ -113,7 +113,7 @@ namespace Concurrency.Implementation
                 t1 = Execute(c1);
                 await t1;
                 canCommit = !t1.Result.hasException();
-                Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(grainClassName) && t1.Result.grainsInNestedFunctions[grainClassName].ContainsKey(myID));
+                Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myGrainID));
                 if (canCommit)
                 {
                     var result = CheckSerializability(t1.Result);
@@ -141,10 +141,10 @@ namespace Concurrency.Implementation
             if (canCommit && t1.Result.beforeSet.Count != 0 && highestCommittedBid < t1.Result.maxBeforeBid)
             {
                 var grainID = t1.Result.grainWithHighestBeforeBid;
-                if (grainID == myID) await WaitForBatchCommit(t1.Result.maxBeforeBid);
+                if (grainID == myGrainID) await WaitForBatchCommit(t1.Result.maxBeforeBid);
                 else
                 {
-                    var grain = GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, grainClassName);
+                    var grain = GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID.Item1, grainID.Item2);
                     var new_bid = await grain.WaitForBatchCommit(t1.Result.maxBeforeBid);
                     if (highestCommittedBid < new_bid) highestCommittedBid = new_bid;
                 }
@@ -243,24 +243,20 @@ namespace Concurrency.Implementation
 
         private void updateExecutionResult(FunctionResult invokeRet)
         {
-            if (invokeRet.grainsInNestedFunctions.ContainsKey(grainClassName) == false)
-                invokeRet.grainsInNestedFunctions.Add(grainClassName, new Dictionary<int, bool>());
-            if (invokeRet.grainsInNestedFunctions[grainClassName].ContainsKey(myID) == false)
-                invokeRet.grainsInNestedFunctions[grainClassName].Add(myID, true);
+            if (invokeRet.grainsInNestedFunctions.ContainsKey(myGrainID) == false)
+                invokeRet.grainsInNestedFunctions.Add(myGrainID, true);
         }
 
         //Update the metadata of the execution results, including accessed grains, before/after set, etc.
         private void updateExecutionResult(int tid, FunctionResult invokeRet)
         {
-            if (invokeRet.grainWithHighestBeforeBid == -1) invokeRet.grainWithHighestBeforeBid = myID;
+            if (invokeRet.grainWithHighestBeforeBid.Item1 == -1) invokeRet.grainWithHighestBeforeBid = myGrainID;
 
             int maxBeforeBid, minAfterBid;
             bool isBeforeAfterConsecutive;
 
-            if (invokeRet.grainsInNestedFunctions.ContainsKey(grainClassName) == false)
-                invokeRet.grainsInNestedFunctions.Add(grainClassName, new Dictionary<int, bool>());
-            if (invokeRet.grainsInNestedFunctions[grainClassName].ContainsKey(myID) == false)
-                invokeRet.grainsInNestedFunctions[grainClassName].Add(myID, invokeRet.isReadOnlyOnGrain);
+            if (invokeRet.grainsInNestedFunctions.ContainsKey(myGrainID) == false)
+                invokeRet.grainsInNestedFunctions.Add(myGrainID, invokeRet.isReadOnlyOnGrain);
 
             var beforeSet = myScheduler.getBeforeSet(tid, out maxBeforeBid);
             var afterSet = myScheduler.getAfterSet(maxBeforeBid, out minAfterBid);
@@ -270,7 +266,7 @@ namespace Concurrency.Implementation
             else if (maxBeforeBid == int.MinValue) isBeforeAfterConsecutive = true;
             else if (batchScheduleMap.ContainsKey(minAfterBid) && batchScheduleMap[minAfterBid].lastBatchID == maxBeforeBid) isBeforeAfterConsecutive = true;
             else isBeforeAfterConsecutive = false;
-            invokeRet.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive, myID);
+            invokeRet.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive, myGrainID);
         }
 
         private async Task<FunctionResult> InvokeFunction(FunctionCall call)
@@ -297,13 +293,8 @@ namespace Concurrency.Implementation
 
         private async Task<bool> Prepare_2PC(int tid, int coordinatorKey, FunctionResult result)
         {
-            var grainIDsInTransaction = new Dictionary<string, HashSet<int>>();
-            foreach (var grains_in_namespace in result.grainsInNestedFunctions)
-            {
-                var the_namespace = grains_in_namespace.Key;
-                grainIDsInTransaction.Add(the_namespace, new HashSet<int>());
-                grainIDsInTransaction[the_namespace].UnionWith(grains_in_namespace.Value.Keys);
-            }
+            var grainIDsInTransaction = new HashSet<Tuple<int, string>>();
+            grainIDsInTransaction.UnionWith(result.grainsInNestedFunctions.Keys);
             var hasException = result.hasException();
             var canCommit = !hasException;
             if (!hasException)
@@ -312,15 +303,10 @@ namespace Concurrency.Implementation
                 if (log != null) logTask = log.HandleBeforePrepareIn2PC(tid, coordinatorKey, grainIDsInTransaction);
 
                 var prepareResult = new List<Task<bool>>();
-                foreach (var grains_in_namespace in result.grainsInNestedFunctions)
+                foreach (var item in result.grainsInNestedFunctions)
                 {
-                    var the_namespace = grains_in_namespace.Key;
-                    foreach (var grain in grains_in_namespace.Value)
-                    {
-                        var grainID = grain.Key;
-                        if (the_namespace == grainClassName && grainID == myID) prepareResult.Add(Prepare(tid, !grain.Value));
-                        else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, the_namespace).Prepare(tid, !grain.Value));
-                    }
+                    if (item.Key == myGrainID) prepareResult.Add(Prepare(tid, !item.Value));
+                    else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key.Item1, item.Key.Item2).Prepare(tid, !item.Value));
                 }
                 await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
                 foreach (var vote in prepareResult)
@@ -339,15 +325,10 @@ namespace Concurrency.Implementation
         {
             var commitTasks = new List<Task>();
             if (log != null) commitTasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));
-            foreach (var grains_in_namespace in result.grainsInNestedFunctions)
+            foreach (var item in result.grainsInNestedFunctions)
             {
-                var the_namespace = grains_in_namespace.Key;
-                foreach (var grain in grains_in_namespace.Value)
-                {
-                    var grainID = grain.Key;
-                    if (the_namespace == grainClassName && grainID == myID) commitTasks.Add(Commit(tid, !grain.Value));
-                    else commitTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, the_namespace).Commit(tid, !grain.Value));
-                }
+                if (item.Key == myGrainID) commitTasks.Add(Commit(tid, !item.Value));
+                else commitTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key.Item1, item.Key.Item2).Commit(tid, !item.Value));
             }
             await Task.WhenAll(commitTasks);
         }
@@ -356,15 +337,10 @@ namespace Concurrency.Implementation
         {
             var abortTasks = new List<Task>();
             //Presume Abort
-            foreach (var grains_in_namespace in result.grainsInNestedFunctions)
+            foreach (var item in result.grainsInNestedFunctions)
             {
-                var the_namespace = grains_in_namespace.Key;
-                foreach (var grain in grains_in_namespace.Value)
-                {
-                    var grainID = grain.Key;
-                    if (the_namespace == grainClassName && grainID == myID) abortTasks.Add(Abort(tid));
-                    else abortTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, the_namespace).Abort(tid));
-                }
+                if (item.Key == myGrainID) abortTasks.Add(Abort(tid));
+                else abortTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key.Item1, item.Key.Item2).Abort(tid));
             }
             await Task.WhenAll(abortTasks);
         }

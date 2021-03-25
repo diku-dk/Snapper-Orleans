@@ -65,5 +65,23 @@ namespace Utilities
             foreach (var ip in host.AddressList) if (ip.AddressFamily == AddressFamily.InterNetwork) return ip.ToString();
             throw new Exception("No network adapters with an IPv4 address in the system!");
         }
+
+        /*
+        public struct Gr : IEquatable<GrainID>
+        {
+            public readonly int id;
+            public readonly string name;
+
+            public GrainID(int id, string name)
+            {
+                this.id = id;
+                this.name = name;
+            }
+
+            public bool Equals(GrainID other)
+            {
+                return other.id == id && other.name == name;
+            }
+        }*/
     }
 }

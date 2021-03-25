@@ -6,6 +6,7 @@ using Concurrency.Interface;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
+using static Utilities.Helper;
 
 namespace Concurrency.Implementation.Logging
 {
@@ -102,7 +103,7 @@ namespace Concurrency.Implementation.Logging
             else await logStorage.Write(key, value);
         }
 
-        public async Task HandleBeforePrepareIn2PC(int tid, int coordinatorKey, Dictionary<string, HashSet<int>> grains)
+        public async Task HandleBeforePrepareIn2PC(int tid, int coordinatorKey, HashSet<Tuple<int, string>> grains)
         {
             var logRecord = new LogParticipant(getSequenceNumber(), coordinatorKey, tid, grains);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
@@ -142,7 +143,7 @@ namespace Concurrency.Implementation.Logging
             await WriteLog(key, value);
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, Dictionary<string, HashSet<int>> grains)
+        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, HashSet<Tuple<int, string>> grains)
         {
             var logRecord = new LogParticipant(getSequenceNumber(), grainID, bid, grains);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
@@ -153,15 +154,6 @@ namespace Concurrency.Implementation.Logging
         async Task ILoggingProtocol<TState>.HandleOnCommitInDeterministicProtocol(int bid)
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMMIT, grainID, bid);
-            var key = BitConverter.GetBytes(logRecord.sequenceNumber);
-            var value = serializer.serialize(logRecord);
-            await WriteLog(key, value);
-        }
-
-        // if persist PACT input
-        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, Dictionary<int, DeterministicBatchSchedule> batchSchedule, Dictionary<int, Tuple<int, object>> inputs)
-        {
-            var logRecord = new LogForPACT(getSequenceNumber(), bid, batchSchedule, inputs);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
             var value = serializer.serialize(logRecord);
             await WriteLog(key, value);
