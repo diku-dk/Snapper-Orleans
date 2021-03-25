@@ -1,10 +1,10 @@
 ﻿using System;
 using Utilities;
-using Persist.Interfaces;
 using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Implementation;
+using Persist.Interfaces;
 
 namespace SmallBank.Grains
 {
@@ -141,7 +141,7 @@ namespace SmallBank.Grains
             }
             return ret;
         }
-
+        /*
         public async Task<FunctionResult> MultiTransfer(FunctionInput fin)
         {
             var context = fin.context;
@@ -183,6 +183,56 @@ namespace SmallBank.Grains
                     {
                         await Task.WhenAll(tasks);
                         foreach (Task<FunctionResult> task in tasks) ret.mergeWithFunctionResult(task.Result);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
+                ret.setException();
+            }
+            return ret;
+        }*/
+
+        // no deadlock
+        public async Task<FunctionResult> MultiTransfer(FunctionInput fin)
+        {
+            var context = fin.context;
+            var ret = new FunctionResult();
+            try
+            {
+                var myState = await state.ReadWrite(context);
+                var inputTuple = (MultiTransferInput)fin.inputObject;
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+                if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item2 * inputTuple.Item3.Count)
+                {
+                    ret.setException();
+                    return ret;
+                }
+                else
+                {
+                    myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                    var destinations = inputTuple.Item3;
+                    foreach (var tuple in destinations)
+                    {
+                        var gID = MapCustomerIdToGroup(tuple.Item2);
+                        var funcInput = new FunctionInput(fin, new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2));
+                        if (gID == myState.GroupID)
+                        {
+                            var task = DepositChecking(funcInput);
+                            await task;
+                            if (!context.isDeterministic) ret.mergeWithFunctionResult(task.Result);
+                        }
+                        else
+                        {
+                            var destination = GrainFactory.GetGrain<ICustomerAccountGroupGrain>(gID);
+                            var funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
+                            var task = destination.Execute(funcCall);
+                            await task;
+                            if (!context.isDeterministic) ret.mergeWithFunctionResult(task.Result);
+                        }
                     }
                 }
             }

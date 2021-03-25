@@ -219,6 +219,7 @@ namespace SmallBank.Grains
             return ret;
         }
 
+        /*
         public async Task<TransactionResult> MultiTransfer(FunctionInput fin)
         {
             var ret = new TransactionResult();
@@ -268,6 +269,63 @@ namespace SmallBank.Grains
                         }
                     }
                     await Task.WhenAll(tasks);
+                }
+            }
+            catch (Exception)
+            {
+                ret.exception = true;
+            }
+            return ret;
+        }*/
+
+        // no deadlock
+        public async Task<TransactionResult> MultiTransfer(FunctionInput fin)
+        {
+            var ret = new TransactionResult();
+            try
+            {
+                var success = false;
+                var myGroupID = -1;
+                var inputTuple = (MultiTransferInput)fin.inputObject;
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+
+                await state.PerformUpdate(myState =>
+                {
+                    myGroupID = myState.GroupID;
+                    if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                    if (myState.checkingAccount.ContainsKey(id) && myState.checkingAccount[id] >= inputTuple.Item2 * inputTuple.Item3.Count)
+                    {
+                        myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                        success = true;
+                    }
+                });
+
+                if (!success)
+                {
+                    ret.exception = true;
+                    return ret;
+                }
+                else
+                {
+                    Debug.Assert(myGroupID >= 0);
+                    var destinations = inputTuple.Item3;
+                    foreach (var tuple in destinations)
+                    {
+                        var gID = MapCustomerIdToGroup(tuple.Item2);
+                        var funcInput = new FunctionInput(fin, new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2));
+                        if (gID == myGroupID)
+                        {
+                            var task = DepositChecking(funcInput);
+                            await task;
+                        }
+                        else
+                        {
+                            var destination = GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(gID);
+                            var task = destination.StartTransaction("DepositChecking", funcInput);
+                            await task;
+                        }
+                    }
                 }
             }
             catch (Exception)

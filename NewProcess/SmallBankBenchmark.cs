@@ -59,6 +59,18 @@ namespace NewProcess
                 return Execute(client, accountGrains[0], "Balance", new FunctionInput(), grainAccessInfo);
             }
 
+            // no deadlock
+            /*
+            accountGrains = new List<int>();
+            for (int i = 0; i < 4; i++)
+            {
+                var id = index % 10000;
+                accountGrains.Add(id);
+                index++;
+                if (index == 10000) index = 0;
+                //Console.Write($"{id} ");
+            }*/
+
             int groupId = 0;
             Tuple<string, int> item1 = null;
             float item2 = transferAmountDistribution.Sample();
