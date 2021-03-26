@@ -82,10 +82,10 @@ namespace TPCC.Grains
             return customer_table;
         }
 
-        public static Dictionary<int, Stock> GenerateStockTable(int numPartition_per_w, int partitionID)
+        public static Dictionary<int, Stock> GenerateStockTable(int partitionID)
         {
             var stock = new Dictionary<int, Stock>();
-            var NUM_I_PER_PARTITION = Constants.NUM_I / numPartition_per_w;
+            var NUM_I_PER_PARTITION = Constants.NUM_I / Constants.NUM_StockGrain_PER_W;
             var minID = NUM_I_PER_PARTITION * partitionID;
             for (int i = 0; i < NUM_I_PER_PARTITION; i++)
             {

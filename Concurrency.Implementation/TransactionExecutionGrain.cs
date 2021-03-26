@@ -17,7 +17,8 @@ namespace Concurrency.Implementation
         private int myID;
         private int coordID;
         private int highestCommittedBid;
-        protected readonly Tuple<int, string> myGrainID;
+        private Tuple<int, string> myGrainID;
+        private readonly string grainClassName;
         private TransactionScheduler myScheduler;
         protected ITransactionalState<TState> state;
         private Dictionary<int, int> coordinatorMap;    // <act tid, grainID who starts the act>
@@ -32,12 +33,13 @@ namespace Concurrency.Implementation
         public TransactionExecutionGrain(IPersistSingletonGroup persistSingletonGroup, string grainClassName)
         {
             this.persistSingletonGroup = persistSingletonGroup;
-            myGrainID = new Tuple<int, string>(myID, grainClassName);
+            this.grainClassName = grainClassName;
         }
 
         public async override Task OnActivateAsync()
         {
             myID = (int)this.GetPrimaryKeyLong();
+            myGrainID = new Tuple<int, string>(myID, grainClassName);
             var configTuple = await GrainFactory.GetGrain<IConfigurationManagerGrain>(0).GetConfiguration();
             // <nonDetCCType, loggingConfig, numCoord>
             coordID = Helper.MapGrainIDToCoordID(configTuple.Item3, myID);
@@ -112,7 +114,7 @@ namespace Concurrency.Implementation
                 var c1 = new FunctionCall(GetType(), startFunction, functionCallInput);
                 t1 = Execute(c1);
                 await t1;
-                canCommit = !t1.Result.hasException();
+                canCommit = !t1.Result.exception;
                 Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myGrainID));
                 if (canCommit)
                 {
@@ -123,7 +125,7 @@ namespace Concurrency.Implementation
                     {
                         if (result.Item2) res.Exp_Serializable = true;
                         else res.Exp_NotSureSerializable = true;
-                    } 
+                    }
                 }
                 else res.Exp_Deadlock |= t1.Result.Exp_Deadlock;  // when deadlock = false, exception may from RW conflict
 
@@ -225,7 +227,7 @@ namespace Concurrency.Implementation
                 {
                     //The scheduler has switched batches, need to commit now
                     var coordID = batchScheduleMap[bid].globalCoordinator;
-                    if (log != null) await log.HandleOnCompleteInDeterministicProtocol(state, bid, coordID);  
+                    if (log != null) await log.HandleOnCompleteInDeterministicProtocol(state, bid, coordID);
 
                     IGlobalTransactionCoordinatorGrain coordinator;
                     if (coordList.ContainsKey(coordID) == false)
@@ -282,7 +284,7 @@ namespace Concurrency.Implementation
         }
 
         // serializable or not, sure or not sure
-        public Tuple<bool, bool> CheckSerializability(FunctionResult result)   
+        public Tuple<bool, bool> CheckSerializability(FunctionResult result)
         {
             if (result.beforeSet.Count == 0) return new Tuple<bool, bool>(true, true);
             if (result.maxBeforeBid <= highestCommittedBid) return new Tuple<bool, bool>(true, true);
@@ -295,7 +297,7 @@ namespace Concurrency.Implementation
         {
             var grainIDsInTransaction = new HashSet<Tuple<int, string>>();
             grainIDsInTransaction.UnionWith(result.grainsInNestedFunctions.Keys);
-            var hasException = result.hasException();
+            var hasException = result.exception;
             var canCommit = !hasException;
             if (!hasException)
             {
@@ -305,6 +307,7 @@ namespace Concurrency.Implementation
                 var prepareResult = new List<Task<bool>>();
                 foreach (var item in result.grainsInNestedFunctions)
                 {
+                    //Console.WriteLine($"grain type = {item.Key.Item2}, grain id = {item.Key.Item1}");
                     if (item.Key == myGrainID) prepareResult.Add(Prepare(tid, !item.Value));
                     else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key.Item1, item.Key.Item2).Prepare(tid, !item.Value));
                 }

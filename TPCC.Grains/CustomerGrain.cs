@@ -66,6 +66,7 @@ namespace TPCC.Grains
                 myState.W_ID = input.Item1;
                 myState.D_ID = input.Item2;
                 myState.customer_table = InMemoryDataGenerator.GenerateCustomerTable();
+                //Console.WriteLine($"CustomerGrain: W_ID = {myState.W_ID}, D_ID = {myState.D_ID}");
             }
             catch (Exception e)
             {
@@ -87,7 +88,7 @@ namespace TPCC.Grains
                 var C_ID = txn_input.C_ID;
                 var ItemsToBuy = txn_input.ItemsToBuy;
                 var myState = await state.Read(context);
-
+                //Console.WriteLine($"PACT {fin.context.transactionID} access CustomerGrain {myState.W_ID * Constants.NUM_D_PER_W + myState.D_ID}");
                 // STEP 1: get item prices from ItemGrain
                 Dictionary<int, float> itemPrices;
                 {
@@ -96,6 +97,7 @@ namespace TPCC.Grains
                     var func_input = new FunctionInput(fin, itemIDs);
                     var func_call = new FunctionCall(typeof(ItemGrain), "GetItemsPrice", func_input);
                     var itemGrain = GrainFactory.GetGrain<IItemGrain>(myState.W_ID);
+                    //Console.WriteLine($"PACT {fin.context.transactionID} access ItemGrain {myState.W_ID}");
                     var r = await itemGrain.Execute(func_call);
                     res.mergeWithFunctionResult(r);
                     if (r.exception)
@@ -117,11 +119,14 @@ namespace TPCC.Grains
                     {
                         var func_call = new FunctionCall(typeof(WarehouseGrain), "GetWTax", func_input);
                         var warehouseGrain = GrainFactory.GetGrain<IWarehouseGrain>(myState.W_ID);
+                        //Console.WriteLine($"PACT {fin.context.transactionID} access WarehouseGrain {myState.W_ID}");
                         tasks.Add(warehouseGrain.Execute(func_call));
                     }
                     {
                         var func_call = new FunctionCall(typeof(DistrictGrain), "GetDTax", func_input);
-                        var districtGrain = GrainFactory.GetGrain<IDistrictGrain>(myState.W_ID * Constants.NUM_D_PER_W + myState.D_ID);
+                        var grainID = myState.W_ID * Constants.NUM_D_PER_W + myState.D_ID;
+                        var districtGrain = GrainFactory.GetGrain<IDistrictGrain>(grainID);
+                        //Console.WriteLine($"PACT {fin.context.transactionID} access DistrictGrain {grainID}");
                         tasks.Add(districtGrain.Execute(func_call));
                     }
                     await Task.WhenAll(tasks);
@@ -145,19 +150,23 @@ namespace TPCC.Grains
                     var stockToUpdate = new Dictionary<int, Dictionary<int, int>>();  // <grainID, <I_ID, quantity>>
                     foreach (var item in ItemsToBuy)                                  // <I_ID, <supply W_ID, quantity>>
                     {
-                        var supply_W_ID = item.Value.Item1;
-                        var stockGrain = Helper.GetStockGrain(supply_W_ID, item.Key);
-                        if (!isRemote.ContainsKey(stockGrain))
+                        var I_ID = item.Key;
+                        if (I_ID != -1)
                         {
-                            if (myState.W_ID != supply_W_ID)
+                            var supply_W_ID = item.Value.Item1;
+                            var stockGrain = Helper.GetStockGrain(supply_W_ID, I_ID);
+                            if (!isRemote.ContainsKey(stockGrain))
                             {
-                                all_local = false;
-                                isRemote.Add(stockGrain, true);
+                                if (myState.W_ID != supply_W_ID)
+                                {
+                                    all_local = false;
+                                    isRemote.Add(stockGrain, true);
+                                }
+                                else isRemote.Add(stockGrain, false);
+                                stockToUpdate.Add(stockGrain, new Dictionary<int, int>());
                             }
-                            else isRemote.Add(stockGrain, false);
-                            stockToUpdate.Add(stockGrain, new Dictionary<int, int>());
+                            if (!abort) stockToUpdate[stockGrain].Add(I_ID, item.Value.Item2);
                         }
-                        if (!abort) stockToUpdate[stockGrain].Add(item.Key, item.Value.Item2);
                     }
 
                     var tasks = new List<Task<FunctionResult>>();
@@ -166,26 +175,31 @@ namespace TPCC.Grains
                         var func_input = new FunctionInput(fin, new UpdateStockInput(myState.W_ID, myState.D_ID, isRemote[grain.Key], grain.Value));
                         var func_call = new FunctionCall(typeof(StockGrain), "UpdateStock", func_input);
                         var stockGrain = GrainFactory.GetGrain<IStockGrain>(grain.Key);
+                        //Console.WriteLine($"PACT {fin.context.transactionID} access StockGrain {grain.Key}");
                         tasks.Add(stockGrain.Execute(func_call));
                     }
                     await Task.WhenAll(tasks);
                     foreach (var t in tasks)
                     {
                         res.mergeWithFunctionResult(t.Result);
-                        var r = (Dictionary<int, string>)t.Result.resultObject;
-                        foreach (var item in r) items_dist_info.Add(item.Key, item.Value);
+                        if (t.Result.resultObject != null)
+                        {
+                            var r = (Dictionary<int, string>)t.Result.resultObject;
+                            foreach (var item in r) items_dist_info.Add(item.Key, item.Value);
+                        }
                     }
                     if (res.exception)
                     {
                         if (!context.isDeterministic) throw new Exception("Exception thrown from StockGrain. ");
                         abort = true;
-                    } 
+                    }
                 }
 
                 // STEP 4: insert records to OrderGrains
                 {
                     var orderGrainID = Helper.GetOrderGrain(myState.W_ID, myState.D_ID, C_ID);
                     var orderGrain = GrainFactory.GetGrain<IOrderGrain>(orderGrainID);
+                    //Console.WriteLine($"PACT {fin.context.transactionID} access OrderGrain {orderGrainID}");
                     if (abort)     // must finish the calls for PACT
                     {
                         Debug.Assert(context.isDeterministic);
@@ -230,6 +244,7 @@ namespace TPCC.Grains
             }
             catch (Exception e)
             {
+                //Console.WriteLine($"Exception: {e.Message} {e.StackTrace}");
                 res.setException();
             }
             return res;

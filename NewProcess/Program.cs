@@ -218,7 +218,7 @@ namespace NewProcess
                     }
                     catch (Exception e)
                     {
-                        //Console.WriteLine($"Exception: {e.Message}. ");
+                        Console.WriteLine($"Exception: {e.Message}. ");
                         noException = false;
                     }
                     numOrleansTxnEmit++;
@@ -248,13 +248,13 @@ namespace NewProcess
                 }
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
-                Console.WriteLine($"thread_requests[{eIndex}][{threadIndex}] has {thread_requests[eIndex][threadIndex].Count} txn remaining");
+                //Console.WriteLine($"thread_requests[{eIndex}][{threadIndex}] has {thread_requests[eIndex][threadIndex].Count} txn remaining");
                 thread_requests[eIndex].Remove(threadIndex);
                 if (isDet) Console.WriteLine($"det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
                 else
                 {
-                    if (config.grainImplementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}");
-                    else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}");
+                    if (config.grainImplementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
+                    else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
                 } 
                 WorkloadResults res;
                 if (config.grainImplementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResults(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
@@ -269,8 +269,8 @@ namespace NewProcess
         {
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = siloCPU / 2;
-            numNonDetConsumer = siloCPU / 2;
+            numDetConsumer = siloCPU / 4;
+            numNonDetConsumer = siloCPU / 4;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 
@@ -363,6 +363,7 @@ namespace NewProcess
                     grains.Add(new Tuple<int, string>(GetOrderGrain(W_ID, D_ID, C_ID), "TPCC.Grains.OrderGrain"));
                     var ol_cnt = ol_cnt_dist_uni.Sample();
                     var rbk = rbk_dist_uni.Sample();
+                    //var rbk = 0;
                     var itemsToBuy = new Dictionary<int, Tuple<int, int>>();  // <I_ID, <supply_warehouse, quantity>>
 
                     var remote_flag = false;
@@ -378,10 +379,10 @@ namespace NewProcess
                             while (itemsToBuy.ContainsKey(I_ID));
                         }
 
-                        var local = local_dist_uni.Sample() > 1;
                         int supply_wh;
-                        if (local) supply_wh = W_ID;    // supply by home warehouse
-                        else                            // supply by remote warehouse
+                        var local = local_dist_uni.Sample() > 1;
+                        if (config.numWarehouse == 1 || local) supply_wh = W_ID;    // supply by home warehouse
+                        else   // supply by remote warehouse
                         {
                             remote_flag = true;
                             do supply_wh = wh_dist.Sample();

@@ -135,11 +135,6 @@ namespace Utilities
             exception = true;
         }
 
-        public bool hasException()
-        {
-            return (exception == true);
-        }
-
         public void expandBeforeandAfterSet(HashSet<int> bSet, HashSet<int> aSet)
         {
             beforeSet.UnionWith(bSet);

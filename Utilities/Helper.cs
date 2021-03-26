@@ -8,12 +8,12 @@ namespace Utilities
     {
         public static int GetStockGrain(int W_ID, int I_ID)
         {
-            return W_ID * Constants.NUM_StockGrain_PER_W + I_ID % Constants.NUM_StockGrain_PER_W;
+            return W_ID * Constants.NUM_StockGrain_PER_W + I_ID / (Constants.NUM_I / Constants.NUM_StockGrain_PER_W);
         }
 
         public static int GetOrderGrain(int W_ID, int D_ID, int C_ID)
         {
-            return W_ID * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D + D_ID * Constants.NUM_OrderGrain_PER_D + C_ID % Constants.NUM_OrderGrain_PER_D;
+            return W_ID * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D + D_ID * Constants.NUM_OrderGrain_PER_D + C_ID / (Constants.NUM_C_PER_D / Constants.NUM_OrderGrain_PER_D);
         }
 
         public static int MapGrainIDToPersistItemID(int numPersistItem, int grainID)

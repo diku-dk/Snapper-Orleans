@@ -450,53 +450,69 @@ namespace ExperimentController
             }
             Console.WriteLine($"Finish loading {workload.numWarehouseGrain} WarehouseGrain. ");
 
-            // load DistrictGrain
-            for (int i = 0; i < workload.numDistrictGrain; i++)
+            // load DistrictGrain and CustomerGrain
+            var index = 0;
+            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
-                var grain = client.GetGrain<IDistrictGrain>(i);
-                await grain.StartTransaction("Init", new FunctionInput(i % Constants.NUM_D_PER_W));
+                for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
+                {
+                    index = W_ID * Constants.NUM_D_PER_W + D_ID;
+                    var input = new FunctionInput(new Tuple<int, int>(W_ID, D_ID));
+                    var districtGrain = client.GetGrain<IDistrictGrain>(index);
+                    await districtGrain.StartTransaction("Init", input);
+                    var customerGrain = client.GetGrain<ICustomerGrain>(index);
+                    await customerGrain.StartTransaction("Init", input);
+                }
             }
-            Console.WriteLine($"Finish loading {workload.numDistrictGrain} DistrictGrain. ");
-
-            // load CustomerGrain
-            for (int i = 0; i < workload.numCustomerGrain; i++)
-            {
-                var W_ID = i / Constants.NUM_D_PER_W;
-                var D_ID = i % Constants.NUM_D_PER_W;
-                var grain = client.GetGrain<ICustomerGrain>(i);
-                await grain.StartTransaction("Init", new FunctionInput(new Tuple<int, int>(W_ID, D_ID)));
-            }
-            Console.WriteLine($"Finish loading {workload.numCustomerGrain} CustomerGrain. ");
+            Debug.Assert(index == workload.numDistrictGrain - 1 && index == workload.numCustomerGrain - 1);
+            Console.WriteLine($"Finish loading {workload.numDistrictGrain} DistrictGrain and {workload.numCustomerGrain} CustomerGrain. ");
 
             // load StockGrain
+            index = 0;
             var tasks = new List<Task<TransactionResult>>();
-            for (int i = 0; i < workload.numStockGrain; i++)
+            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
-                var grain = client.GetGrain<IStockGrain>(i);
-                tasks.Add(grain.StartTransaction("Init", new FunctionInput(i % Constants.NUM_StockGrain_PER_W)));
-                if (sequence && tasks.Count == Environment.ProcessorCount)
+                for (int i = 0; i < Constants.NUM_StockGrain_PER_W; i++)
                 {
-                    //Console.WriteLine($"Load {Environment.ProcessorCount} StockGrains, i = {i}");
-                    await Task.WhenAll(tasks);
-                    tasks.Clear();
+                    index = W_ID * Constants.NUM_StockGrain_PER_W + i;
+                    var input = new FunctionInput(new Tuple<int, int>(W_ID, i));
+                    var grain = client.GetGrain<IStockGrain>(index);
+                    tasks.Add(grain.StartTransaction("Init", input));
+                    if (sequence && tasks.Count == Environment.ProcessorCount)
+                    {
+                        //Console.WriteLine($"Load {Environment.ProcessorCount} StockGrains, i = {i}");
+                        await Task.WhenAll(tasks);
+                        tasks.Clear();
+                    }
                 }
             }
             if (tasks.Count > 0) await Task.WhenAll(tasks);
+            Debug.Assert(index == workload.numStockGrain - 1);
             Console.WriteLine($"Finish loading {workload.numStockGrain} StockGrain. ");
 
             // load OrderGrain
+            index = 0;
             tasks = new List<Task<TransactionResult>>();
-            for (int i = 0; i < workload.numOrderGrain; i++)
+            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
-                var grain = client.GetGrain<IOrderGrain>(i);
-                tasks.Add(grain.StartTransaction("Init", new FunctionInput()));
-                if (sequence && tasks.Count == Environment.ProcessorCount)
+                for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
                 {
-                    //Console.WriteLine($"Load {Environment.ProcessorCount} OrderGrains, i = {i}");
-                    await Task.WhenAll(tasks);
-                    tasks.Clear();
+                    for (int i = 0; i < Constants.NUM_OrderGrain_PER_D; i++)
+                    {
+                        index = W_ID * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D + D_ID * Constants.NUM_OrderGrain_PER_D + i;
+                        var input = new FunctionInput(new Tuple<int, int, int>(W_ID, D_ID, i));
+                        var grain = client.GetGrain<IOrderGrain>(index);
+                        tasks.Add(grain.StartTransaction("Init", input));
+                        if (sequence && tasks.Count == Environment.ProcessorCount)
+                        {
+                            //Console.WriteLine($"Load {Environment.ProcessorCount} OrderGrains, i = {i}");
+                            await Task.WhenAll(tasks);
+                            tasks.Clear();
+                        }
+                    }
                 }
             }
+            Debug.Assert(index == workload.numOrderGrain - 1);
             if (tasks.Count > 0) await Task.WhenAll(tasks);
             Console.WriteLine($"Finish loading {workload.numOrderGrain} OrderGrain. ");
 

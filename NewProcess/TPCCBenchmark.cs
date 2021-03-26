@@ -40,8 +40,17 @@ namespace NewProcess
         public Task<TransactionResult> newTransaction(IClusterClient client, RequestData data)
         {
             var grainAccessInfo = new Dictionary<Tuple<int, string>, int>();   // <grainID, namespace, access time>
-            foreach (var grain in data.grains_in_namespace) grainAccessInfo.Add(grain, 1);
-            
+            foreach (var grain in data.grains_in_namespace)
+            {
+                grainAccessInfo.Add(grain, 1);
+                //Console.WriteLine($"grain type = {grain.Item2}, grain id = {grain.Item1}");
+            }
+            /*
+            Console.WriteLine();
+            Console.WriteLine();
+            Console.WriteLine();
+            Console.WriteLine();*/
+
             var input = new FunctionInput(data.tpcc_input);
             var task = Execute(client, data.firstGrainID, "NewOrder", input, grainAccessInfo);
             return task;

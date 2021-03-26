@@ -5,6 +5,7 @@ using Persist.Interfaces;
 using System.Threading.Tasks;
 using Concurrency.Implementation;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace TPCC.Grains
 {
@@ -27,6 +28,7 @@ namespace TPCC.Grains
     [Serializable]
     public class StockTable : ICloneable
     {
+        public int W_ID;
         public Dictionary<int, Stock> stock;  // key: I_ID
 
         public StockTable()
@@ -36,6 +38,7 @@ namespace TPCC.Grains
 
         public StockTable(StockTable stock_table)
         {
+            W_ID = stock_table.W_ID;
             stock = stock_table.stock;
         }
 
@@ -51,7 +54,7 @@ namespace TPCC.Grains
         {
         }
 
-        // input: int    partitionID
+        // input: Tuple<int, int>     W_ID, StockGrain index within the warehouse
         // output: null
         public async Task<FunctionResult> Init(FunctionInput fin)
         {
@@ -59,9 +62,10 @@ namespace TPCC.Grains
             var ret = new FunctionResult();
             try
             {
-                var partitionID = (int)fin.inputObject;
+                var input = (Tuple<int, int>)fin.inputObject;    // W_ID, StockGrain index within the warehouse
                 var myState = await state.ReadWrite(context);
-                myState.stock = InMemoryDataGenerator.GenerateStockTable(Constants.NUM_StockGrain_PER_W, partitionID);
+                myState.W_ID = input.Item1;
+                myState.stock = InMemoryDataGenerator.GenerateStockTable(input.Item2);
             }
             catch (Exception e)
             {
@@ -86,11 +90,14 @@ namespace TPCC.Grains
                 var items = input.itemsToBuy;
                 if (items.Count == 0) throw new Exception("Exception: no items to buy");
                 var myState = await state.ReadWrite(context);
+                if (remoteFlag == 1) Debug.Assert(W_ID != myState.W_ID);
+                else Debug.Assert(W_ID == myState.W_ID);
                 foreach (var item in items)
                 {
                     var I_ID = item.Key;
                     var quantity = item.Value;
 
+                    Debug.Assert(myState.stock.ContainsKey(I_ID));
                     var the_stock = myState.stock[I_ID];
                     var S_QUANTITY = the_stock.S_QUANTITY;
                     if (S_QUANTITY - quantity >= 10) S_QUANTITY -= quantity;
@@ -107,6 +114,7 @@ namespace TPCC.Grains
             }
             catch (Exception e)
             {
+                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
                 ret.setException();
             }
             return ret;
