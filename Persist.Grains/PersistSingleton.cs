@@ -12,21 +12,18 @@ namespace Persist.Grains
     [Reentrant]
     public class PersistSingletonGroup : IPersistSingletonGroup
     {
-        private bool initialized = false;
-        private IPersistWorker[] persistWorkers;
+        private IPersistWorker[] persistWorkers = null;
 
         public void Init(int numSingleton, int maxNumWaitLog)
         {
-            initialized = true;
-            persistWorkers = new IPersistWorker[numSingleton];
-            for (int i = 0; i < numSingleton; i++) persistWorkers[i] = new PersistWorker(i, maxNumWaitLog);
+            if (persistWorkers != null) foreach (var worker in persistWorkers) worker.CleanFile();
+            else
+            {
+                persistWorkers = new IPersistWorker[numSingleton];
+                for (int i = 0; i < numSingleton; i++) persistWorkers[i] = new PersistWorker(i, maxNumWaitLog);
+            }
         }
 
-        public bool IsInitialized()
-        {
-            return initialized;
-        }
-        
         public IPersistWorker GetSingleton(int index)
         {
             return persistWorkers[index];
@@ -68,11 +65,19 @@ namespace Persist.Grains
             numWaitLog = 0;
             this.myID = myID;
             maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
+            maxBufferSize = (int)Math.Pow(10, 5);    // for TPCC
             buffer = new byte[maxBufferSize];
             this.maxNumWaitLog = 1;
             fileName = Constants.logPath + myID;
             instanceLock = new SemaphoreSlim(1);
             waitFlush = new TaskCompletionSource<bool>();
+            file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
+        }
+
+        public void CleanFile()
+        {
+            file.Close();
+            File.Delete(fileName);
             file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
         }
 

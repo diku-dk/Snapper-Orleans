@@ -59,7 +59,8 @@ namespace TPCC.Grains
         public async Task<FunctionResult> Init(FunctionInput fin)
         {
             var context = fin.context;
-            var ret = new FunctionResult();
+            var res = new FunctionResult();
+            res.isReadOnlyOnGrain = true;     // Yijian: avoid logging, just for run experiemnt easier
             try
             {
                 var input = (Tuple<int, int>)fin.inputObject;    // W_ID, StockGrain index within the warehouse
@@ -69,9 +70,9 @@ namespace TPCC.Grains
             }
             catch (Exception e)
             {
-                ret.setException();
+                res.setException();
             }
-            return ret;
+            return res;
         }
 
         // input: UpdateStockInput   W_ID, D_ID, isRemote, <I_ID, I_QUANTITY>

@@ -8,7 +8,6 @@ namespace Persist.Interfaces
         IPersistWorker GetSingleton(int index);
         long GetIOCount();
         void SetIOCount();
-        bool IsInitialized();
     }
 
     public interface IPersistWorker
@@ -16,5 +15,7 @@ namespace Persist.Interfaces
         Task Write(byte[] value);
         long GetIOCount();
         void SetIOCount();
+
+        void CleanFile();
     }
 }

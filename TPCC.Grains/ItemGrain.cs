@@ -13,7 +13,7 @@ namespace TPCC.Grains
     public class ItemTable : ICloneable
     {
         public Dictionary<int, Item> items;  // key: I_ID
-        
+
         public ItemTable()
         {
             items = new Dictionary<int, Item>();
@@ -40,7 +40,8 @@ namespace TPCC.Grains
         public async Task<FunctionResult> Init(FunctionInput fin)
         {
             var context = fin.context;
-            var ret = new FunctionResult();
+            var res = new FunctionResult();
+            res.isReadOnlyOnGrain = true;     // Yijian: avoid logging, just for run experiemnt easier
             try
             {
                 var myState = await state.ReadWrite(context);
@@ -48,9 +49,9 @@ namespace TPCC.Grains
             }
             catch (Exception e)
             {
-                ret.setException();
+                res.setException();
             }
-            return ret;
+            return res;
         }
 
         // input: List<int> (item IDs)

@@ -67,6 +67,7 @@ namespace TPCC.Grains
         {
             var context = fin.context;
             var res = new FunctionResult();
+            res.isReadOnlyOnGrain = true;     // Yijian: avoid logging, just for run experiemnt easier
             try
             {
                 var input = (Tuple<int, int, int>)fin.inputObject;    // W_ID, D_ID, OrderGrain index within the district
