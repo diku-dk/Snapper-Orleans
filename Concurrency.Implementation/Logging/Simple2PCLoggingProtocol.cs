@@ -13,6 +13,7 @@ namespace Concurrency.Implementation.Logging
     class Simple2PCLoggingProtocol<TState> : ILoggingProtocol<TState>
     {
         private int grainID;
+        private string grainType;
         private int sequenceNumber;
         private ISerializer serializer;
         private IKeyValueStorageWrapper logStorage;
@@ -25,6 +26,7 @@ namespace Concurrency.Implementation.Logging
         public Simple2PCLoggingProtocol(string grainType, int grainID, LoggingConfiguration loggingConfig, object persistItem = null)
         {
             this.grainID = grainID;
+            this.grainType = grainType;
             sequenceNumber = 0;
 
             switch (loggingConfig.loggingType)
@@ -87,6 +89,8 @@ namespace Concurrency.Implementation.Logging
 
         private async Task WriteLog(byte[] key, byte[] value)
         {
+            //Console.WriteLine($"{grainType}, {value.Length}");
+
             if (usePersistGrain) await persistGrain.Write(value);
             else if (usePersistSingleton) await persistWorker.Write(value);
             else await logStorage.Write(key, value);

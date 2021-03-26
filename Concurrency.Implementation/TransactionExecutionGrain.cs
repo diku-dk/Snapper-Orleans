@@ -227,7 +227,7 @@ namespace Concurrency.Implementation
                 {
                     //The scheduler has switched batches, need to commit now
                     var coordID = batchScheduleMap[bid].globalCoordinator;
-                    if (log != null) await log.HandleOnCompleteInDeterministicProtocol(state, bid, coordID);
+                    if (log != null && ret.isReadOnlyOnGrain == false) await log.HandleOnCompleteInDeterministicProtocol(state, bid, coordID);
 
                     IGlobalTransactionCoordinatorGrain coordinator;
                     if (coordList.ContainsKey(coordID) == false)

@@ -65,7 +65,7 @@ namespace Persist.Grains
             numWaitLog = 0;
             this.myID = myID;
             maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
-            maxBufferSize = (int)Math.Pow(10, 5);    // for TPCC
+            maxBufferSize = (int)Math.Pow(10, 5);  // for TPCC (ACT)
             buffer = new byte[maxBufferSize];
             this.maxNumWaitLog = 1;
             fileName = Constants.logPath + myID;
