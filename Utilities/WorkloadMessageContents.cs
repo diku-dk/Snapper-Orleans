@@ -22,8 +22,8 @@ namespace Utilities
         public const int NUM_D_PER_W = 10;
         public const int NUM_C_PER_D = 3000;
         public const int NUM_I = 100000;
-        public const int NUM_OrderGrain_PER_D = 300;
-        public const int NUM_StockGrain_PER_W = 2000;
+        public const int NUM_OrderGrain_PER_D = 100;
+        public const int NUM_StockGrain_PER_W = 5000;
         
         public const bool enableAzureClustering = false;
         public const string connectionString = "DefaultEndpointsProtocol=https;AccountName=silo-membership-table;AccountKey=cyNmVPVYxlTeepACZWayOBtK4yuN5N733nBcaolrVtDjQd8Y04e263oZt8nKWLHNLAVPsMvyU6gO7dHUawmy3A==;TableEndpoint=https://silo-membership-table.table.cosmos.azure.com:443/;";   // primary connection string

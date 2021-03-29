@@ -363,7 +363,7 @@ namespace NewProcess
                     grains.Add(new Tuple<int, string>(GetOrderGrain(W_ID, D_ID, C_ID), "TPCC.Grains.OrderGrain"));
                     var ol_cnt = ol_cnt_dist_uni.Sample();
                     var rbk = rbk_dist_uni.Sample();
-                    //var rbk = 0;
+                    //rbk = 0;
                     var itemsToBuy = new Dictionary<int, Tuple<int, int>>();  // <I_ID, <supply_warehouse, quantity>>
 
                     var remote_flag = false;

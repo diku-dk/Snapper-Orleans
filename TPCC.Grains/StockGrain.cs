@@ -67,6 +67,9 @@ namespace TPCC.Grains
                 var myState = await state.ReadWrite(context);
                 myState.W_ID = input.Item1;
                 myState.stock = InMemoryDataGenerator.GenerateStockTable(input.Item2);
+                //var serializer = new MsgPackSerializer();
+                //var data = serializer.serialize(myState.stock);
+                //Console.WriteLine($"StockGrain: W_ID  ={input.Item1}, size = {data.Length}");
             }
             catch (Exception e)
             {
