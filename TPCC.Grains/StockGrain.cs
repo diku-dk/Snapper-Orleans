@@ -9,6 +9,7 @@ using System.Diagnostics;
 
 namespace TPCC.Grains
 {
+    [Serializable]
     public class UpdateStockInput
     {
         public int W_ID;

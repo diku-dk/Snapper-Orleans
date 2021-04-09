@@ -429,24 +429,41 @@ namespace ExperimentController
 
         private static async void LoadTPCCGrains()
         {
-            Debug.Assert(workload.grainImplementationType == ImplementationType.SNAPPER);
-            Console.WriteLine($"Load grains, benchmark {workload.benchmark}. ");
+            Debug.Assert(workload.grainImplementationType != ImplementationType.ORLEANSTXN);
+            var eventual = workload.grainImplementationType == ImplementationType.ORLEANSEVENTUAL;
+            Console.WriteLine($"Load grains, benchmark {workload.benchmark}, {workload.grainImplementationType}. ");
             var sequence = true;   // load the grains in sequence instead of all concurrent
             var start = DateTime.Now;
 
             // load ItemGrain
             for (int i = 0; i < workload.numItemGrain; i++)
             {
-                var grain = client.GetGrain<IItemGrain>(i);
-                await grain.StartTransaction("Init", new FunctionInput());
+                if (eventual)
+                {
+                    var grain = client.GetGrain<IEventualItemGrain>(i);
+                    await grain.StartTransaction("Init", new FunctionInput());
+                }
+                else
+                {
+                    var grain = client.GetGrain<IItemGrain>(i);
+                    await grain.StartTransaction("Init", new FunctionInput());
+                }
             }
             Console.WriteLine($"Finish loading {workload.numItemGrain} ItemGrain. ");
 
             // load WarehouseGrain
             for (int i = 0; i < workload.numWarehouseGrain; i++)
             {
-                var grain = client.GetGrain<IWarehouseGrain>(i);
-                await grain.StartTransaction("Init", new FunctionInput(i));
+                if (eventual)
+                {
+                    var grain = client.GetGrain<IEventualWarehouseGrain>(i);
+                    await grain.StartTransaction("Init", new FunctionInput(i));
+                }
+                else
+                {
+                    var grain = client.GetGrain<IWarehouseGrain>(i);
+                    await grain.StartTransaction("Init", new FunctionInput(i));
+                }
             }
             Console.WriteLine($"Finish loading {workload.numWarehouseGrain} WarehouseGrain. ");
 
@@ -458,10 +475,20 @@ namespace ExperimentController
                 {
                     index = W_ID * Constants.NUM_D_PER_W + D_ID;
                     var input = new FunctionInput(new Tuple<int, int>(W_ID, D_ID));
-                    var districtGrain = client.GetGrain<IDistrictGrain>(index);
-                    await districtGrain.StartTransaction("Init", input);
-                    var customerGrain = client.GetGrain<ICustomerGrain>(index);
-                    await customerGrain.StartTransaction("Init", input);
+                    if (eventual)
+                    {
+                        var districtGrain = client.GetGrain<IEventualDistrictGrain>(index);
+                        await districtGrain.StartTransaction("Init", input);
+                        var customerGrain = client.GetGrain<IEventualCustomerGrain>(index);
+                        await customerGrain.StartTransaction("Init", input);
+                    }
+                    else
+                    {
+                        var districtGrain = client.GetGrain<IDistrictGrain>(index);
+                        await districtGrain.StartTransaction("Init", input);
+                        var customerGrain = client.GetGrain<ICustomerGrain>(index);
+                        await customerGrain.StartTransaction("Init", input);
+                    }
                 }
             }
             Debug.Assert(index == workload.numDistrictGrain - 1 && index == workload.numCustomerGrain - 1);
@@ -476,8 +503,16 @@ namespace ExperimentController
                 {
                     index = W_ID * Constants.NUM_StockGrain_PER_W + i;
                     var input = new FunctionInput(new Tuple<int, int>(W_ID, i));
-                    var grain = client.GetGrain<IStockGrain>(index);
-                    tasks.Add(grain.StartTransaction("Init", input));
+                    if (eventual)
+                    {
+                        var grain = client.GetGrain<IEventualStockGrain>(index);
+                        tasks.Add(grain.StartTransaction("Init", input));
+                    }
+                    else
+                    {
+                        var grain = client.GetGrain<IStockGrain>(index);
+                        tasks.Add(grain.StartTransaction("Init", input));
+                    }
                     if (sequence && tasks.Count == Environment.ProcessorCount)
                     {
                         //Console.WriteLine($"Load {Environment.ProcessorCount} StockGrains, i = {i}");
@@ -501,8 +536,16 @@ namespace ExperimentController
                     {
                         index = W_ID * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D + D_ID * Constants.NUM_OrderGrain_PER_D + i;
                         var input = new FunctionInput(new Tuple<int, int, int>(W_ID, D_ID, i));
-                        var grain = client.GetGrain<IOrderGrain>(index);
-                        tasks.Add(grain.StartTransaction("Init", input));
+                        if (eventual)
+                        {
+                            var grain = client.GetGrain<IEventualOrderGrain>(index);
+                            tasks.Add(grain.StartTransaction("Init", input));
+                        }
+                        else
+                        {
+                            var grain = client.GetGrain<IOrderGrain>(index);
+                            tasks.Add(grain.StartTransaction("Init", input));
+                        }
                         if (sequence && tasks.Count == Environment.ProcessorCount)
                         {
                             //Console.WriteLine($"Load {Environment.ProcessorCount} OrderGrains, i = {i}");

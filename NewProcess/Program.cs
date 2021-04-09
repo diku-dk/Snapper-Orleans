@@ -342,8 +342,28 @@ namespace NewProcess
 
             for (int round = 0; round < siloCPU / 4; round++)
             {
-                var wh_dist = new DiscreteUniform(0, config.numWarehouse - 1, new Random());
-                var district_dist_uni = new DiscreteUniform(0, Constants.NUM_D_PER_W - 1, new Random());
+                DiscreteUniform hot = null;
+                DiscreteUniform wh_dist = null;
+                DiscreteUniform hot_wh_dist = null;
+                DiscreteUniform district_dist = null;
+                DiscreteUniform hot_district_dist = null;
+                if (config.distribution == Distribution.HOTRECORD)
+                {
+                    // hot set
+                    var num_hot_wh = (int)(0.5 * config.numWarehouse);
+                    var num_hot_district = (int)(0.1 * Constants.NUM_D_PER_W);
+                    hot_wh_dist = new DiscreteUniform(0, num_hot_wh - 1, new Random());
+                    wh_dist = new DiscreteUniform(num_hot_wh, config.numWarehouse - 1, new Random());
+                    hot_district_dist = new DiscreteUniform(0, num_hot_district - 1, new Random());
+                    district_dist = new DiscreteUniform(num_hot_district, Constants.NUM_D_PER_W - 1, new Random());
+                    hot = new DiscreteUniform(0, 99, new Random());
+                }
+                else
+                {
+                    Debug.Assert(config.distribution == Distribution.UNIFORM);
+                    wh_dist = new DiscreteUniform(0, config.numWarehouse - 1, new Random());
+                    district_dist = new DiscreteUniform(0, Constants.NUM_D_PER_W - 1, new Random());
+                }
                 var ol_cnt_dist_uni = new DiscreteUniform(5, 15, new Random());
                 var rbk_dist_uni = new DiscreteUniform(1, 100, new Random());
                 var local_dist_uni = new DiscreteUniform(1, 100, new Random());
@@ -351,11 +371,30 @@ namespace NewProcess
 
                 for (int txn = 0; txn < Constants.BASE_NUM_NEWORDER; txn++)
                 {
-                    int W_ID = wh_dist.Sample();
-                    var grains = new HashSet<Tuple<int, string>>();
-                    var D_ID = district_dist_uni.Sample();
+                    int W_ID;
+                    int D_ID;
+                    if (config.distribution == Distribution.HOTRECORD)
+                    {
+                        var p = hot.Sample();
+                        if (p < Constants.hotRatio * 100)    // 75% choose from hot set
+                        {
+                            W_ID = hot_wh_dist.Sample();
+                            D_ID = hot_district_dist.Sample();
+                        }
+                        else
+                        {
+                            W_ID = wh_dist.Sample();
+                            D_ID = district_dist.Sample();
+                        }
+                    }
+                    else
+                    {
+                        W_ID = wh_dist.Sample();
+                        D_ID = district_dist.Sample();
+                    }
                     var C_ID = NURand(1023, 1, Constants.NUM_C_PER_D, 0) - 1;
                     var firstGrainID = W_ID * Constants.NUM_D_PER_W + D_ID;
+                    var grains = new HashSet<Tuple<int, string>>();
                     grains.Add(new Tuple<int, string>(W_ID, "TPCC.Grains.ItemGrain"));
                     grains.Add(new Tuple<int, string>(W_ID, "TPCC.Grains.WarehouseGrain"));
                     grains.Add(new Tuple<int, string>(firstGrainID, "TPCC.Grains.CustomerGrain"));

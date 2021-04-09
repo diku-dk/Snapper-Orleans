@@ -5,10 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.5.4.30" />
-    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.4.1" />
-    <PackageReference Include="Microsoft.Orleans.Core" Version="3.4.1" />
-    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="3.4.1">
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.0.10" />
+    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.4.2" />
+    <PackageReference Include="Microsoft.Orleans.Core" Version="3.4.2" />
+    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="3.4.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

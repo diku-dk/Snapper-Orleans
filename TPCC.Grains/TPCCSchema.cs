@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 namespace TPCC.Grains
 {
+    public enum AllTxnTypes { Init, NewOrder, GetDTax, GetItemsPrice, AddNewOrder, UpdateStock, GetWTax };
+
     [Serializable]
     public class Warehouse
     {
