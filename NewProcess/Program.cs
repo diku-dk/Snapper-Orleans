@@ -340,7 +340,7 @@ namespace NewProcess
             var remote_count = 0;
             var txn_size = new List<int>();
 
-            for (int round = 0; round < siloCPU / 4; round++)
+            for (int round = 0; round < numRound; round++)
             {
                 DiscreteUniform hot = null;
                 DiscreteUniform wh_dist = null;
@@ -392,14 +392,14 @@ namespace NewProcess
                         W_ID = wh_dist.Sample();
                         D_ID = district_dist.Sample();
                     }
-                    var C_ID = NURand(1023, 1, Constants.NUM_C_PER_D, 0) - 1;
+                    var C_ID = Helper.NURand(1023, 1, Constants.NUM_C_PER_D, 0) - 1;
                     var firstGrainID = W_ID * Constants.NUM_D_PER_W + D_ID;
                     var grains = new HashSet<Tuple<int, string>>();
                     grains.Add(new Tuple<int, string>(W_ID, "TPCC.Grains.ItemGrain"));
                     grains.Add(new Tuple<int, string>(W_ID, "TPCC.Grains.WarehouseGrain"));
                     grains.Add(new Tuple<int, string>(firstGrainID, "TPCC.Grains.CustomerGrain"));
                     grains.Add(new Tuple<int, string>(W_ID * Constants.NUM_D_PER_W + D_ID, "TPCC.Grains.DistrictGrain"));
-                    grains.Add(new Tuple<int, string>(GetOrderGrain(W_ID, D_ID, C_ID), "TPCC.Grains.OrderGrain"));
+                    grains.Add(new Tuple<int, string>(Helper.GetOrderGrain(W_ID, D_ID, C_ID), "TPCC.Grains.OrderGrain"));
                     var ol_cnt = ol_cnt_dist_uni.Sample();
                     var rbk = rbk_dist_uni.Sample();
                     //rbk = 0;
@@ -414,7 +414,7 @@ namespace NewProcess
                         if (i == ol_cnt - 1 && rbk == 1) I_ID = -1;
                         else
                         {
-                            do I_ID = NURand(8191, 1, Constants.NUM_I, 0) - 1;
+                            do I_ID = Helper.NURand(8191, 1, Constants.NUM_I, 0) - 1;
                             while (itemsToBuy.ContainsKey(I_ID));
                         }
 
@@ -432,7 +432,7 @@ namespace NewProcess
 
                         if (I_ID != -1)
                         {
-                            var grainID = GetStockGrain(supply_wh, I_ID);
+                            var grainID = Helper.GetStockGrain(supply_wh, I_ID);
                             var id = new Tuple<int, string>(grainID, "TPCC.Grains.StockGrain");
                             if (!grains.Contains(id)) grains.Add(id);
                         }

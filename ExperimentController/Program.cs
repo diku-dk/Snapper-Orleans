@@ -246,9 +246,12 @@ namespace ExperimentController
                 IOcount = new long[workload.numEpochs];
                 for (int i = 0; i < workload.numEpochs; i++)
                 {
-                    SetIOCount();
-                    while (!setCountFinish) Thread.Sleep(100);
-                    setCountFinish = false;
+                    if (workload.grainImplementationType == ImplementationType.SNAPPER)
+                    {
+                        SetIOCount();
+                        while (!setCountFinish) Thread.Sleep(100);
+                        setCountFinish = false;
+                    }
 
                     //Send the command to run an epoch
                     Console.WriteLine($"Running Epoch {i} on {numWorkerNodes} worker nodes");
@@ -257,9 +260,12 @@ namespace ExperimentController
                     WaitForWorkerAcksAndReset();
                     Console.WriteLine($"Finished running epoch {i} on {numWorkerNodes} worker nodes");
 
-                    GetIOCount(i);
-                    while (!getCountFinish) Thread.Sleep(100);
-                    getCountFinish = false;
+                    if (workload.grainImplementationType == ImplementationType.SNAPPER)
+                    {
+                        GetIOCount(i);
+                        while (!getCountFinish) Thread.Sleep(100);
+                        getCountFinish = false;
+                    }
                 }
             }
         }

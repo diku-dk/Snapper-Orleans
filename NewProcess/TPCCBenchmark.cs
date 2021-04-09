@@ -23,15 +23,12 @@ namespace NewProcess
             switch (config.grainImplementationType)
             {
                 case ImplementationType.SNAPPER:
-                    switch (config.benchmark)
-                    {
-                        case BenchmarkType.TPCC:
-                            var grain = client.GetGrain<ICustomerGrain>(grainId);
-                            if (isDet) return grain.StartTransaction(grainAccessInfo, functionName, input);
-                            else return grain.StartTransaction(functionName, input);
-                        default:
-                            throw new Exception($"Exception: Unknown benchmark {config.benchmark}");
-                    }
+                    var grain = client.GetGrain<ICustomerGrain>(grainId);
+                    if (isDet) return grain.StartTransaction(grainAccessInfo, functionName, input);
+                    else return grain.StartTransaction(functionName, input);
+                case ImplementationType.ORLEANSEVENTUAL:
+                    var egrain = client.GetGrain<IEventualCustomerGrain>(grainId);
+                    return egrain.StartTransaction(functionName, input);
                 default:
                     throw new Exception("Exception: TPCC does not support orleans txn");
             }
