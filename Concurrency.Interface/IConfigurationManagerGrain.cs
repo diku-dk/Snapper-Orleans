@@ -8,13 +8,14 @@ namespace Concurrency.Interface
 {
     public class LoggingConfiguration
     {
+        public bool batching;
         public int numPersistItem;
         public int loggingBatchSize;
         public LoggingType loggingType;
         public StorageType storageType;
         public SerializerType serializerType;
 
-        public LoggingConfiguration(LoggingType loggingType, StorageType storageType, SerializerType serializerType, int numPersistItem, int loggingBatchSize)
+        public LoggingConfiguration(LoggingType loggingType, StorageType storageType, SerializerType serializerType, int numPersistItem, int loggingBatchSize, bool batching)
         {
             this.loggingType = loggingType;
             if (loggingType != LoggingType.NOLOGGING)
@@ -23,6 +24,7 @@ namespace Concurrency.Interface
                 this.serializerType = serializerType;
                 if (loggingType != LoggingType.ONGRAIN)
                 {
+                    this.batching = batching;
                     this.numPersistItem = numPersistItem;
                     this.loggingBatchSize = loggingBatchSize;
                 }

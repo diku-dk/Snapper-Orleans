@@ -17,15 +17,15 @@ if ($LastExitCode -ne 0) { return; }
 
 $zipF = 0.9, 1.0, 1.25, 1.5, 2.0
 $percent = 100, 99, 90, 75, 50, 25, 0
-$detPipe = 32
-$nonDetPipeAll = 16, 8, 4, 4, 4
-$cpu = 4
+$detPipe = 256
+$nonDetPipeAll = 1, 16, 8, 4, 4, 4
+$cpu = 32
 
 for ($j = 0; $j -le 0; $j++)
 {
     $nonDetPipe = $nonDetPipeAll[$j]
     $zipf = $zipF[$j]
-    for ($i = 6; $i -le 6; $i++)
+    for ($i = 0; $i -le 0; $i++)
     {
         $detPercent = $percent[$i]
         for ($pipe = 1; $pipe -le 1; $pipe *= 2)

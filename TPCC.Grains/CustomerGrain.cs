@@ -66,8 +66,8 @@ namespace TPCC.Grains
                 var myState = await state.ReadWrite(context);
                 myState.W_ID = input.Item1;
                 myState.D_ID = input.Item2;
-                myState.customer_table = InMemoryDataGenerator.GenerateCustomerTable();
-                //Console.WriteLine($"CustomerGrain: W_ID = {myState.W_ID}, D_ID = {myState.D_ID}");
+                if (myState.customer_table.Count == 0) myState.customer_table = InMemoryDataGenerator.GenerateCustomerTable();
+                else Debug.Assert(myState.customer_table.Count == Constants.NUM_C_PER_D);
             }
             catch (Exception e)
             {

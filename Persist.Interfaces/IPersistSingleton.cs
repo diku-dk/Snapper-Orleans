@@ -4,7 +4,7 @@ namespace Persist.Interfaces
 {
     public interface IPersistSingletonGroup
     {
-        void Init(int numSingleton, int maxNumWaitLog);
+        void Init(int numSingleton, int maxNumWaitLog, bool tpcc);
         IPersistWorker GetSingleton(int index);
         long GetIOCount();
         void SetIOCount();

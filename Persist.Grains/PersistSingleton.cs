@@ -14,13 +14,13 @@ namespace Persist.Grains
     {
         private IPersistWorker[] persistWorkers = null;
 
-        public void Init(int numSingleton, int maxNumWaitLog)
+        public void Init(int numSingleton, int maxNumWaitLog, bool tpcc)
         {
             if (persistWorkers != null) foreach (var worker in persistWorkers) worker.CleanFile();
             else
             {
                 persistWorkers = new IPersistWorker[numSingleton];
-                for (int i = 0; i < numSingleton; i++) persistWorkers[i] = new PersistWorker(i, maxNumWaitLog);
+                for (int i = 0; i < numSingleton; i++) persistWorkers[i] = new PersistWorker(i, maxNumWaitLog, tpcc);
             }
         }
 
@@ -48,6 +48,7 @@ namespace Persist.Grains
     {
         private int myID;
         private int index;
+        private bool tpcc;
         private byte[] buffer;
         private int numWaitLog;
         private FileStream file;
@@ -59,18 +60,21 @@ namespace Persist.Grains
 
         private long IOcount = 0;
 
-        public PersistWorker(int myID, int maxNumWaitLog)
+        public PersistWorker(int myID, int maxNumWaitLog, bool tpcc)
         {
             index = 0;
             numWaitLog = 0;
             this.myID = myID;
-            maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
-            maxBufferSize = (int)Math.Pow(10, 5);  // for TPCC (ACT)
-            buffer = new byte[maxBufferSize];
-            this.maxNumWaitLog = 1;
+            this.tpcc = tpcc;
+            if (!tpcc)
+            {
+                maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
+                buffer = new byte[maxBufferSize];
+                this.maxNumWaitLog = 1;
+                waitFlush = new TaskCompletionSource<bool>();
+            } 
             fileName = Constants.logPath + myID;
             instanceLock = new SemaphoreSlim(1);
-            waitFlush = new TaskCompletionSource<bool>();
             file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
         }
 
@@ -94,6 +98,15 @@ namespace Persist.Grains
 
         public async Task Write(byte[] value)
         {
+            // for TPCC
+            await instanceLock.WaitAsync();
+            var sizeBytes = BitConverter.GetBytes(value.Length);
+            await file.WriteAsync(sizeBytes, 0, sizeBytes.Length);
+            await file.WriteAsync(value, 0, value.Length);
+            await file.FlushAsync();
+            instanceLock.Release();
+
+            /*
             await instanceLock.WaitAsync();
 
             // STEP 1: add log to buffer
@@ -115,7 +128,7 @@ namespace Persist.Grains
             {
                 instanceLock.Release();
                 await waitFlush.Task;
-            }
+            }*/
         }
 
         private async Task Flush()

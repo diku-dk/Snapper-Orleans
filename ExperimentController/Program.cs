@@ -598,13 +598,13 @@ namespace ExperimentController
             workload.deterministicTxnPercent = float.Parse(args[1]);
             vCPU = int.Parse(args[2]);
 
-            if (workload.benchmark == BenchmarkType.SMALLBANK)
+            if (workload.grainImplementationType == ImplementationType.SNAPPER)
             {
-                workload.numAccounts = 5000 * vCPU;
                 coordConfig.numCoordinators = vCPU * 2;
                 numCoordinators = coordConfig.numCoordinators;
                 Console.WriteLine($"worker node = {workload.numWorkerNodes}, silo_vCPU = {vCPU}, detPercent = {workload.deterministicTxnPercent}%, num_coord = {numCoordinators}, numPersistItem = {numPersistItem}");
             }
+            if (workload.benchmark == BenchmarkType.SMALLBANK) workload.numAccounts = 5000 * vCPU;
             if (workload.benchmark == BenchmarkType.TPCC)
             {
                 workload.numWarehouse = vCPU * Constants.NUM_W_PER_4CORE / 4;

@@ -269,8 +269,8 @@ namespace NewProcess
         {
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = siloCPU / 4;
-            numNonDetConsumer = siloCPU / 4;
+            numDetConsumer = siloCPU;
+            numNonDetConsumer = siloCPU;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 
@@ -347,6 +347,7 @@ namespace NewProcess
                 DiscreteUniform hot_wh_dist = null;
                 DiscreteUniform district_dist = null;
                 DiscreteUniform hot_district_dist = null;
+                var all_wh_dist = new DiscreteUniform(0, config.numWarehouse - 1, new Random());
                 if (config.distribution == Distribution.HOTRECORD)
                 {
                     // hot set
@@ -375,9 +376,11 @@ namespace NewProcess
                     int D_ID;
                     if (config.distribution == Distribution.HOTRECORD)
                     {
+                        var is_hot = false;
                         var p = hot.Sample();
-                        if (p < Constants.hotRatio * 100)    // 75% choose from hot set
+                        if (p < 75)    // 75% choose from hot set
                         {
+                            is_hot = true;
                             W_ID = hot_wh_dist.Sample();
                             D_ID = hot_district_dist.Sample();
                         }
@@ -424,7 +427,7 @@ namespace NewProcess
                         else   // supply by remote warehouse
                         {
                             remote_flag = true;
-                            do supply_wh = wh_dist.Sample();
+                            do supply_wh = all_wh_dist.Sample();
                             while (supply_wh == W_ID);
                         }
                         var quantity = quantity_dist_uni.Sample();
@@ -450,15 +453,9 @@ namespace NewProcess
 
         private static void InitializeTPCCWorkload()
         {
-            switch (config.distribution)
-            {
-                case Distribution.UNIFORM:
-                    Console.WriteLine($"Generate UNIFORM data for TPCC");
-                    for (int epoch = 0; epoch < config.numEpochs; epoch++) GenerateNewOrder(epoch);
-                    break;
-                default:
-                    throw new Exception($"Exception: TPCC does not support distribution {config.distribution}. ");
-            }
+            Debug.Assert(config.distribution != Distribution.ZIPFIAN);
+            Console.WriteLine($"Generate {config.distribution} data for TPCC. ");
+            for (int epoch = 0; epoch < config.numEpochs; epoch++) GenerateNewOrder(epoch);
         }
 
         private static void InitializeGetBalanceWorkload()
