@@ -22,7 +22,7 @@ namespace Utilities
         public const int NUM_D_PER_W = 10;
         public const int NUM_C_PER_D = 3000;
         public const int NUM_I = 100000;
-        public const int NUM_OrderGrain_PER_D = 100;
+        public const int NUM_OrderGrain_PER_D = 1;
         public const int NUM_StockGrain_PER_W = 5000;
         
         public const bool enableAzureClustering = false;

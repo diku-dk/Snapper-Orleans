@@ -66,13 +66,14 @@ namespace Persist.Grains
             numWaitLog = 0;
             this.myID = myID;
             this.batching = batching;
-            if (!batching)
+            if (batching)
             {
                 maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
+                //maxBufferSize = 5 * (int)Math.Pow(10, 5);    // tpcc
                 buffer = new byte[maxBufferSize];
                 this.maxNumWaitLog = 1;
                 waitFlush = new TaskCompletionSource<bool>();
-            } 
+            }
             fileName = Constants.logPath + myID;
             instanceLock = new SemaphoreSlim(1);
             file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
@@ -94,6 +95,10 @@ namespace Persist.Grains
         {
             maxNumWaitLog = 1;   // maxNumWaitLog
             IOcount = 0;
+
+            file.Close();
+            File.Delete(fileName);
+            file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
         }
 
         public async Task Write(byte[] value)

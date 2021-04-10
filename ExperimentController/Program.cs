@@ -327,7 +327,43 @@ namespace ExperimentController
                     await txngrain.GetIOCount();
                     break;
             }
-            
+
+            // set OrderGrain as empty table
+            if (workload.benchmark == BenchmarkType.TPCC)
+            {
+                var index = 0;
+                var tasks = new List<Task<TransactionResult>>();
+                for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
+                {
+                    for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
+                    {
+                        for (int i = 0; i < Constants.NUM_OrderGrain_PER_D; i++)
+                        {
+                            index = W_ID * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D + D_ID * Constants.NUM_OrderGrain_PER_D + i;
+                            var input = new FunctionInput(new Tuple<int, int, int>(W_ID, D_ID, i));
+                            if (workload.grainImplementationType == ImplementationType.ORLEANSEVENTUAL)
+                            {
+                                var grain = client.GetGrain<IEventualOrderGrain>(index);
+                                tasks.Add(grain.StartTransaction("Init", input));
+                            }
+                            else
+                            {
+                                var grain = client.GetGrain<IOrderGrain>(index);
+                                tasks.Add(grain.StartTransaction("Init", input));
+                            }
+                            if (tasks.Count == Environment.ProcessorCount)
+                            {
+                                await Task.WhenAll(tasks);
+                                tasks.Clear();
+                            }
+                        }
+                    }
+                }
+                Debug.Assert(index == workload.numOrderGrain - 1);
+                if (tasks.Count > 0) await Task.WhenAll(tasks);
+                Console.WriteLine($"Finish re-setting {workload.numOrderGrain} OrderGrain. ");
+            }
+
             getCountFinish = true;
         }
 

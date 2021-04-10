@@ -17,15 +17,15 @@ if ($LastExitCode -ne 0) { return; }
 
 $zipF = 0.9, 1.0, 1.25, 1.5, 2.0
 $percent = 100, 99, 90, 75, 50, 25, 0
-$detPipe = 256
-$nonDetPipeAll = 1, 16, 8, 4, 4, 4
+$detPipe = 128
+$nonDetPipeAll = 4, 16, 8, 4, 4, 4
 $cpu = 32
 
 for ($j = 0; $j -le 0; $j++)
 {
     $nonDetPipe = $nonDetPipeAll[$j]
     $zipf = $zipF[$j]
-    for ($i = 0; $i -le 0; $i++)
+    for ($i = 6; $i -le 6; $i++)
     {
         $detPercent = $percent[$i]
         for ($pipe = 1; $pipe -le 1; $pipe *= 2)
@@ -33,7 +33,7 @@ for ($j = 0; $j -le 0; $j++)
             #$detPipe = $pipe
             #$nonDetPipe = $pipe
             #Start-Process "dotnet" -ArgumentList "run --project ExperimentController --no-build -- $zipF $detPercent $cpu"
-            #Start-Sleep 18
+            #Start-Sleep 35
             Start-Process "dotnet" -ArgumentList "run --project NewProcess --no-build -- $cpu $detPipe $nonDetPipe"
             #Start-Process "dotnet" -ArgumentList "run --project ExperimentProcess --no-build -- $cpu $pipe"
             #Start-Sleep 62

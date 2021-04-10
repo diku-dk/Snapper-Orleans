@@ -269,8 +269,8 @@ namespace NewProcess
         {
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = siloCPU;
-            numNonDetConsumer = siloCPU;
+            numDetConsumer = siloCPU / 4;
+            numNonDetConsumer = siloCPU / 4;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 
@@ -299,13 +299,13 @@ namespace NewProcess
             {
                 if (numDetConsumer > 0)
                 {
-                    detBufferSize = detPercent * 100 * siloCPU / (4 * numDetConsumer);
-                    //detBufferSize = detPipeSize * 5;
+                    //detBufferSize = detPercent * 100 * siloCPU / (4 * numDetConsumer);
+                    detBufferSize = detPipeSize * 10;
                 }
                 if (numNonDetConsumer > 0)
                 {
-                    nonDetBufferSize = (100 - detPercent) * 100 * siloCPU / (4 * numNonDetConsumer);
-                    //nonDetBufferSize = nonDetPipeSize * 5;
+                    //nonDetBufferSize = (100 - detPercent) * 100 * siloCPU / (4 * numNonDetConsumer);
+                    nonDetBufferSize = nonDetPipeSize * 10;
                 }
             }
             Console.WriteLine($"detPercent = {detPercent}%, detBuffer = {detBufferSize}, nonDetBuffer = {nonDetBufferSize}");
