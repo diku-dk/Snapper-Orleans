@@ -85,7 +85,9 @@ namespace ExperimentController
             workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfigSection["grainImplementationType"]);
 
             coordConfig = new CoordinatorGrainConfiguration(batchInterval, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
-            loggingConfig = new LoggingConfiguration(loggingType, storageType, serializerType, numPersistItem, loggingBatchSize);
+            var batching = true;
+            if (workload.benchmark == BenchmarkType.TPCC) batching = false;
+            loggingConfig = new LoggingConfiguration(loggingType, storageType, serializerType, numPersistItem, loggingBatchSize, batching);
             Console.WriteLine("Generated workload configuration");
         }
 
@@ -475,6 +477,7 @@ namespace ExperimentController
 
             // load DistrictGrain and CustomerGrain
             var index = 0;
+            var tasks = new List<Task<TransactionResult>>();
             for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
                 for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
@@ -484,25 +487,31 @@ namespace ExperimentController
                     if (eventual)
                     {
                         var districtGrain = client.GetGrain<IEventualDistrictGrain>(index);
-                        await districtGrain.StartTransaction("Init", input);
+                        tasks.Add(districtGrain.StartTransaction("Init", input));
                         var customerGrain = client.GetGrain<IEventualCustomerGrain>(index);
-                        await customerGrain.StartTransaction("Init", input);
+                        tasks.Add(customerGrain.StartTransaction("Init", input));
                     }
                     else
                     {
                         var districtGrain = client.GetGrain<IDistrictGrain>(index);
-                        await districtGrain.StartTransaction("Init", input);
+                        tasks.Add(districtGrain.StartTransaction("Init", input));
                         var customerGrain = client.GetGrain<ICustomerGrain>(index);
-                        await customerGrain.StartTransaction("Init", input);
+                        tasks.Add(customerGrain.StartTransaction("Init", input));
+                    }
+                    if (sequence && tasks.Count == Environment.ProcessorCount)
+                    {
+                        await Task.WhenAll(tasks);
+                        tasks.Clear();
                     }
                 }
             }
+            if (tasks.Count > 0) await Task.WhenAll(tasks);
             Debug.Assert(index == workload.numDistrictGrain - 1 && index == workload.numCustomerGrain - 1);
             Console.WriteLine($"Finish loading {workload.numDistrictGrain} DistrictGrain and {workload.numCustomerGrain} CustomerGrain. ");
 
             // load StockGrain
             index = 0;
-            var tasks = new List<Task<TransactionResult>>();
+            tasks = new List<Task<TransactionResult>>();
             for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
                 for (int i = 0; i < Constants.NUM_StockGrain_PER_W; i++)

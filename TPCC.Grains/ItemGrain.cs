@@ -45,7 +45,8 @@ namespace TPCC.Grains
             try
             {
                 var myState = await state.ReadWrite(context);
-                myState.items = InMemoryDataGenerator.GenerateItemTable();
+                if (myState.items.Count == 0) myState.items = InMemoryDataGenerator.GenerateItemTable();
+                else Debug.Assert(myState.items.Count == Constants.NUM_I);
             }
             catch (Exception e)
             {

@@ -46,10 +46,7 @@ namespace Concurrency.Implementation
             if (config == null) throw new ArgumentNullException(nameof(config));
             loggingConfig = config;
             if (config.loggingType == LoggingType.PERSISTSINGLETON)
-            {
-                if (config.)
-                persistSingletonGroup.Init(config.numPersistItem, config.loggingBatchSize);
-            } 
+                persistSingletonGroup.Init(config.numPersistItem, config.loggingBatchSize, config.batching);
             return Task.CompletedTask;
         }
 

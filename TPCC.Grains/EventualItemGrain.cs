@@ -3,6 +3,7 @@ using Utilities;
 using TPCC.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace TPCC.Grains
 {
@@ -32,7 +33,8 @@ namespace TPCC.Grains
             try
             {
                 var myState = state;
-                myState.items = InMemoryDataGenerator.GenerateItemTable();
+                if (myState.items.Count == 0) myState.items = InMemoryDataGenerator.GenerateItemTable();
+                else Debug.Assert(myState.items.Count == Constants.NUM_I);
             }
             catch (Exception)
             {

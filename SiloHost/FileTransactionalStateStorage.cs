@@ -31,7 +31,7 @@ namespace OrleansSiloHost
             this.name = name;
             this.options = options;
             this.persistSingletonGroup = persistSingletonGroup;
-            persistSingletonGroup.Init(options.numSingleton, options.maxNumWaitLog);
+            persistSingletonGroup.Init(options.numSingleton, options.maxNumWaitLog, true);
         }
 
         public ITransactionalStateStorage<TState> Create<TState>(string stateName, IGrainActivationContext context) where TState : class, new()

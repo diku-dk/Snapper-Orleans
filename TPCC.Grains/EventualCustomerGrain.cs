@@ -3,6 +3,7 @@ using Utilities;
 using TPCC.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace TPCC.Grains
 {
@@ -36,7 +37,8 @@ namespace TPCC.Grains
                 var myState = state;
                 myState.W_ID = input.Item1;
                 myState.D_ID = input.Item2;
-                myState.customer_table = InMemoryDataGenerator.GenerateCustomerTable();
+                if (myState.customer_table.Count == 0) myState.customer_table = InMemoryDataGenerator.GenerateCustomerTable();
+                else Debug.Assert(myState.customer_table.Count == Constants.NUM_C_PER_D);
             }
             catch (Exception)
             {

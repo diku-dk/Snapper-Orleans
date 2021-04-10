@@ -14,13 +14,13 @@ namespace Persist.Grains
     {
         private IPersistWorker[] persistWorkers = null;
 
-        public void Init(int numSingleton, int maxNumWaitLog, bool tpcc)
+        public void Init(int numSingleton, int maxNumWaitLog, bool batching)
         {
             if (persistWorkers != null) foreach (var worker in persistWorkers) worker.CleanFile();
             else
             {
                 persistWorkers = new IPersistWorker[numSingleton];
-                for (int i = 0; i < numSingleton; i++) persistWorkers[i] = new PersistWorker(i, maxNumWaitLog, tpcc);
+                for (int i = 0; i < numSingleton; i++) persistWorkers[i] = new PersistWorker(i, maxNumWaitLog, batching);
             }
         }
 
@@ -48,7 +48,7 @@ namespace Persist.Grains
     {
         private int myID;
         private int index;
-        private bool tpcc;
+        private bool batching;
         private byte[] buffer;
         private int numWaitLog;
         private FileStream file;
@@ -60,13 +60,13 @@ namespace Persist.Grains
 
         private long IOcount = 0;
 
-        public PersistWorker(int myID, int maxNumWaitLog, bool tpcc)
+        public PersistWorker(int myID, int maxNumWaitLog, bool batching)
         {
             index = 0;
             numWaitLog = 0;
             this.myID = myID;
-            this.tpcc = tpcc;
-            if (!tpcc)
+            this.batching = batching;
+            if (!batching)
             {
                 maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
                 buffer = new byte[maxBufferSize];
@@ -98,37 +98,41 @@ namespace Persist.Grains
 
         public async Task Write(byte[] value)
         {
-            // for TPCC
-            await instanceLock.WaitAsync();
-            var sizeBytes = BitConverter.GetBytes(value.Length);
-            await file.WriteAsync(sizeBytes, 0, sizeBytes.Length);
-            await file.WriteAsync(value, 0, value.Length);
-            await file.FlushAsync();
-            instanceLock.Release();
-
-            /*
-            await instanceLock.WaitAsync();
-
-            // STEP 1: add log to buffer
-            var sizeBytes = BitConverter.GetBytes(value.Length);
-            Debug.Assert(index + sizeBytes.Length + value.Length <= maxBufferSize);
-            Buffer.BlockCopy(sizeBytes, 0, buffer, index, sizeBytes.Length);
-            index += sizeBytes.Length;
-            Buffer.BlockCopy(value, 0, buffer, index, value.Length);
-            index += value.Length;
-            numWaitLog++;
-
-            // STEP 2: check if need to flush
-            if (numWaitLog == maxNumWaitLog)
+            if (!batching)
             {
-                await Flush();
+                await instanceLock.WaitAsync();
+                var sizeBytes = BitConverter.GetBytes(value.Length);
+                await file.WriteAsync(sizeBytes, 0, sizeBytes.Length);
+                await file.WriteAsync(value, 0, value.Length);
+                await file.FlushAsync();
+                IOcount++;
                 instanceLock.Release();
             }
             else
             {
-                instanceLock.Release();
-                await waitFlush.Task;
-            }*/
+                await instanceLock.WaitAsync();
+
+                // STEP 1: add log to buffer
+                var sizeBytes = BitConverter.GetBytes(value.Length);
+                Debug.Assert(index + sizeBytes.Length + value.Length <= maxBufferSize);
+                Buffer.BlockCopy(sizeBytes, 0, buffer, index, sizeBytes.Length);
+                index += sizeBytes.Length;
+                Buffer.BlockCopy(value, 0, buffer, index, value.Length);
+                index += value.Length;
+                numWaitLog++;
+
+                // STEP 2: check if need to flush
+                if (numWaitLog == maxNumWaitLog)
+                {
+                    await Flush();
+                    instanceLock.Release();
+                }
+                else
+                {
+                    instanceLock.Release();
+                    await waitFlush.Task;
+                }
+            }
         }
 
         private async Task Flush()
