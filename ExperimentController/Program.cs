@@ -85,7 +85,7 @@ namespace ExperimentController
             workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfigSection["grainImplementationType"]);
 
             coordConfig = new CoordinatorGrainConfiguration(batchInterval, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
-            var batching = true;
+            var batching = false;
             if (workload.benchmark == BenchmarkType.TPCC) batching = false;
             loggingConfig = new LoggingConfiguration(loggingType, storageType, serializerType, numPersistItem, loggingBatchSize, batching);
             Console.WriteLine("Generated workload configuration");
@@ -268,6 +268,12 @@ namespace ExperimentController
                         while (!getCountFinish) Thread.Sleep(100);
                         getCountFinish = false;
                     }
+                    if (workload.benchmark == BenchmarkType.TPCC)
+                    {
+                        ResetOrderGrain();
+                        while (!resetFinish) Thread.Sleep(100);
+                        resetFinish = false;
+                    }
                 }
             }
         }
@@ -327,44 +333,45 @@ namespace ExperimentController
                     await txngrain.GetIOCount();
                     break;
             }
+            getCountFinish = true;
+        }
 
+        static bool resetFinish = false;
+        static async void ResetOrderGrain()
+        {
             // set OrderGrain as empty table
-            if (workload.benchmark == BenchmarkType.TPCC)
+            var index = 0;
+            var tasks = new List<Task<TransactionResult>>();
+            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
-                var index = 0;
-                var tasks = new List<Task<TransactionResult>>();
-                for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
+                for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
                 {
-                    for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
+                    for (int i = 0; i < Constants.NUM_OrderGrain_PER_D; i++)
                     {
-                        for (int i = 0; i < Constants.NUM_OrderGrain_PER_D; i++)
+                        index = W_ID * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D + D_ID * Constants.NUM_OrderGrain_PER_D + i;
+                        var input = new FunctionInput(new Tuple<int, int, int>(W_ID, D_ID, i));
+                        if (workload.grainImplementationType == ImplementationType.ORLEANSEVENTUAL)
                         {
-                            index = W_ID * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D + D_ID * Constants.NUM_OrderGrain_PER_D + i;
-                            var input = new FunctionInput(new Tuple<int, int, int>(W_ID, D_ID, i));
-                            if (workload.grainImplementationType == ImplementationType.ORLEANSEVENTUAL)
-                            {
-                                var grain = client.GetGrain<IEventualOrderGrain>(index);
-                                tasks.Add(grain.StartTransaction("Init", input));
-                            }
-                            else
-                            {
-                                var grain = client.GetGrain<IOrderGrain>(index);
-                                tasks.Add(grain.StartTransaction("Init", input));
-                            }
-                            if (tasks.Count == Environment.ProcessorCount)
-                            {
-                                await Task.WhenAll(tasks);
-                                tasks.Clear();
-                            }
+                            var grain = client.GetGrain<IEventualOrderGrain>(index);
+                            tasks.Add(grain.StartTransaction("Init", input));
+                        }
+                        else
+                        {
+                            var grain = client.GetGrain<IOrderGrain>(index);
+                            tasks.Add(grain.StartTransaction("Init", input));
+                        }
+                        if (tasks.Count == Environment.ProcessorCount)
+                        {
+                            await Task.WhenAll(tasks);
+                            tasks.Clear();
                         }
                     }
                 }
-                Debug.Assert(index == workload.numOrderGrain - 1);
-                if (tasks.Count > 0) await Task.WhenAll(tasks);
-                Console.WriteLine($"Finish re-setting {workload.numOrderGrain} OrderGrain. ");
             }
-
-            getCountFinish = true;
+            Debug.Assert(index == workload.numOrderGrain - 1);
+            if (tasks.Count > 0) await Task.WhenAll(tasks);
+            Console.WriteLine($"Finish re-setting {workload.numOrderGrain} OrderGrain. ");
+            resetFinish = true;
         }
 
         static void PullFromWorkers()
@@ -647,7 +654,8 @@ namespace ExperimentController
             {
                 coordConfig.numCoordinators = vCPU * 2;
                 numCoordinators = coordConfig.numCoordinators;
-                Console.WriteLine($"worker node = {workload.numWorkerNodes}, silo_vCPU = {vCPU}, detPercent = {workload.deterministicTxnPercent}%, num_coord = {numCoordinators}, numPersistItem = {numPersistItem}");
+                loggingConfig.numPersistItem = vCPU * 2;
+                numPersistItem = loggingConfig.numPersistItem;
             }
             if (workload.benchmark == BenchmarkType.SMALLBANK) workload.numAccounts = 5000 * vCPU;
             if (workload.benchmark == BenchmarkType.TPCC)
@@ -659,9 +667,8 @@ namespace ExperimentController
                 workload.numDistrictGrain = workload.numWarehouse * Constants.NUM_D_PER_W;
                 workload.numStockGrain = workload.numWarehouse * Constants.NUM_StockGrain_PER_W;
                 workload.numOrderGrain = workload.numWarehouse * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D;
-                Console.WriteLine($"worker node = {workload.numWorkerNodes}, silo_vCPU = {vCPU}, detPercent = {workload.deterministicTxnPercent}%, num_warehouse = {workload.numWarehouse}, numPersistItem = {numPersistItem}");
             }
-
+            Console.WriteLine($"worker node = {workload.numWorkerNodes}, silo_vCPU = {vCPU}, detPercent = {workload.deterministicTxnPercent}%, num_coord = {numCoordinators}, num_warehouse = {workload.numWarehouse}, numPersistItem = {numPersistItem}");
             numWorkerNodes = workload.numWorkerNodes;
             ackedWorkers = new CountdownEvent(numWorkerNodes);
 

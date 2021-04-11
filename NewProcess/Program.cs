@@ -137,7 +137,7 @@ namespace NewProcess
                 var reqs = new Dictionary<Task<TransactionResult>, TimeSpan>();
                 var queue = thread_requests[eIndex][threadIndex];
                 RequestData txn;
-                await Task.Delay(TimeSpan.FromMilliseconds(100));   // give some time for producer to populate the buffer
+                await Task.Delay(TimeSpan.FromMilliseconds(500));   // give some time for producer to populate the buffer
                 //Wait for all threads to arrive at barrier point
                 barriers[eIndex].SignalAndWait();
                 globalWatch.Restart();
@@ -248,7 +248,7 @@ namespace NewProcess
                 }
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
-                //Console.WriteLine($"thread_requests[{eIndex}][{threadIndex}] has {thread_requests[eIndex][threadIndex].Count} txn remaining");
+                Console.WriteLine($"thread_requests[{eIndex}][{threadIndex}] has {thread_requests[eIndex][threadIndex].Count} txn remaining");
                 thread_requests[eIndex].Remove(threadIndex);
                 if (isDet) Console.WriteLine($"det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
                 else
@@ -332,14 +332,12 @@ namespace NewProcess
 
         private static void GenerateNewOrder(int epoch)
         {
-            Console.WriteLine($"Generate TPCC workload for epoch {epoch}");
-
             var numRound = siloCPU / 4;
             if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) numRound *= 3;
 
             var remote_count = 0;
             var txn_size = new List<int>();
-
+            Console.WriteLine($"Generate TPCC workload for epoch {epoch}, numRound = {numRound}");
             for (int round = 0; round < numRound; round++)
             {
                 DiscreteUniform hot = null;
