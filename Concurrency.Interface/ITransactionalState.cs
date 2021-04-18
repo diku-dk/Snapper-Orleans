@@ -6,8 +6,10 @@ namespace Concurrency.Interface
 {    
     public interface ITransactionalState<TState>
     {
+        [AlwaysInterleave]
         Task<TState> Read(TransactionContext ctx);
 
+        [AlwaysInterleave]
         Task<TState> ReadWrite(TransactionContext ctx);
 
         [AlwaysInterleave]
@@ -19,8 +21,10 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task Abort(int tid);
 
+        [AlwaysInterleave]
         TState GetPreparedState(int tid);
 
+        [AlwaysInterleave]
         TState GetCommittedState(int tid);
     }
 }

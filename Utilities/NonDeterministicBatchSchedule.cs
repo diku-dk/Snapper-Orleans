@@ -4,23 +4,23 @@ namespace Utilities
 {
     public class NonDeterministicBatchSchedule
     {
-        public HashSet<int> transactions;
+        public HashSet<int> txnList;
 
         public NonDeterministicBatchSchedule(int tid)
         {
-            transactions = new HashSet<int>();
-            transactions.Add(tid);
+            txnList = new HashSet<int>();
+            txnList.Add(tid);
         }
 
         public void AddTransaction(int tid)
         {
-            transactions.Add(tid);
+            txnList.Add(tid);
         }
 
         public bool RemoveTransaction(int tid)
         {
-            transactions.Remove(tid);
-            return (transactions.Count == 0);
+            txnList.Remove(tid);
+            return txnList.Count == 0;
         }
     }
 }

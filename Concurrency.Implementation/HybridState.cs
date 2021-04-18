@@ -79,27 +79,14 @@ namespace Concurrency.Implementation
 
         Task<TState> ITransactionalState<TState>.Read(TransactionContext ctx)
         {
-            if (ctx.isDeterministic)
-            {
-                return detStateManager.Read(ctx, myState.GetState());
-            }
-            else
-            {
-                return nonDetStateManager.Read(ctx, myState);
-            }
-
+            if (ctx.isDet) return detStateManager.Read(ctx, myState.GetState());
+            else return nonDetStateManager.Read(ctx, myState);
         }
 
         Task<TState> ITransactionalState<TState>.ReadWrite(TransactionContext ctx)
         {
-            if (ctx.isDeterministic)
-            {
-                return detStateManager.ReadWrite(ctx, myState.GetState());
-            }
-            else
-            {
-                return nonDetStateManager.ReadWrite(ctx, myState);
-            }
+            if (ctx.isDet) return detStateManager.ReadWrite(ctx, myState.GetState());
+            else return nonDetStateManager.ReadWrite(ctx, myState);
         }
     }
 }

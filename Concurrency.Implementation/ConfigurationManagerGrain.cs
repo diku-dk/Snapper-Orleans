@@ -56,16 +56,14 @@ namespace Concurrency.Implementation
             return Task.CompletedTask;
         }
 
-        public async Task UpdateConfiguration(CoordinatorGrainConfiguration config)
+        public async Task UpdateConfiguration(int numCoord)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
-
-            numCoord = config.numCoordinators;
+            this.numCoord = numCoord;
             var tasks = new List<Task>();
             for (int i = 0; i < numCoord; i++)
             {
                 var grain = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(i);
-                tasks.Add(grain.SpawnCoordinator(numCoord, config.batchInterval, config.backoffIntervalMSecs, config.idleIntervalTillBackOffSecs, loggingConfig));
+                tasks.Add(grain.SpawnCoordinator(numCoord, loggingConfig));
             }
             await Task.WhenAll(tasks);
 

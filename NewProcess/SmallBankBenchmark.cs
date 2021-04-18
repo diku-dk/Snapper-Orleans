@@ -24,20 +24,20 @@ namespace NewProcess
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
         }
 
-        private Task<TransactionResult> Execute(IClusterClient client, int grainId, string functionName, FunctionInput input, Dictionary<Tuple<int, string>, int> grainAccessInfo)
+        private Task<TransactionResult> Execute(IClusterClient client, int grainId, string startFunc, object funcInput, Dictionary<int, Tuple<string, int>> grainAccessInfo)
         {
             switch (config.grainImplementationType)
             {
                 case ImplementationType.SNAPPER:
                     var grain = client.GetGrain<ICustomerAccountGroupGrain>(grainId);
-                    if (isDet) return grain.StartTransaction(grainAccessInfo, functionName, input);
-                    else return grain.StartTransaction(functionName, input);
+                    if (isDet) return grain.StartTransaction(startFunc, funcInput, grainAccessInfo);
+                    else return grain.StartTransaction(startFunc, funcInput);
                 case ImplementationType.ORLEANSEVENTUAL:
                     var eventuallyConsistentGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(grainId);
-                    return eventuallyConsistentGrain.StartTransaction(functionName, input);
+                    return eventuallyConsistentGrain.StartTransaction(startFunc, funcInput);
                 case ImplementationType.ORLEANSTXN:
                     var txnGrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(grainId);
-                    return txnGrain.StartTransaction(functionName, input);
+                    return txnGrain.StartTransaction(startFunc, funcInput);
                 default:
                     return null;
             }
@@ -52,11 +52,11 @@ namespace NewProcess
         {
             var accountGrains = data.grains;
             //accountGrains.Sort();
-            var grainAccessInfo = new Dictionary<Tuple<int, string>, int>();
+            var grainAccessInfo = new Dictionary<int, Tuple<string, int>>();
             if (config.mixture[0] == 100)
             {
-                grainAccessInfo.Add(new Tuple<int, string>(accountGrains[0], grain_namespace), 1);
-                return Execute(client, accountGrains[0], "Balance", new FunctionInput(), grainAccessInfo);
+                grainAccessInfo.Add(accountGrains[0], new Tuple<string, int>(grain_namespace, 1));
+                return Execute(client, accountGrains[0], "Balance", null, grainAccessInfo);
             }
 
             // no deadlock
@@ -82,18 +82,17 @@ namespace NewProcess
                 {
                     first = false;
                     groupId = item;
-                    grainAccessInfo.Add(new Tuple<int, string>(groupId, grain_namespace), 1);
+                    grainAccessInfo.Add(groupId, new Tuple<string, int>(grain_namespace, 1));
                     int sourceId = getAccountForGrain(item);
                     item1 = new Tuple<string, int>(sourceId.ToString(), sourceId);
                     continue;
                 }
                 int destAccountId = getAccountForGrain(item);
                 item3.Add(new Tuple<string, int>(destAccountId.ToString(), destAccountId));
-                grainAccessInfo.Add(new Tuple<int, string>(item, grain_namespace), 1);
+                grainAccessInfo.Add(item, new Tuple<string, int>(grain_namespace, 1));
             }
             var args = new Tuple<Tuple<string, int>, float, List<Tuple<string, int>>>(item1, item2, item3);
-            var input = new FunctionInput(args);
-            var task = Execute(client, groupId, "MultiTransfer", input, grainAccessInfo);
+            var task = Execute(client, groupId, "MultiTransfer", args, grainAccessInfo);
             return task;
         }
     }

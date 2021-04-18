@@ -6,7 +6,7 @@ namespace TPCC.Interfaces
 {
     public interface IDistrictGrain : ITransactionExecutionGrain
     {
-        Task<FunctionResult> Init(FunctionInput functionInput);
-        Task<FunctionResult> GetDTax(FunctionInput functionInput);
+        Task<TransactionResult> Init(TransactionContext ctx, object funcInput);
+        Task<TransactionResult> GetDTax(TransactionContext ctx, object funcInput);
     }
 }

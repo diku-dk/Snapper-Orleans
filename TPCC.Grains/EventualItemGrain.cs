@@ -1,9 +1,9 @@
 ﻿using System;
 using Utilities;
 using TPCC.Interfaces;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace TPCC.Grains
 {
@@ -11,23 +11,23 @@ namespace TPCC.Grains
     {
         ItemTable state = new ItemTable();
 
-        public Task<TransactionResult> StartTransaction(string startFunction, FunctionInput inputs)
+        public Task<TransactionResult> StartTransaction(string startFunc, object funcInput)
         {
             AllTxnTypes fnType;
-            if (!Enum.TryParse(startFunction.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunction}");
+            if (!Enum.TryParse(startFunc.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunc}");
             switch (fnType)
             {
                 case AllTxnTypes.Init:
-                    return Init(inputs);
+                    return Init(funcInput);
                 case AllTxnTypes.GetItemsPrice:
-                    return GetItemsPrice(inputs);
+                    return GetItemsPrice(funcInput);
                 default:
                     throw new Exception($"Unknown function {fnType}");
             }
         }
 
         // input, output: null
-        private async Task<TransactionResult> Init(FunctionInput fin)
+        private async Task<TransactionResult> Init(object funcInput)
         {
             var res = new TransactionResult();
             try
@@ -45,12 +45,12 @@ namespace TPCC.Grains
 
         // input: List<int> (item IDs)
         // output: Dictionary<int, float> (I_ID, item price)
-        private async Task<TransactionResult> GetItemsPrice(FunctionInput fin)
+        private async Task<TransactionResult> GetItemsPrice(object funcInput)
         {
             var res = new TransactionResult();
             try
             {
-                var item_ids = (List<int>)fin.inputObject;
+                var item_ids = (List<int>)funcInput;
                 var item_prices = new Dictionary<int, float>();  // <I_ID, price>
                 var myState = state;
                 foreach (var id in item_ids)

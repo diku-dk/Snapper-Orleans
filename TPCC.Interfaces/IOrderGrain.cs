@@ -6,7 +6,7 @@ namespace TPCC.Interfaces
 {
     public interface IOrderGrain : ITransactionExecutionGrain
     {
-        Task<FunctionResult> Init(FunctionInput functionInput);
-        Task<FunctionResult> AddNewOrder(FunctionInput functionInput);
+        Task<TransactionResult> Init(TransactionContext context, object funcInput);
+        Task<TransactionResult> AddNewOrder(TransactionContext context, object funcInput);
     }
 }

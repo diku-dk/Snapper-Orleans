@@ -6,7 +6,7 @@ namespace TPCC.Interfaces
 {
     public interface IItemGrain : ITransactionExecutionGrain
     {
-        Task<FunctionResult> Init(FunctionInput functionInput);
-        Task<FunctionResult> GetItemsPrice(FunctionInput functionInput);   // an invalid I_ID get price -1
+        Task<TransactionResult> Init(TransactionContext context, object funcInput);
+        Task<TransactionResult> GetItemsPrice(TransactionContext context, object funcInput);   // an invalid I_ID get price -1
     }
 }

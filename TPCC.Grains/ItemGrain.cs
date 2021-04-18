@@ -1,11 +1,11 @@
 ﻿using System;
 using Utilities;
 using TPCC.Interfaces;
+using System.Diagnostics;
 using Persist.Interfaces;
 using System.Threading.Tasks;
 using Concurrency.Implementation;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace TPCC.Grains
 {
@@ -37,36 +37,32 @@ namespace TPCC.Grains
         }
 
         // input, output: null
-        public async Task<FunctionResult> Init(FunctionInput fin)
+        public async Task<TransactionResult> Init(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
-            res.isReadOnlyOnGrain = true;     // Yijian: avoid logging, just for run experiemnt easier
+            var res = new TransactionResult();
             try
             {
-                var myState = await state.ReadWrite(context);
+                var myState = await GetState(context, AccessMode.ReadWrite);
                 if (myState.items.Count == 0) myState.items = InMemoryDataGenerator.GenerateItemTable();
                 else Debug.Assert(myState.items.Count == Constants.NUM_I);
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                res.setException();
+                res.exception = true;
             }
             return res;
         }
 
         // input: List<int> (item IDs)
         // output: Dictionary<int, float> (I_ID, item price)
-        public async Task<FunctionResult> GetItemsPrice(FunctionInput fin)
+        public async Task<TransactionResult> GetItemsPrice(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
-            res.isReadOnlyOnGrain = true;
+            var res = new TransactionResult();
             try
             {
-                var item_ids = (List<int>)fin.inputObject;
+                var item_ids = (List<int>)funcInput;
                 var item_prices = new Dictionary<int, float>();  // <I_ID, price>
-                var myState = await state.Read(context);
+                var myState = await GetState(context, AccessMode.Read);
                 foreach (var id in item_ids)
                 {
                     if (myState.items.ContainsKey(id)) item_prices.Add(id, myState.items[id].I_PRICE);
@@ -74,9 +70,9 @@ namespace TPCC.Grains
                 }
                 res.resultObject = item_prices;
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                res.setException();
+                res.exception = true;
             }
             return res;
         }

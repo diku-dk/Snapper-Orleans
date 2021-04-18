@@ -7,14 +7,12 @@ namespace Concurrency.Implementation
 {
     public class ScheduleInfo
     {
-        private int myID;
         public Dictionary<int, ScheduleNode> nodes;
         public Dictionary<int, NonDeterministicBatchSchedule> nonDetBatchScheduleMap;
         public Dictionary<int, int> nonDetTxnToScheduleMap;
 
-        public ScheduleInfo(int myID)
+        public ScheduleInfo()
         {
-            this.myID = myID;
             nodes = new Dictionary<int, ScheduleNode>();
             var node = new ScheduleNode(-1, true);
             nonDetBatchScheduleMap = new Dictionary<int, NonDeterministicBatchSchedule>();
@@ -58,16 +56,16 @@ namespace Concurrency.Implementation
         public void insertDetBatch(DeterministicBatchSchedule schedule)
         {
             ScheduleNode node;
-            if (!nodes.ContainsKey(schedule.batchID))
+            if (!nodes.ContainsKey(schedule.bid))
             {
-                node = new ScheduleNode(schedule.batchID, true);
-                nodes.Add(schedule.batchID, node);
+                node = new ScheduleNode(schedule.bid, true);
+                nodes.Add(schedule.bid, node);
             }
-            else node = nodes[schedule.batchID];
+            else node = nodes[schedule.bid];
 
-            if (nodes.ContainsKey(schedule.lastBatchID))
+            if (nodes.ContainsKey(schedule.lastBid))
             {
-                var prevNode = nodes[schedule.lastBatchID];
+                var prevNode = nodes[schedule.lastBid];
                 if (prevNode.next == null)
                 {
                     prevNode.next = node;
@@ -83,7 +81,7 @@ namespace Concurrency.Implementation
             else
             {
                 // last node is already deleted because it's committed
-                if (schedule.highestCommittedBatchId >= schedule.lastBatchID)
+                if (schedule.highestCommittedBid >= schedule.lastBid)
                 {
                     var prevNode = nodes[-1];
                     if (prevNode.next == null)
@@ -100,8 +98,8 @@ namespace Concurrency.Implementation
                 }
                 else   // last node hasn't arrived yet
                 {
-                    var prevNode = new ScheduleNode(schedule.lastBatchID, true);
-                    nodes.Add(schedule.lastBatchID, prevNode);
+                    var prevNode = new ScheduleNode(schedule.lastBid, true);
+                    nodes.Add(schedule.lastBid, prevNode);
                     prevNode.next = node;
                     node.prev = prevNode;
                     Debug.Assert(prevNode.prev == null);
@@ -156,11 +154,7 @@ namespace Concurrency.Implementation
             var schedule = nonDetBatchScheduleMap[scheduleId];
 
             // return true if transaction list is empty
-            if (schedule.RemoveTransaction(tid))
-            {
-                nodes[scheduleId].executionPromise.SetResult(true);
-                //Console.WriteLine($"grain {myPrimaryKey}: nondet {tid} set nondet node {scheduleId} promise true");
-            }
+            if (schedule.RemoveTransaction(tid)) nodes[scheduleId].executionPromise.SetResult(true);
         }
     }
 

@@ -6,18 +6,17 @@ namespace Concurrency.Implementation.Logging
     [Serializable]
     public class LogParticipant
     {
-        public int txn_id;
+        public int tid;
+        public int coordID;
         public int sequenceNumber;
-        public int coordinatorKey;
-        public HashSet<Tuple<int, string>> participants;
+        public HashSet<int> grains;
 
-        public LogParticipant(int sequenceNumber, int coordinatorKey, int txn_id, HashSet<Tuple<int, string>> grains)
+        public LogParticipant(int sequenceNumber, int coordID, int tid, HashSet<int> grains)
         {
             this.sequenceNumber = sequenceNumber;
-            this.coordinatorKey = coordinatorKey;
-            this.txn_id = txn_id;
-            participants = grains;
+            this.coordID = coordID;
+            this.tid = tid;
+            this.grains = grains;
         }
-
     }
 }

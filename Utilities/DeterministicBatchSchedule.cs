@@ -6,52 +6,52 @@ namespace Utilities
     [Serializable]
     public class DeterministicBatchSchedule
     {
-        public List<int> transactionList;
-        private Dictionary<int, int> transactionAccessMap;
+        public int bid;
         private int curPos;
+        public int coordID;
+        public int lastBid;
         private bool completed;
-        public int globalCoordinator;
-        public int batchID;
-        public int lastBatchID;
-        public int highestCommittedBatchId;
+        public List<int> txnList;
+        public int highestCommittedBid;
+        private Dictionary<int, int> txnAccessMap;
 
         public DeterministicBatchSchedule(int bid, int lastBid)
         {
-            batchID = bid;
-            lastBatchID = lastBid;
+            this.bid = bid;
+            this.lastBid = lastBid;
             curPos = 0;
             completed = false;
-            transactionList = new List<int>();
-            transactionAccessMap = new Dictionary<int, int>();
+            txnList = new List<int>();
+            txnAccessMap = new Dictionary<int, int>();
         }
 
         public DeterministicBatchSchedule(int bid)
         {
-            batchID = bid;
-            lastBatchID = -1;
+            this.bid = bid;
+            lastBid = -1;
             curPos = 0;
             completed = false;
-            transactionList = new List<int>();
-            transactionAccessMap = new Dictionary<int, int>();
+            txnList = new List<int>();
+            txnAccessMap = new Dictionary<int, int>();
         }
 
         public void AddNewTransaction(int tid, int num)  // txn tid will access the grain num times
         {
-            transactionList.Add(tid);
-            transactionAccessMap.Add(tid, num);
+            txnList.Add(tid);
+            txnAccessMap.Add(tid, num);
         }
 
         public void AccessIncrement(int tid)  // txn tid finish one access
         {
-            int num = --transactionAccessMap[tid];
+            int num = --txnAccessMap[tid];
             if (num == 0) curPos++;           // all accesses of this txn have finished, now skip to next txn
-            if (curPos == transactionList.Count) completed = true;   // curPos = 0, 1, ... count - 1
+            if (curPos == txnList.Count) completed = true;   // curPos = 0, 1, ... count - 1
         }
 
         public int curExecTransaction()  // return tid that should currently be exected
         {
             if (completed) return -1;
-            else return transactionList[curPos];
+            else return txnList[curPos];
         }
     }
 }

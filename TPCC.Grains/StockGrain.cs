@@ -1,11 +1,11 @@
 ﻿using System;
 using Utilities;
 using TPCC.Interfaces;
+using System.Diagnostics;
 using Persist.Interfaces;
 using System.Threading.Tasks;
 using Concurrency.Implementation;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace TPCC.Grains
 {
@@ -57,44 +57,38 @@ namespace TPCC.Grains
 
         // input: Tuple<int, int>     W_ID, StockGrain index within the warehouse
         // output: null
-        public async Task<FunctionResult> Init(FunctionInput fin)
+        public async Task<TransactionResult> Init(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
-            res.isReadOnlyOnGrain = true;     // Yijian: avoid logging, just for run experiemnt easier
+            var res = new TransactionResult();
             try
             {
-                var input = (Tuple<int, int>)fin.inputObject;    // W_ID, StockGrain index within the warehouse
-                var myState = await state.ReadWrite(context);
+                var input = (Tuple<int, int>)funcInput;    // W_ID, StockGrain index within the warehouse
+                var myState = await GetState(context, AccessMode.ReadWrite);
                 myState.W_ID = input.Item1;
                 myState.stock = InMemoryDataGenerator.GenerateStockTable(input.Item2);
-                //var serializer = new MsgPackSerializer();
-                //var data = serializer.serialize(myState.stock);
-                //Console.WriteLine($"StockGrain: W_ID  ={input.Item1}, size = {data.Length}");
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                res.setException();
+                res.exception = true;
             }
             return res;
         }
 
         // input: UpdateStockInput   W_ID, D_ID, isRemote, <I_ID, I_QUANTITY>
         // output: Dictionary<int, string>    <I_ID, S_DIST_xx info>
-        public async Task<FunctionResult> UpdateStock(FunctionInput fin)
+        public async Task<TransactionResult> UpdateStock(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var ret = new FunctionResult();
+            var ret = new TransactionResult();
             var result = new Dictionary<int, string>();
             try
             {
-                var input = (UpdateStockInput)fin.inputObject;   // W_ID, D_ID, isRemote, <I_ID, I_QUANTITY>
+                var input = (UpdateStockInput)funcInput;   // W_ID, D_ID, isRemote, <I_ID, I_QUANTITY>
                 var W_ID = input.W_ID;
                 var D_ID = input.D_ID;
                 var remoteFlag = input.isRemote ? 1 : 0;
                 var items = input.itemsToBuy;
                 if (items.Count == 0) throw new Exception("Exception: no items to buy");
-                var myState = await state.ReadWrite(context);
+                var myState = await GetState(context, AccessMode.ReadWrite);
                 if (remoteFlag == 1) Debug.Assert(W_ID != myState.W_ID);
                 else Debug.Assert(W_ID == myState.W_ID);
                 foreach (var item in items)
@@ -115,12 +109,11 @@ namespace TPCC.Grains
                     var S_DIST = the_stock.S_DIST[D_ID];
                     result.Add(I_ID, S_DIST);
                 }
-                ret.setResult(result);
+                ret.resultObject = result;
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
-                ret.setException();
+                ret.exception = true;
             }
             return ret;
         }

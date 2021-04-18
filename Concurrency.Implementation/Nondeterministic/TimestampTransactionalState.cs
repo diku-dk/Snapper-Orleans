@@ -30,7 +30,7 @@ namespace Concurrency.Implementation.Nondeterministic
             TState copy;
             TransactionStateInfo info;
             Node<TransactionStateInfo> node;
-            var tid = ctx.transactionID;
+            var tid = ctx.tid;
             if (transactionMap.ContainsKey(tid))  // if tid has written the state before
             {
                 Debug.Assert(transactionMap[tid].data.status.Equals(Status.Executing));
@@ -77,7 +77,7 @@ namespace Concurrency.Implementation.Nondeterministic
             TState copy;
             TransactionStateInfo info;
             Node<TransactionStateInfo> node;
-            var tid = ctx.transactionID;
+            var tid = ctx.tid;
             if (transactionMap.ContainsKey(tid))  // if tid has written the state before
             {
                 Debug.Assert(transactionMap[tid].data.status.Equals(Status.Executing));

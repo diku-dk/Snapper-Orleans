@@ -28,7 +28,7 @@ namespace Concurrency.Implementation.Nondeterministic
 
         public async Task<TState> Read(TransactionContext ctx, CommittedState<TState> committedState)
         {
-            var tid = ctx.transactionID;
+            var tid = ctx.tid;
             if (waitinglist.Count == 0)  // if nobody is reading or writing the grain
             {
                 var mylock = new TaskCompletionSource<bool>();
@@ -77,7 +77,7 @@ namespace Concurrency.Implementation.Nondeterministic
 
         public async Task<TState> ReadWrite(TransactionContext ctx, CommittedState<TState> committedState)
         {
-            var tid = ctx.transactionID;
+            var tid = ctx.tid;
             if (waitinglist.Count == 0)    // if nobody is reading or writing the grain
             {
                 var mylock = new TaskCompletionSource<bool>();

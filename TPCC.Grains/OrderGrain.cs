@@ -1,11 +1,11 @@
 ﻿using System;
 using Utilities;
 using TPCC.Interfaces;
+using System.Diagnostics;
 using Persist.Interfaces;
 using System.Threading.Tasks;
 using Concurrency.Implementation;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace TPCC.Grains
 {
@@ -63,15 +63,13 @@ namespace TPCC.Grains
 
         // input: Tuple<int, int, int>    W_ID, D_ID, OrderGrain index within the district
         // output: null
-        public async Task<FunctionResult> Init(FunctionInput fin)
+        public async Task<TransactionResult> Init(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
-            res.isReadOnlyOnGrain = true;     // Yijian: avoid logging, just for run experiemnt easier
+            var res = new TransactionResult();
             try
             {
-                var input = (Tuple<int, int, int>)fin.inputObject;    // W_ID, D_ID, OrderGrain index within the district
-                var myState = await state.ReadWrite(context);
+                var input = (Tuple<int, int, int>)funcInput;    // W_ID, D_ID, OrderGrain index within the district
+                var myState = await GetState(context, AccessMode.ReadWrite);
                 myState.W_ID = input.Item1;
                 myState.D_ID = input.Item2;
                 myState.OrderGrainID = input.Item3;
@@ -79,24 +77,22 @@ namespace TPCC.Grains
                 myState.order_table = new Dictionary<long, Order>();
                 myState.orderline_table = new Dictionary<Tuple<long, int>, OrderLine>();
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                res.setException();
+                res.exception = true;
             }
             return res;
         }
 
-        public async Task<FunctionResult> AddNewOrder(FunctionInput fin)
+        public async Task<TransactionResult> AddNewOrder(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
+            var res = new TransactionResult();
             try
             {
-                if (fin.inputObject == null) throw new Exception("Exception: input data is null. ");
-                var input = (OrderInfo)fin.inputObject;
+                if (funcInput == null) throw new Exception("Exception: input data is null. ");
+                var input = (OrderInfo)funcInput;
                 var O_ID = input.order.O_ID;
-                var myState = await state.ReadWrite(context);
-                //if (myState.neworder.Contains(O_ID)) Console.WriteLine($"OrderGrain: W_ID = {myState.W_ID}, D_ID = {myState.D_ID}, index = {myState.OrderGrainID}, for C_ID = {input.order.O_C_ID}, the O_ID = {O_ID} already exists. ");
+                var myState = await GetState(context, AccessMode.ReadWrite);
                 Debug.Assert(myState.neworder.Contains(O_ID) == false);
                 myState.neworder.Add(O_ID);
                 myState.order_table.Add(O_ID, input.order);
@@ -106,10 +102,9 @@ namespace TPCC.Grains
                     myState.orderline_table.Add(new Tuple<long, int>(O_ID, num), orderline);
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
-                res.setException();
+                res.exception = true;
             }
             return res;
         }

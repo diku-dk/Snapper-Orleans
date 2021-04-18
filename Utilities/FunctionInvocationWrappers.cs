@@ -4,24 +4,6 @@ using System.Collections.Generic;
 namespace Utilities
 {
     [Serializable]
-    public class FunctionInput
-    {
-        public object inputObject;
-        public TransactionContext context;
-
-        public FunctionInput(FunctionInput input, object data = null)
-        {
-            context = input.context;
-            inputObject = data;
-        }
-
-        public FunctionInput(object data = null)
-        {
-            inputObject = data;
-        }
-    }
-
-    [Serializable]
     public class TransactionResult
     {
         public bool exception;
@@ -63,7 +45,7 @@ namespace Utilities
         public bool isReadOnlyOnGrain;
         public bool isBeforeAfterConsecutive;
         public Tuple<int, string> grainWithHighestBeforeBid;
-        public Dictionary<Tuple<int, string>, bool> grainsInNestedFunctions;   // <namespace, grainID, isReadonly>
+        public Dictionary<int, Tuple<string, bool>> grainsInNestedFunctions;   // <grainID, namespace, isReadonly>
 
         public FunctionResult(object resultObject = null)
         {
@@ -77,7 +59,7 @@ namespace Utilities
             isBeforeAfterConsecutive = false;
             this.resultObject = resultObject;
             grainWithHighestBeforeBid = new Tuple<int, string>(-1, "");
-            grainsInNestedFunctions = new Dictionary<Tuple<int, string>, bool>();
+            grainsInNestedFunctions = new Dictionary<int, Tuple<string, bool>>();
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
@@ -88,7 +70,12 @@ namespace Utilities
             {
                 if (grainsInNestedFunctions.ContainsKey(item.Key) == false)
                     grainsInNestedFunctions.Add(item.Key, item.Value);
-                else grainsInNestedFunctions[item.Key] |= item.Value;
+                else
+                {
+                    var grainClassName = item.Value.Item1;
+                    var isReadOnly = grainsInNestedFunctions[item.Key].Item2 && item.Value.Item2;
+                    grainsInNestedFunctions[item.Key] = new Tuple<string, bool>(grainClassName, isReadOnly);
+                }
             }
 
             if (beforeSet.Count == 0 && afterSet.Count == 0)
@@ -124,36 +111,20 @@ namespace Utilities
             isBeforeAfterConsecutive &= consecutive;
 
         }
-
-        public void setResult(object result)
-        {
-            resultObject = result;
-        }
-
-        public void setException()
-        {
-            exception = true;
-        }
-
-        public void expandBeforeandAfterSet(HashSet<int> bSet, HashSet<int> aSet)
-        {
-            beforeSet.UnionWith(bSet);
-            afterSet.UnionWith(aSet);
-        }
     }
 
     [Serializable]
     public class FunctionCall
     {
-        public FunctionInput funcInput;
-        public Type type;
-        public string func;
-
-        public FunctionCall(Type t, string func, FunctionInput funcInput)
+        public readonly string funcName;
+        public readonly object funcInput;
+        public readonly Type grainClassName;
+        
+        public FunctionCall(string funcName, object funcInput, Type grainClassName)
         {
-            type = t;
-            this.func = func;
+            this.funcName = funcName;
             this.funcInput = funcInput;
+            this.grainClassName = grainClassName;
         }
     }
 }

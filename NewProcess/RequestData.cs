@@ -14,7 +14,7 @@ namespace NewProcess
         // for TPCC
         public int firstGrainID;
         public NewOrderInput tpcc_input;
-        public HashSet<Tuple<int, string>> grains_in_namespace; 
+        public Dictionary<int, string> grains_in_namespace; 
 
         public RequestData(List<int> grains)
         {

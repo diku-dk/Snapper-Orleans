@@ -55,55 +55,48 @@ namespace TPCC.Grains
 
         // input: Tuple<int, int>     W_ID, D_ID
         // output: null
-        public async Task<FunctionResult> Init(FunctionInput fin)
+        public async Task<TransactionResult> Init(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
-            res.isReadOnlyOnGrain = true;     // Yijian: avoid logging, just for run experiemnt easier
+            var res = new TransactionResult();
             try
             {
-                var input = (Tuple<int, int>)fin.inputObject;   // <W_ID, D_ID>
-                var myState = await state.ReadWrite(context);
+                var input = (Tuple<int, int>)funcInput;   // <W_ID, D_ID>
+                var myState = await GetState(context, AccessMode.Read);
                 myState.W_ID = input.Item1;
                 myState.D_ID = input.Item2;
                 if (myState.customer_table.Count == 0) myState.customer_table = InMemoryDataGenerator.GenerateCustomerTable();
                 else Debug.Assert(myState.customer_table.Count == Constants.NUM_C_PER_D);
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                res.setException();
+                res.exception = true;
             }
             return res;
         }
 
-        public async Task<FunctionResult> NewOrder(FunctionInput fin)
+        public async Task<TransactionResult> NewOrder(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
-            res.isReadOnlyOnGrain = true;
+            var res = new TransactionResult();
             try
             {
                 var abort = false;
                 var all_local = true;
-                var txn_input = (NewOrderInput)fin.inputObject;
+                var txn_input = (NewOrderInput)funcInput;
                 var C_ID = txn_input.C_ID;
                 var ItemsToBuy = txn_input.ItemsToBuy;
-                var myState = await state.Read(context);
-                //Console.WriteLine($"PACT {fin.context.transactionID} access CustomerGrain {myState.W_ID * Constants.NUM_D_PER_W + myState.D_ID}");
+                var myState = await GetState(context, AccessMode.Read);
+
                 // STEP 1: get item prices from ItemGrain
                 Dictionary<int, float> itemPrices;
                 {
                     var itemIDs = new List<int>();
                     foreach (var item in ItemsToBuy) itemIDs.Add(item.Key);
-                    var func_input = new FunctionInput(fin, itemIDs);
-                    var func_call = new FunctionCall(typeof(ItemGrain), "GetItemsPrice", func_input);
-                    var itemGrain = GrainFactory.GetGrain<IItemGrain>(myState.W_ID);
-                    //Console.WriteLine($"PACT {fin.context.transactionID} access ItemGrain {myState.W_ID}");
-                    var r = await itemGrain.Execute(func_call);
-                    res.mergeWithFunctionResult(r);
+                    var itemGrainID = Helper.GetItemGrain(myState.W_ID);
+                    var func_call = new FunctionCall("GetItemsPrice", itemIDs, typeof(ItemGrain));
+                    var r = await CallGrain(context, itemGrainID, "IItemGrain", func_call);
                     if (r.exception)
                     {
-                        if (!context.isDeterministic) throw new Exception("Exception thrown from ItemGrain. ");
+                        if (!context.isDet) throw new Exception("Exception thrown from ItemGrain. ");
                         abort = true;
                         itemPrices = new Dictionary<int, float>();
                     }
@@ -115,27 +108,21 @@ namespace TPCC.Grains
                 float D_TAX;
                 long O_ID;
                 {
-                    var tasks = new List<Task<FunctionResult>>();
-                    var func_input = new FunctionInput(fin);
+                    var tasks = new List<Task<TransactionResult>>();
                     {
-                        var func_call = new FunctionCall(typeof(WarehouseGrain), "GetWTax", func_input);
-                        var warehouseGrain = GrainFactory.GetGrain<IWarehouseGrain>(myState.W_ID);
-                        //Console.WriteLine($"PACT {fin.context.transactionID} access WarehouseGrain {myState.W_ID}");
-                        tasks.Add(warehouseGrain.Execute(func_call));
+                        var func_call = new FunctionCall("GetWTax", null, typeof(WarehouseGrain));
+                        var warehouseGrainID = Helper.GetWarehouseGrain(myState.W_ID);
+                        tasks.Add(CallGrain(context, warehouseGrainID, "IWarehouseGrain", func_call));
                     }
                     {
-                        var func_call = new FunctionCall(typeof(DistrictGrain), "GetDTax", func_input);
-                        var grainID = myState.W_ID * Constants.NUM_D_PER_W + myState.D_ID;
-                        var districtGrain = GrainFactory.GetGrain<IDistrictGrain>(grainID);
-                        //Console.WriteLine($"PACT {fin.context.transactionID} access DistrictGrain {grainID}");
-                        tasks.Add(districtGrain.Execute(func_call));
+                        var func_call = new FunctionCall("GetDTax", null, typeof(DistrictGrain));
+                        var districtGrainID = Helper.GetDistrictGrain(myState.W_ID, myState.D_ID);
+                        tasks.Add(CallGrain(context, districtGrainID, "IDistrictGrain", func_call));
                     }
                     await Task.WhenAll(tasks);
-                    res.mergeWithFunctionResult(tasks[0].Result);
-                    res.mergeWithFunctionResult(tasks[1].Result);
                     if (tasks[0].Result.exception || tasks[1].Result.exception)
                     {
-                        if (!context.isDeterministic) throw new Exception("Exception thrown from WarehouseGrain or DistrictGrain. ");
+                        if (!context.isDet) throw new Exception("Exception thrown from WarehouseGrain or DistrictGrain. ");
                         abort = true;
                     }
                     W_TAX = (float)tasks[0].Result.resultObject;
@@ -170,19 +157,16 @@ namespace TPCC.Grains
                         }
                     }
 
-                    var tasks = new List<Task<FunctionResult>>();
+                    var tasks = new List<Task<TransactionResult>>();
                     foreach (var grain in stockToUpdate)
                     {
-                        var func_input = new FunctionInput(fin, new UpdateStockInput(myState.W_ID, myState.D_ID, isRemote[grain.Key], grain.Value));
-                        var func_call = new FunctionCall(typeof(StockGrain), "UpdateStock", func_input);
-                        var stockGrain = GrainFactory.GetGrain<IStockGrain>(grain.Key);
-                        //Console.WriteLine($"PACT {fin.context.transactionID} access StockGrain {grain.Key}");
-                        tasks.Add(stockGrain.Execute(func_call));
+                        var func_input = new UpdateStockInput(myState.W_ID, myState.D_ID, isRemote[grain.Key], grain.Value);
+                        var func_call = new FunctionCall("UpdateStock", func_input, typeof(StockGrain));
+                        tasks.Add(CallGrain(context, grain.Key, "IStockGrain", func_call));
                     }
                     await Task.WhenAll(tasks);
                     foreach (var t in tasks)
                     {
-                        res.mergeWithFunctionResult(t.Result);
                         if (t.Result.resultObject != null)
                         {
                             var r = (Dictionary<int, string>)t.Result.resultObject;
@@ -191,7 +175,7 @@ namespace TPCC.Grains
                     }
                     if (res.exception)
                     {
-                        if (!context.isDeterministic) throw new Exception("Exception thrown from StockGrain. ");
+                        if (!context.isDet) throw new Exception("Exception thrown from StockGrain. ");
                         abort = true;
                     }
                 }
@@ -200,13 +184,11 @@ namespace TPCC.Grains
                 {
                     var orderGrainID = Helper.GetOrderGrain(myState.W_ID, myState.D_ID, C_ID);
                     var orderGrain = GrainFactory.GetGrain<IOrderGrain>(orderGrainID);
-                    //Console.WriteLine($"PACT {fin.context.transactionID} access OrderGrain {orderGrainID}");
                     if (abort)     // must finish the calls for PACT
                     {
-                        Debug.Assert(context.isDeterministic);
-                        var func_input = new FunctionInput(fin);
-                        var func_call = new FunctionCall(typeof(OrderGrain), "AddNewOrder", func_input);
-                        _ = orderGrain.Execute(func_call);
+                        Debug.Assert(context.isDet);
+                        var func_call = new FunctionCall("AddNewOrder", null, typeof(OrderGrain));
+                        _ = CallGrain(context, orderGrainID, "IOrderGrain", func_call);
                     }
                     else
                     {
@@ -228,25 +210,19 @@ namespace TPCC.Grains
                             orderlines.Add(orderline);
                         }
                         var order_info = new OrderInfo(order, orderlines);
-                        var func_input = new FunctionInput(fin, order_info);
-                        var func_call = new FunctionCall(typeof(OrderGrain), "AddNewOrder", func_input);
-                        var t = orderGrain.Execute(func_call);
-                        if (!context.isDeterministic)
-                        {
-                            await t;
-                            res.mergeWithFunctionResult(t.Result);
-                        }
+                        var func_call = new FunctionCall("AddNewOrder", order_info, typeof(OrderGrain));
+                        var t = CallGrain(context, orderGrainID, "IOrderGrain", func_call);
+                        if (!context.isDet) await t;
 
                         var C_DISCOUNT = myState.customer_table[C_ID].C_DISCOUNT;
                         total_amount *= (1 - C_DISCOUNT) * (1 + W_TAX + D_TAX);
-                        res.setResult(total_amount);
+                        res.resultObject = total_amount;
                     }
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                //Console.WriteLine($"Exception: {e.Message} {e.StackTrace}");
-                res.setException();
+                res.exception = true;
             }
             return res;
         }

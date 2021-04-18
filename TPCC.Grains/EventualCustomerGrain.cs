@@ -1,9 +1,9 @@
 ﻿using System;
 using Utilities;
 using TPCC.Interfaces;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace TPCC.Grains
 {
@@ -11,16 +11,16 @@ namespace TPCC.Grains
     {
         CustomerData state = new CustomerData();
 
-        public Task<TransactionResult> StartTransaction(string startFunction, FunctionInput inputs)
+        public Task<TransactionResult> StartTransaction(string startFunc, object funcInput)
         {
             AllTxnTypes fnType;
-            if (!Enum.TryParse(startFunction.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunction}");
+            if (!Enum.TryParse(startFunc.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunc}");
             switch (fnType)
             {
                 case AllTxnTypes.Init:
-                    return Init(inputs);
+                    return Init(funcInput);
                 case AllTxnTypes.NewOrder:
-                    return NewOrder(inputs);
+                    return NewOrder(funcInput);
                 default:
                     throw new Exception($"Unknown function {fnType}");
             }
@@ -28,12 +28,12 @@ namespace TPCC.Grains
 
         // input: Tuple<int, int>     W_ID, D_ID
         // output: null
-        private async Task<TransactionResult> Init(FunctionInput fin)
+        private async Task<TransactionResult> Init(object funcInput)
         {
             var res = new TransactionResult();
             try
             {
-                var input = (Tuple<int, int>)fin.inputObject;   // <W_ID, D_ID>
+                var input = (Tuple<int, int>)funcInput;   // <W_ID, D_ID>
                 var myState = state;
                 myState.W_ID = input.Item1;
                 myState.D_ID = input.Item2;
@@ -47,13 +47,13 @@ namespace TPCC.Grains
             return res;
         }
 
-        private async Task<TransactionResult> NewOrder(FunctionInput fin)
+        private async Task<TransactionResult> NewOrder(object funcInput)
         {
             var res = new TransactionResult();
             try
             {
                 var all_local = true;
-                var txn_input = (NewOrderInput)fin.inputObject;
+                var txn_input = (NewOrderInput)funcInput;
                 var C_ID = txn_input.C_ID;
                 var ItemsToBuy = txn_input.ItemsToBuy;
                 var myState = state;
@@ -62,9 +62,9 @@ namespace TPCC.Grains
                 {
                     var itemIDs = new List<int>();
                     foreach (var item in ItemsToBuy) itemIDs.Add(item.Key);
-                    var func_input = new FunctionInput(fin, itemIDs);
-                    var itemGrain = GrainFactory.GetGrain<IEventualItemGrain>(myState.W_ID);
-                    var r = await itemGrain.StartTransaction("GetItemsPrice", func_input);
+                    var itemGrainID = Helper.GetItemGrain(myState.W_ID);
+                    var itemGrain = GrainFactory.GetGrain<IEventualItemGrain>(itemGrainID);
+                    var r = await itemGrain.StartTransaction("GetItemsPrice", itemIDs);
                     if (r.exception) throw new Exception("Exception thrown from ItemGrain. ");
                     itemPrices = (Dictionary<int, float>)r.resultObject;
                 }
@@ -75,15 +75,15 @@ namespace TPCC.Grains
                 long O_ID;
                 {
                     var tasks = new List<Task<TransactionResult>>();
-                    var func_input = new FunctionInput(fin);
                     {
-                        var warehouseGrain = GrainFactory.GetGrain<IEventualWarehouseGrain>(myState.W_ID);
-                        tasks.Add(warehouseGrain.StartTransaction("GetWTax", func_input));
+                        var warehouseGrainID = Helper.GetWarehouseGrain(myState.W_ID);
+                        var warehouseGrain = GrainFactory.GetGrain<IEventualWarehouseGrain>(warehouseGrainID);
+                        tasks.Add(warehouseGrain.StartTransaction("GetWTax", null));
                     }
                     {
-                        var grainID = myState.W_ID * Constants.NUM_D_PER_W + myState.D_ID;
-                        var districtGrain = GrainFactory.GetGrain<IEventualDistrictGrain>(grainID);
-                        tasks.Add(districtGrain.StartTransaction("GetDTax", func_input));
+                        var districtGrainID = Helper.GetDistrictGrain(myState.W_ID, myState.D_ID);
+                        var districtGrain = GrainFactory.GetGrain<IEventualDistrictGrain>(districtGrainID);
+                        tasks.Add(districtGrain.StartTransaction("GetDTax", null));
                     }
                     await Task.WhenAll(tasks);
                     if (tasks[0].Result.exception || tasks[1].Result.exception) throw new Exception("Exception thrown from WarehouseGrain or DistrictGrain. ");
@@ -122,7 +122,7 @@ namespace TPCC.Grains
                     var tasks = new List<Task<TransactionResult>>();
                     foreach (var grain in stockToUpdate)
                     {
-                        var func_input = new FunctionInput(fin, new UpdateStockInput(myState.W_ID, myState.D_ID, isRemote[grain.Key], grain.Value));
+                        var func_input = new UpdateStockInput(myState.W_ID, myState.D_ID, isRemote[grain.Key], grain.Value);
                         var stockGrain = GrainFactory.GetGrain<IEventualStockGrain>(grain.Key);
                         tasks.Add(stockGrain.StartTransaction("UpdateStock", func_input));
                     }
@@ -160,8 +160,7 @@ namespace TPCC.Grains
                         orderlines.Add(orderline);
                     }
                     var order_info = new OrderInfo(order, orderlines);
-                    var func_input = new FunctionInput(fin, order_info);
-                    var t = orderGrain.StartTransaction("AddNewOrder", func_input);
+                    var t = orderGrain.StartTransaction("AddNewOrder", order_info);
                     await t;
 
                     var C_DISCOUNT = myState.customer_table[C_ID].C_DISCOUNT;

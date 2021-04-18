@@ -9,16 +9,16 @@ namespace TPCC.Grains
     {
         WarehouseInfo state = new WarehouseInfo();
 
-        public Task<TransactionResult> StartTransaction(string startFunction, FunctionInput inputs)
+        public Task<TransactionResult> StartTransaction(string startFunc, object funcInput)
         {
             AllTxnTypes fnType;
-            if (!Enum.TryParse(startFunction.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunction}");
+            if (!Enum.TryParse(startFunc.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunc}");
             switch (fnType)
             {
                 case AllTxnTypes.Init:
-                    return Init(inputs);
+                    return Init(funcInput);
                 case AllTxnTypes.GetWTax:
-                    return GetWTax(inputs);
+                    return GetWTax(funcInput);
                 default:
                     throw new Exception($"Unknown function {fnType}");
             }
@@ -26,12 +26,12 @@ namespace TPCC.Grains
 
         // input: int     W_ID
         // output: null
-        private async Task<TransactionResult> Init(FunctionInput fin)
+        private async Task<TransactionResult> Init(object funcInput)
         {
             var res = new TransactionResult();
             try
             {
-                var W_ID = (int)fin.inputObject;   // W_ID
+                var W_ID = (int)funcInput;   // W_ID
                 var myState = state;
                 myState.warehouse = InMemoryDataGenerator.GenerateWarehouseInfo(W_ID);
             }
@@ -44,7 +44,7 @@ namespace TPCC.Grains
 
         // input: null
         // output: float    D_TAX
-        private async Task<TransactionResult> GetWTax(FunctionInput fin)
+        private async Task<TransactionResult> GetWTax(object funcInput)
         {
             var res = new TransactionResult();
             try

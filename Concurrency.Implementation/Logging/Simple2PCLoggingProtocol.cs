@@ -6,14 +6,12 @@ using Concurrency.Interface;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
-using static Utilities.Helper;
 
 namespace Concurrency.Implementation.Logging
 {
     class Simple2PCLoggingProtocol<TState> : ILoggingProtocol<TState>
     {
         private int grainID;
-        private string grainType;
         private int sequenceNumber;
         private ISerializer serializer;
         private IKeyValueStorageWrapper logStorage;
@@ -26,7 +24,6 @@ namespace Concurrency.Implementation.Logging
         public Simple2PCLoggingProtocol(string grainType, int grainID, LoggingConfiguration loggingConfig, object persistItem = null)
         {
             this.grainID = grainID;
-            this.grainType = grainType;
             sequenceNumber = 0;
 
             switch (loggingConfig.loggingType)
@@ -89,14 +86,12 @@ namespace Concurrency.Implementation.Logging
 
         private async Task WriteLog(byte[] key, byte[] value)
         {
-            //Console.WriteLine($"{grainType}, {value.Length}");
-
             if (usePersistGrain) await persistGrain.Write(value);
             else if (usePersistSingleton) await persistWorker.Write(value);
             else await logStorage.Write(key, value);
         }
 
-        public async Task HandleBeforePrepareIn2PC(int tid, int coordinatorKey, HashSet<Tuple<int, string>> grains)
+        public async Task HandleBeforePrepareIn2PC(int tid, int coordinatorKey, HashSet<int> grains)
         {
             var logRecord = new LogParticipant(getSequenceNumber(), coordinatorKey, tid, grains);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
@@ -136,7 +131,7 @@ namespace Concurrency.Implementation.Logging
             await WriteLog(key, value);
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, HashSet<Tuple<int, string>> grains)
+        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, HashSet<int> grains)
         {
             var logRecord = new LogParticipant(getSequenceNumber(), grainID, bid, grains);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);

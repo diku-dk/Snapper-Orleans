@@ -32,37 +32,11 @@ namespace Concurrency.Interface
         }
     }
 
-    public class ExecutionGrainConfiguration
-    {
-        public ConcurrencyType nonDetCCType;
-
-        public ExecutionGrainConfiguration(ConcurrencyType nonDetCCType)
-        {
-            this.nonDetCCType = nonDetCCType;
-        }
-    }
-
-    public class CoordinatorGrainConfiguration
-    {
-        public int batchInterval;
-        public int numCoordinators;
-        public int backoffIntervalMSecs;
-        public int idleIntervalTillBackOffSecs;
-        
-        public CoordinatorGrainConfiguration(int batchInterval, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs, int numCoordinators)
-        {
-            this.batchInterval = batchInterval;
-            this.backoffIntervalMSecs = backoffIntervalMSecs;
-            this.idleIntervalTillBackOffSecs = idleIntervalTillBackOffSecs;
-            this.numCoordinators = numCoordinators;
-        }
-    }
-
     public interface IConfigurationManagerGrain : IGrainWithIntegerKey
     {
         Task UpdateConfiguration(LoggingConfiguration config);
         Task UpdateConfiguration(ConcurrencyType nonDetCCType);
-        Task UpdateConfiguration(CoordinatorGrainConfiguration config);
+        Task UpdateConfiguration(int numCoord);
         Task<Tuple<ConcurrencyType, LoggingConfiguration, int>> GetConfiguration();
 
         Task SetIOCount();

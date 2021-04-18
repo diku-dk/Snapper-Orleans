@@ -40,7 +40,6 @@ namespace ExperimentController
         static volatile bool loadingDone = false;
         static LoggingConfiguration loggingConfig;
         static IConfigurationManagerGrain configGrain;
-        static CoordinatorGrainConfiguration coordConfig;
         static volatile bool asyncInitializationDone = false;
 
         private static void GenerateWorkLoadFromSettingsFile()
@@ -84,7 +83,6 @@ namespace ExperimentController
             workload.numGrainsMultiTransfer = int.Parse(benchmarkConfigSection["numGrainsMultiTransfer"]);
             workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfigSection["grainImplementationType"]);
 
-            coordConfig = new CoordinatorGrainConfiguration(batchInterval, backoffIntervalMsecs, idleIntervalTillBackOffSecs, numCoordinators);
             var batching = false;
             if (workload.benchmark == BenchmarkType.TPCC) batching = false;
             loggingConfig = new LoggingConfiguration(loggingType, storageType, serializerType, numPersistItem, loggingBatchSize, batching);
@@ -348,8 +346,8 @@ namespace ExperimentController
                 {
                     for (int i = 0; i < Constants.NUM_OrderGrain_PER_D; i++)
                     {
-                        index = W_ID * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D + D_ID * Constants.NUM_OrderGrain_PER_D + i;
-                        var input = new FunctionInput(new Tuple<int, int, int>(W_ID, D_ID, i));
+                        index = W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + 2 * Constants.NUM_D_PER_W + Constants.NUM_StockGrain_PER_W + i;
+                        var input = new Tuple<int, int, int>(W_ID, D_ID, i);
                         if (workload.grainImplementationType == ImplementationType.ORLEANSEVENTUAL)
                         {
                             var grain = client.GetGrain<IEventualOrderGrain>(index);
@@ -430,7 +428,7 @@ namespace ExperimentController
                 configGrain = client.GetGrain<IConfigurationManagerGrain>(0);
                 await configGrain.UpdateConfiguration(loggingConfig);
                 await configGrain.UpdateConfiguration(nonDetCCType);
-                await configGrain.UpdateConfiguration(coordConfig);
+                await configGrain.UpdateConfiguration(numCoordinators);
                 Console.WriteLine("Spawned the configuration grain.");
             }
             asyncInitializationDone = true;
@@ -446,8 +444,7 @@ namespace ExperimentController
             var start = DateTime.Now;
             for (int i = 0; i < numGrain; i++)
             {
-                var args = new Tuple<int, int>(workload.numAccountsPerGroup, i);
-                var input = new FunctionInput(args);
+                var input = new Tuple<int, int>(workload.numAccountsPerGroup, i);
                 switch (workload.grainImplementationType)
                 {
                     case ImplementationType.ORLEANSEVENTUAL:
@@ -489,15 +486,16 @@ namespace ExperimentController
             // load ItemGrain
             for (int i = 0; i < workload.numItemGrain; i++)
             {
+                var grainID = i * Constants.NUM_GRAIN_PER_W;
                 if (eventual)
                 {
-                    var grain = client.GetGrain<IEventualItemGrain>(i);
-                    await grain.StartTransaction("Init", new FunctionInput());
+                    var grain = client.GetGrain<IEventualItemGrain>(grainID);
+                    await grain.StartTransaction("Init", null);
                 }
                 else
                 {
-                    var grain = client.GetGrain<IItemGrain>(i);
-                    await grain.StartTransaction("Init", new FunctionInput());
+                    var grain = client.GetGrain<IItemGrain>(grainID);
+                    await grain.StartTransaction("Init", null);
                 }
             }
             Console.WriteLine($"Finish loading {workload.numItemGrain} ItemGrain. ");
@@ -505,40 +503,43 @@ namespace ExperimentController
             // load WarehouseGrain
             for (int i = 0; i < workload.numWarehouseGrain; i++)
             {
+                var grainID = i * Constants.NUM_GRAIN_PER_W + 1;
                 if (eventual)
                 {
-                    var grain = client.GetGrain<IEventualWarehouseGrain>(i);
-                    await grain.StartTransaction("Init", new FunctionInput(i));
+                    var grain = client.GetGrain<IEventualWarehouseGrain>(grainID);
+                    await grain.StartTransaction("Init", grainID);
                 }
                 else
                 {
-                    var grain = client.GetGrain<IWarehouseGrain>(i);
-                    await grain.StartTransaction("Init", new FunctionInput(i));
+                    var grain = client.GetGrain<IWarehouseGrain>(grainID);
+                    await grain.StartTransaction("Init", grainID);
                 }
             }
             Console.WriteLine($"Finish loading {workload.numWarehouseGrain} WarehouseGrain. ");
 
             // load DistrictGrain and CustomerGrain
-            var index = 0;
+            var districtGrainID = 0;
+            var customerGrainID = 0;
             var tasks = new List<Task<TransactionResult>>();
             for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
                 for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
                 {
-                    index = W_ID * Constants.NUM_D_PER_W + D_ID;
-                    var input = new FunctionInput(new Tuple<int, int>(W_ID, D_ID));
+                    districtGrainID = W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + D_ID;
+                    customerGrainID = W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + Constants.NUM_D_PER_W + D_ID;
+                    var input = new Tuple<int, int>(W_ID, D_ID);
                     if (eventual)
                     {
-                        var districtGrain = client.GetGrain<IEventualDistrictGrain>(index);
+                        var districtGrain = client.GetGrain<IEventualDistrictGrain>(districtGrainID);
                         tasks.Add(districtGrain.StartTransaction("Init", input));
-                        var customerGrain = client.GetGrain<IEventualCustomerGrain>(index);
+                        var customerGrain = client.GetGrain<IEventualCustomerGrain>(customerGrainID);
                         tasks.Add(customerGrain.StartTransaction("Init", input));
                     }
                     else
                     {
-                        var districtGrain = client.GetGrain<IDistrictGrain>(index);
+                        var districtGrain = client.GetGrain<IDistrictGrain>(districtGrainID);
                         tasks.Add(districtGrain.StartTransaction("Init", input));
-                        var customerGrain = client.GetGrain<ICustomerGrain>(index);
+                        var customerGrain = client.GetGrain<ICustomerGrain>(customerGrainID);
                         tasks.Add(customerGrain.StartTransaction("Init", input));
                     }
                     if (sequence && tasks.Count == Environment.ProcessorCount)
@@ -549,42 +550,41 @@ namespace ExperimentController
                 }
             }
             if (tasks.Count > 0) await Task.WhenAll(tasks);
-            Debug.Assert(index == workload.numDistrictGrain - 1 && index == workload.numCustomerGrain - 1);
+            Debug.Assert(districtGrainID == workload.numDistrictGrain - 1 && customerGrainID == workload.numCustomerGrain - 1);
             Console.WriteLine($"Finish loading {workload.numDistrictGrain} DistrictGrain and {workload.numCustomerGrain} CustomerGrain. ");
 
             // load StockGrain
-            index = 0;
+            var stockGrainID = 0;
             tasks = new List<Task<TransactionResult>>();
             for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
                 for (int i = 0; i < Constants.NUM_StockGrain_PER_W; i++)
                 {
-                    index = W_ID * Constants.NUM_StockGrain_PER_W + i;
-                    var input = new FunctionInput(new Tuple<int, int>(W_ID, i));
+                    stockGrainID = W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + 2 * Constants.NUM_D_PER_W + i;
+                    var input = new Tuple<int, int>(W_ID, i);
                     if (eventual)
                     {
-                        var grain = client.GetGrain<IEventualStockGrain>(index);
+                        var grain = client.GetGrain<IEventualStockGrain>(stockGrainID);
                         tasks.Add(grain.StartTransaction("Init", input));
                     }
                     else
                     {
-                        var grain = client.GetGrain<IStockGrain>(index);
+                        var grain = client.GetGrain<IStockGrain>(stockGrainID);
                         tasks.Add(grain.StartTransaction("Init", input));
                     }
                     if (sequence && tasks.Count == Environment.ProcessorCount)
                     {
-                        //Console.WriteLine($"Load {Environment.ProcessorCount} StockGrains, i = {i}");
                         await Task.WhenAll(tasks);
                         tasks.Clear();
                     }
                 }
             }
             if (tasks.Count > 0) await Task.WhenAll(tasks);
-            Debug.Assert(index == workload.numStockGrain - 1);
+            Debug.Assert(stockGrainID == workload.numStockGrain - 1);
             Console.WriteLine($"Finish loading {workload.numStockGrain} StockGrain. ");
 
             // load OrderGrain
-            index = 0;
+            var orderGrainID = 0;
             tasks = new List<Task<TransactionResult>>();
             for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
@@ -592,28 +592,27 @@ namespace ExperimentController
                 {
                     for (int i = 0; i < Constants.NUM_OrderGrain_PER_D; i++)
                     {
-                        index = W_ID * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D + D_ID * Constants.NUM_OrderGrain_PER_D + i;
-                        var input = new FunctionInput(new Tuple<int, int, int>(W_ID, D_ID, i));
+                        orderGrainID = W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + 2 * Constants.NUM_D_PER_W + Constants.NUM_StockGrain_PER_W + D_ID * Constants.NUM_OrderGrain_PER_D + i;
+                        var input = new Tuple<int, int, int>(W_ID, D_ID, i);
                         if (eventual)
                         {
-                            var grain = client.GetGrain<IEventualOrderGrain>(index);
+                            var grain = client.GetGrain<IEventualOrderGrain>(orderGrainID);
                             tasks.Add(grain.StartTransaction("Init", input));
                         }
                         else
                         {
-                            var grain = client.GetGrain<IOrderGrain>(index);
+                            var grain = client.GetGrain<IOrderGrain>(orderGrainID);
                             tasks.Add(grain.StartTransaction("Init", input));
                         }
                         if (sequence && tasks.Count == Environment.ProcessorCount)
                         {
-                            //Console.WriteLine($"Load {Environment.ProcessorCount} OrderGrains, i = {i}");
                             await Task.WhenAll(tasks);
                             tasks.Clear();
                         }
                     }
                 }
             }
-            Debug.Assert(index == workload.numOrderGrain - 1);
+            Debug.Assert(orderGrainID == workload.numOrderGrain - 1);
             if (tasks.Count > 0) await Task.WhenAll(tasks);
             Console.WriteLine($"Finish loading {workload.numOrderGrain} OrderGrain. ");
 
@@ -652,8 +651,7 @@ namespace ExperimentController
 
             if (workload.grainImplementationType == ImplementationType.SNAPPER)
             {
-                coordConfig.numCoordinators = vCPU * 2;
-                numCoordinators = coordConfig.numCoordinators;
+                numCoordinators = vCPU * 2;
                 loggingConfig.numPersistItem = vCPU * 2;
                 numPersistItem = loggingConfig.numPersistItem;
             }

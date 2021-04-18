@@ -11,16 +11,16 @@ namespace TPCC.Grains
     {
         OrderData state = new OrderData();
 
-        public Task<TransactionResult> StartTransaction(string startFunction, FunctionInput inputs)
+        public Task<TransactionResult> StartTransaction(string startFunc, object funcInput)
         {
             AllTxnTypes fnType;
-            if (!Enum.TryParse(startFunction.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunction}");
+            if (!Enum.TryParse(startFunc.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunc}");
             switch (fnType)
             {
                 case AllTxnTypes.Init:
-                    return Init(inputs);
+                    return Init(funcInput);
                 case AllTxnTypes.AddNewOrder:
-                    return AddNewOrder(inputs);
+                    return AddNewOrder(funcInput);
                 default:
                     throw new Exception($"Unknown function {fnType}");
             }
@@ -28,12 +28,12 @@ namespace TPCC.Grains
 
         // input: Tuple<int, int, int>    W_ID, D_ID, OrderGrain index within the district
         // output: null
-        private async Task<TransactionResult> Init(FunctionInput fin)
+        private async Task<TransactionResult> Init(object funcInput)
         {
             var res = new TransactionResult();
             try
             {
-                var input = (Tuple<int, int, int>)fin.inputObject;    // W_ID, D_ID, OrderGrain index within the district
+                var input = (Tuple<int, int, int>)funcInput;    // W_ID, D_ID, OrderGrain index within the district
                 var myState = state;
                 myState.W_ID = input.Item1;
                 myState.D_ID = input.Item2;
@@ -49,13 +49,13 @@ namespace TPCC.Grains
             return res;
         }
 
-        private async Task<TransactionResult> AddNewOrder(FunctionInput fin)
+        private async Task<TransactionResult> AddNewOrder(object funcInput)
         {
             var res = new TransactionResult();
             try
             {
-                if (fin.inputObject == null) throw new Exception("Exception: input data is null. ");
-                var input = (OrderInfo)fin.inputObject;
+                if (funcInput == null) throw new Exception("Exception: input data is null. ");
+                var input = (OrderInfo)funcInput;
                 var O_ID = input.order.O_ID;
                 var myState = state;
                 Debug.Assert(myState.neworder.Contains(O_ID) == false);

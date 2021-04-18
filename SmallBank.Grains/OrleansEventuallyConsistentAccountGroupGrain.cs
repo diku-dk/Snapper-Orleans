@@ -26,13 +26,13 @@ namespace SmallBank.Grains
             return accountID / numAccountPerGroup; //You can can also range/hash partition
         }
 
-        private async Task<TransactionResult> Balance(FunctionInput fin)
+        private async Task<TransactionResult> Balance(object funcInput)
         {
             var ret = new TransactionResult();
             try
             {
                 var myState = state;
-                var custName = (BalanceInput)fin.inputObject;
+                var custName = (BalanceInput)funcInput;
                 if (myState.account.ContainsKey(custName))
                 {
                     var id = myState.account[custName];
@@ -56,13 +56,13 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        private async Task<TransactionResult> DepositChecking(FunctionInput fin)
+        private async Task<TransactionResult> DepositChecking(object funcInput)
         {
             var ret = new TransactionResult();
             try
             {
                 var myState = state;
-                var inputTuple = (DepositCheckingInput)fin.inputObject;
+                var inputTuple = (DepositCheckingInput)funcInput;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
                 if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
@@ -80,13 +80,13 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        public async Task<TransactionResult> TransactSaving(FunctionInput fin)
+        public async Task<TransactionResult> TransactSaving(object funcInput)
         {
             var ret = new TransactionResult();
             try
             {
                 var myState = state;
-                var inputTuple = (TransactSavingInput)fin.inputObject;
+                var inputTuple = (TransactSavingInput)funcInput;
                 if (myState.account.ContainsKey(inputTuple.Item1))
                 {
                     var id = myState.account[inputTuple.Item1];
@@ -110,13 +110,13 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        private async Task<TransactionResult> Transfer(FunctionInput fin)
+        private async Task<TransactionResult> Transfer(object funcInput)
         {
             var ret = new TransactionResult();
             try
             {
                 var myState = state;
-                var inputTuple = (TransferInput)fin.inputObject;
+                var inputTuple = (TransferInput)funcInput;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
 
@@ -127,13 +127,13 @@ namespace SmallBank.Grains
                     return ret;
                 }
                 var gID = MapCustomerIdToGroup(inputTuple.Item2.Item2);
-                var funcInput = new FunctionInput(fin, new DepositCheckingInput(inputTuple.Item2, inputTuple.Item3));
+                var input = new DepositCheckingInput(inputTuple.Item2, inputTuple.Item3);
                 Task<TransactionResult> task;
-                if (gID == myState.GroupID) task = DepositChecking(funcInput);
+                if (gID == myState.GroupID) task = DepositChecking(input);
                 else
                 {
                     var destination = GrainFactory.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(gID);
-                    task = destination.StartTransaction("DepositChecking", funcInput);
+                    task = destination.StartTransaction("DepositChecking", input);
                 }
                 await task;
                 if (task.Result.exception) return ret;
@@ -146,13 +146,13 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        public async Task<TransactionResult> WriteCheck(FunctionInput fin)
+        public async Task<TransactionResult> WriteCheck(object funcInput)
         {
             var ret = new TransactionResult();
             try
             {
                 var myState = state;
-                var inputTuple = (WriteCheckInput)fin.inputObject;
+                var inputTuple = (WriteCheckInput)funcInput;
                 if (myState.account.ContainsKey(inputTuple.Item1))
                 {
                     var id = myState.account[inputTuple.Item1];
@@ -178,13 +178,13 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        public async Task<TransactionResult> MultiTransfer(FunctionInput fin)
+        public async Task<TransactionResult> MultiTransfer(object funcInput)
         {
             var ret = new TransactionResult();
             try
             {
                 var myState = state;
-                var inputTuple = (MultiTransferInput)fin.inputObject;
+                var inputTuple = (MultiTransferInput)funcInput;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
                 if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
@@ -200,16 +200,16 @@ namespace SmallBank.Grains
                     foreach (var tuple in destinations)
                     {
                         var gID = MapCustomerIdToGroup(tuple.Item2);
-                        var funcInput = new FunctionInput(fin, new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2));
+                        var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2);
                         if (gID == myState.GroupID)
                         {
-                            var localCall = DepositChecking(funcInput);
+                            var localCall = DepositChecking(input);
                             tasks.Add(localCall);
                         }
                         else
                         {
                             var destination = this.GrainFactory.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(gID);
-                            var task = destination.StartTransaction("DepositChecking", funcInput);
+                            var task = destination.StartTransaction("DepositChecking", input);
                             tasks.Add(task);
                         }
                     }
@@ -224,13 +224,13 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        public async Task<TransactionResult> Init(FunctionInput fin)
+        public async Task<TransactionResult> Init(object funcInput)
         {
             var ret = new TransactionResult();
             try
             {
                 var myState = state;
-                var tuple = (InitAccountInput)fin.inputObject;
+                var tuple = (InitAccountInput)funcInput;
                 numAccountPerGroup = tuple.Item1;
                 myState.GroupID = tuple.Item2;
 
@@ -250,26 +250,26 @@ namespace SmallBank.Grains
             return ret;
         }
 
-        Task<TransactionResult> IOrleansEventuallyConsistentAccountGroupGrain.StartTransaction(string startFunction, FunctionInput inputs)
+        Task<TransactionResult> IOrleansEventuallyConsistentAccountGroupGrain.StartTransaction(string startFunc, object funcInput)
         {
             AllTxnTypes fnType;
-            if (!Enum.TryParse(startFunction.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunction}");
+            if (!Enum.TryParse(startFunc.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunc}");
             switch (fnType)
             {
                 case AllTxnTypes.Balance:
-                    return Balance(inputs);
+                    return Balance(funcInput);
                 case AllTxnTypes.DepositChecking:
-                    return DepositChecking(inputs);
+                    return DepositChecking(funcInput);
                 case AllTxnTypes.TransactSaving:
-                    return TransactSaving(inputs);
+                    return TransactSaving(funcInput);
                 case AllTxnTypes.WriteCheck:
-                    return WriteCheck(inputs);
+                    return WriteCheck(funcInput);
                 case AllTxnTypes.Transfer:
-                    return Transfer(inputs);
+                    return Transfer(funcInput);
                 case AllTxnTypes.MultiTransfer:
-                    return MultiTransfer(inputs);
+                    return MultiTransfer(funcInput);
                 case AllTxnTypes.Init:
-                    return Init(inputs);
+                    return Init(funcInput);
                 default:
                     throw new Exception($"Unknown function {fnType}");
             }

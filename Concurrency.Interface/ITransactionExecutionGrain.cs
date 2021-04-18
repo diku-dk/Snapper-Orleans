@@ -12,13 +12,13 @@ namespace Concurrency.Interface
          * Client calls this function to submit a determinictic transaction to the transaction coordinator.
          */
         [AlwaysInterleave]
-        Task<TransactionResult> StartTransaction(Dictionary<Tuple<int, string>, int> grainAccessInformation, string startFunction, FunctionInput inputs);
+        Task<TransactionResult> StartTransaction(string startFunc, object funcInput, Dictionary<int, Tuple<string, int>> grainAccessInfo);
 
         /*  
          * Client calls this function to submit a non-determinictic transaction to the transaction coordinator.
          */
         [AlwaysInterleave]
-        Task<TransactionResult> StartTransaction(string startFunction, FunctionInput inputs);
+        Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
 
         /*
          * Receive batch schedule from the coordinator.
@@ -30,7 +30,7 @@ namespace Concurrency.Interface
          * Called by other grains to execute a function.
          */
         [AlwaysInterleave]
-        Task<FunctionResult> Execute(FunctionCall call);
+        Task<FunctionResult> Execute(FunctionCall call, TransactionContext ctx);
 
         [AlwaysInterleave]
         Task<bool> Prepare(int tid, bool doLogging);

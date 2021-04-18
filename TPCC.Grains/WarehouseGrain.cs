@@ -35,39 +35,35 @@ namespace TPCC.Grains
 
         // input: int     W_ID
         // output: null
-        public async Task<FunctionResult> Init(FunctionInput fin)
+        public async Task<TransactionResult> Init(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
-            res.isReadOnlyOnGrain = true;     // Yijian: avoid logging, just for run experiemnt easier
+            var res = new TransactionResult();
             try
             {
-                var W_ID = (int)fin.inputObject;   // W_ID
-                var myState = await state.ReadWrite(context);
+                var W_ID = (int)funcInput;   // W_ID
+                var myState = await GetState(context, AccessMode.ReadWrite);
                 myState.warehouse = InMemoryDataGenerator.GenerateWarehouseInfo(W_ID);
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                res.setException();
+                res.exception = true;
             }
             return res;
         }
 
         // input: null
         // output: float    D_TAX
-        public async Task<FunctionResult> GetWTax(FunctionInput fin)
+        public async Task<TransactionResult> GetWTax(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
-            res.isReadOnlyOnGrain = true;
+            var res = new TransactionResult();
             try
             {
-                var myState = await state.Read(context);
+                var myState = await GetState(context, AccessMode.Read);
                 res.resultObject = myState.warehouse.W_TAX;
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                res.setException();
+                res.exception = true;
             }
             return res;
         }

@@ -7,6 +7,6 @@ namespace SmallBank.Interfaces
     public interface IOrleansEventuallyConsistentAccountGroupGrain : Orleans.IGrainWithIntegerKey
     {
         [AlwaysInterleave]
-        Task<TransactionResult> StartTransaction(string startFunction, FunctionInput inputs);
+        Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
     }
 }

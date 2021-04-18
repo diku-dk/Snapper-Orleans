@@ -7,6 +7,6 @@ namespace TPCC.Interfaces
     public interface IEventualStockGrain : Orleans.IGrainWithIntegerKey
     {
         [AlwaysInterleave]
-        Task<TransactionResult> StartTransaction(string startFunction, FunctionInput inputs);
+        Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
     }
 }

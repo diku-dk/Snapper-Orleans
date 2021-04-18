@@ -6,7 +6,7 @@ namespace TPCC.Interfaces
 {
     public interface IWarehouseGrain : ITransactionExecutionGrain
     {
-        Task<FunctionResult> Init(FunctionInput functionInput);
-        Task<FunctionResult> GetWTax(FunctionInput functionInput);
+        Task<TransactionResult> Init(TransactionContext context, object funcInput);
+        Task<TransactionResult> GetWTax(TransactionContext context, object funcInput);
     }
 }

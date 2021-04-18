@@ -17,7 +17,7 @@ namespace Concurrency.Interface
         /// </summary>
         /// 
         [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction(Dictionary<Tuple<int, string>, int> grainAccessInformation);
+        Task<TransactionContext> NewTransaction(Dictionary<int, Tuple<string, int>> grainAccessInfo);
 
         /// <summary>
         /// Client calls this function to submit a new non-deterministic transaction
@@ -38,7 +38,7 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task PassToken(BatchToken token);
 
-        Task SpawnCoordinator(int numOfCoordinators, int batchInterval, int backOffIntervalMSecs, int idleIntervalTillBackOffSecs, LoggingConfiguration loggingConfig);
+        Task SpawnCoordinator(int numCoord, LoggingConfiguration loggingConfig);
 
         /// <summary>
         /// Actors call this function to notify coordinator that a transaction has been completed locally. 

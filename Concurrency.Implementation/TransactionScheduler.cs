@@ -8,17 +8,15 @@ namespace Concurrency.Implementation
 {
     class TransactionScheduler
     {
-        private int myID;
         public ScheduleInfo scheduleInfo;
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
         public Dictionary<int, Dictionary<int, List<TaskCompletionSource<bool>>>> inBatchTransactionCompletionMap; // <bid, <tid, List<Task>>>
 
-        public TransactionScheduler(Dictionary<int, DeterministicBatchSchedule> batchScheduleMap, int myID)
+        public TransactionScheduler(Dictionary<int, DeterministicBatchSchedule> batchScheduleMap)
         {
-            this.myID = myID;
             this.batchScheduleMap = batchScheduleMap;
             inBatchTransactionCompletionMap = new Dictionary<int, Dictionary<int, List<TaskCompletionSource<bool>>>>();
-            scheduleInfo = new ScheduleInfo(myID);
+            scheduleInfo = new ScheduleInfo();
         }
 
         public async void RegisterDeterministicBatchSchedule(int bid)
@@ -73,7 +71,7 @@ namespace Concurrency.Implementation
             if (batchScheduleMap.ContainsKey(bid))
             {
                 var schedule = batchScheduleMap[bid];
-                var dep = scheduleInfo.getDependingNode(schedule.batchID, true);
+                var dep = scheduleInfo.getDependingNode(schedule.bid, true);
                 if (dep.id > -1 && !dep.executionPromise.Task.IsCompleted)
                 {
                     //Console.WriteLine($"grain {myPrimaryKey}: waitForTurn, det {tid} wait for node {dep.id}, isDet = {dep.isDet}");

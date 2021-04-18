@@ -7,6 +7,6 @@ namespace TPCC.Interfaces
     public interface IEventualDistrictGrain : Orleans.IGrainWithIntegerKey
     {
         [AlwaysInterleave]
-        Task<TransactionResult> StartTransaction(string startFunction, FunctionInput inputs);
+        Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
     }
 }

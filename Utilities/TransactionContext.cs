@@ -6,29 +6,25 @@ namespace Utilities
     [Serializable]
     public class TransactionContext
     {
-        // if persist PACT input
-        public int grainID;  // the grain who starts the transaction
-        public object input;
-
-        public int coordinatorKey;
-        public bool isDeterministic;
-        public int batchID { get; set; }
-        public int highestBatchIdCommitted;
-        public int transactionID { get; set; }
-        public Dictionary<Tuple<int, string>, int> grainAccessInformation;  // <grainID, access this grian how many times>
+        public int bid;
+        public int tid;
+        public bool isDet;
+        public int coordID;
+        public int highestCommittedBid;
+        public Dictionary<int, Tuple<string, int>> grainAccessInfo;  // <grainID, namespace, access this grian how many times>
 
         public TransactionContext(int tid)
         {
-            transactionID = tid;
-            isDeterministic = false;
-            highestBatchIdCommitted = -1;
+            this.tid = tid;
+            isDet = false;
+            highestCommittedBid = -1;
         }
 
-        public TransactionContext(Dictionary<Tuple<int, string>, int> grainAccessInformation)
+        public TransactionContext(Dictionary<int, Tuple<string, int>> grainAccessInfo)
         {
-            this.grainAccessInformation = grainAccessInformation;
-            isDeterministic = true;
-            highestBatchIdCommitted = -1;
+            isDet = true;
+            highestCommittedBid = -1;
+            this.grainAccessInfo = grainAccessInfo;
         }
     }
 }

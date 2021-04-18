@@ -11,16 +11,16 @@ namespace TPCC.Grains
     {
         StockTable state = new StockTable();
 
-        public Task<TransactionResult> StartTransaction(string startFunction, FunctionInput inputs)
+        public Task<TransactionResult> StartTransaction(string startFunc, object funcInput)
         {
             AllTxnTypes fnType;
-            if (!Enum.TryParse(startFunction.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunction}");
+            if (!Enum.TryParse(startFunc.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunc}");
             switch (fnType)
             {
                 case AllTxnTypes.Init:
-                    return Init(inputs);
+                    return Init(funcInput);
                 case AllTxnTypes.UpdateStock:
-                    return UpdateStock(inputs);
+                    return UpdateStock(funcInput);
                 default:
                     throw new Exception($"Unknown function {fnType}");
             }
@@ -28,12 +28,12 @@ namespace TPCC.Grains
 
         // input: Tuple<int, int>     W_ID, StockGrain index within the warehouse
         // output: null
-        private async Task<TransactionResult> Init(FunctionInput fin)
+        private async Task<TransactionResult> Init(object funcInput)
         {
             var res = new TransactionResult();
             try
             {
-                var input = (Tuple<int, int>)fin.inputObject;    // W_ID, StockGrain index within the warehouse
+                var input = (Tuple<int, int>)funcInput;    // W_ID, StockGrain index within the warehouse
                 var myState = state;
                 myState.W_ID = input.Item1;
                 myState.stock = InMemoryDataGenerator.GenerateStockTable(input.Item2);
@@ -47,13 +47,13 @@ namespace TPCC.Grains
 
         // input: UpdateStockInput   W_ID, D_ID, isRemote, <I_ID, I_QUANTITY>
         // output: Dictionary<int, string>    <I_ID, S_DIST_xx info>
-        private async Task<TransactionResult> UpdateStock(FunctionInput fin)
+        private async Task<TransactionResult> UpdateStock(object funcInput)
         {
             var ret = new TransactionResult();
             var result = new Dictionary<int, string>();
             try
             {
-                var input = (UpdateStockInput)fin.inputObject;   // W_ID, D_ID, isRemote, <I_ID, I_QUANTITY>
+                var input = (UpdateStockInput)funcInput;   // W_ID, D_ID, isRemote, <I_ID, I_QUANTITY>
                 var W_ID = input.W_ID;
                 var D_ID = input.D_ID;
                 var remoteFlag = input.isRemote ? 1 : 0;

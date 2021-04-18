@@ -38,40 +38,36 @@ namespace TPCC.Grains
 
         // input: W_ID, D_ID
         // output: null
-        public async Task<FunctionResult> Init(FunctionInput fin)
+        public async Task<TransactionResult> Init(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
-            res.isReadOnlyOnGrain = true;     // Yijian: avoid logging, just for run experiemnt easier
+            var res = new TransactionResult();
             try
             {
-                var input = (Tuple<int, int>)fin.inputObject;   // W_ID, D_ID
-                var myState = await state.ReadWrite(context);
+                var input = (Tuple<int, int>)funcInput;   // W_ID, D_ID
+                var myState = await GetState(context, AccessMode.ReadWrite);
                 myState.district = InMemoryDataGenerator.GenerateDistrictInfo(input.Item2);
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                res.setException();
+                res.exception = true;
             }
             return res;
         }
 
         // input: null
         // output: Tuple<float, long>    D_TAX, O_ID
-        public async Task<FunctionResult> GetDTax(FunctionInput fin)
+        public async Task<TransactionResult> GetDTax(TransactionContext context, object funcInput)
         {
-            var context = fin.context;
-            var res = new FunctionResult();
+            var res = new TransactionResult();
             try
             {
-                var myState = await state.ReadWrite(context);
+                var myState = await GetState(context, AccessMode.ReadWrite);
                 var O_ID = myState.district.D_NEXT_O_ID++;
                 res.resultObject = new Tuple<float, long>(myState.district.D_TAX, O_ID);
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                //Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
-                res.setException();
+                res.exception = true;
             }
             return res;
         }

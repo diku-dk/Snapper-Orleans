@@ -6,7 +6,7 @@ namespace TPCC.Interfaces
 {
     public interface IStockGrain : ITransactionExecutionGrain
     {
-        Task<FunctionResult> Init(FunctionInput functionInput);
-        Task<FunctionResult> UpdateStock(FunctionInput functionInput);
+        Task<TransactionResult> Init(TransactionContext context, object funcInput);
+        Task<TransactionResult> UpdateStock(TransactionContext context, object funcInput);
     }
 }
