@@ -200,9 +200,9 @@ namespace Concurrency.Implementation
             }
         }
 
-        public async Task<TransactionResult> CallGrain(TransactionContext context, int grainID, string grainInterfaceName, FunctionCall call)
+        public async Task<TransactionResult> CallGrain(TransactionContext context, int grainID, string grainNameSpace, FunctionCall call)
         {
-            var grain = GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, grainInterfaceName);
+            var grain = GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID, grainNameSpace);
             var res = await grain.Execute(call, context);
             funcResults[context.tid].mergeWithFunctionResult(res);
             return new TransactionResult(res.exception, res.resultObject);

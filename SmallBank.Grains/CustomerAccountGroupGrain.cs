@@ -167,7 +167,7 @@ namespace SmallBank.Grains
                         else
                         {
                             var funcCall = new FunctionCall("DepositChecking", input, typeof(CustomerAccountGroupGrain));
-                            tasks.Add(CallGrain(context, gID, "ICustomerAccountGroupGrain", funcCall));
+                            tasks.Add(CallGrain(context, gID, "SmallBank.Grains.CustomerAccountGroupGrain", funcCall));
                         }
                     }
                 }
@@ -211,7 +211,7 @@ namespace SmallBank.Grains
                         else
                         {
                             var funcCall = new FunctionCall("DepositChecking", input, typeof(CustomerAccountGroupGrain));
-                            var task = CallGrain(context, gID, funcCall);
+                            var task = CallGrain(context, gID, "SmallBank.Grains.CustomerAccountGroupGrain", funcCall);
                             await task;
                         }
                     }

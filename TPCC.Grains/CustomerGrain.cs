@@ -93,7 +93,7 @@ namespace TPCC.Grains
                     foreach (var item in ItemsToBuy) itemIDs.Add(item.Key);
                     var itemGrainID = Helper.GetItemGrain(myState.W_ID);
                     var func_call = new FunctionCall("GetItemsPrice", itemIDs, typeof(ItemGrain));
-                    var r = await CallGrain(context, itemGrainID, "IItemGrain", func_call);
+                    var r = await CallGrain(context, itemGrainID, "TPCC.Grains.ItemGrain", func_call);
                     if (r.exception)
                     {
                         if (!context.isDet) throw new Exception("Exception thrown from ItemGrain. ");
@@ -112,12 +112,12 @@ namespace TPCC.Grains
                     {
                         var func_call = new FunctionCall("GetWTax", null, typeof(WarehouseGrain));
                         var warehouseGrainID = Helper.GetWarehouseGrain(myState.W_ID);
-                        tasks.Add(CallGrain(context, warehouseGrainID, "IWarehouseGrain", func_call));
+                        tasks.Add(CallGrain(context, warehouseGrainID, "TPCC.Grains.WarehouseGrain", func_call));
                     }
                     {
                         var func_call = new FunctionCall("GetDTax", null, typeof(DistrictGrain));
                         var districtGrainID = Helper.GetDistrictGrain(myState.W_ID, myState.D_ID);
-                        tasks.Add(CallGrain(context, districtGrainID, "IDistrictGrain", func_call));
+                        tasks.Add(CallGrain(context, districtGrainID, "TPCC.Grains.DistrictGrain", func_call));
                     }
                     await Task.WhenAll(tasks);
                     if (tasks[0].Result.exception || tasks[1].Result.exception)
@@ -162,7 +162,7 @@ namespace TPCC.Grains
                     {
                         var func_input = new UpdateStockInput(myState.W_ID, myState.D_ID, isRemote[grain.Key], grain.Value);
                         var func_call = new FunctionCall("UpdateStock", func_input, typeof(StockGrain));
-                        tasks.Add(CallGrain(context, grain.Key, "IStockGrain", func_call));
+                        tasks.Add(CallGrain(context, grain.Key, "TPCC.Grains.StockGrain", func_call));
                     }
                     await Task.WhenAll(tasks);
                     foreach (var t in tasks)
@@ -188,7 +188,7 @@ namespace TPCC.Grains
                     {
                         Debug.Assert(context.isDet);
                         var func_call = new FunctionCall("AddNewOrder", null, typeof(OrderGrain));
-                        _ = CallGrain(context, orderGrainID, "IOrderGrain", func_call);
+                        _ = CallGrain(context, orderGrainID, "TPCC.Grains.OrderGrain", func_call);
                     }
                     else
                     {
@@ -211,7 +211,7 @@ namespace TPCC.Grains
                         }
                         var order_info = new OrderInfo(order, orderlines);
                         var func_call = new FunctionCall("AddNewOrder", order_info, typeof(OrderGrain));
-                        var t = CallGrain(context, orderGrainID, "IOrderGrain", func_call);
+                        var t = CallGrain(context, orderGrainID, "TPCC.Grains.OrderGrain", func_call);
                         if (!context.isDet) await t;
 
                         var C_DISCOUNT = myState.customer_table[C_ID].C_DISCOUNT;
