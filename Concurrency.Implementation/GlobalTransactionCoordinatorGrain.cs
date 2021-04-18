@@ -235,6 +235,7 @@ namespace Concurrency.Implementation
             }
             foreach (var item in curScheduleMap)
             {
+                //Console.WriteLine($"batch {curBatchID}: {grainClassName[item.Key]} {item.Key}");
                 var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, grainClassName[item.Key]);
                 var schedule = item.Value;
                 schedule.coordID = myID;

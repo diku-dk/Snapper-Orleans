@@ -61,7 +61,7 @@ namespace TPCC.Grains
             var res = new TransactionResult();
             try
             {
-                var myState = await GetState(context, AccessMode.ReadWrite);
+                var myState = await GetState(context, AccessMode.Read);
                 var O_ID = myState.district.D_NEXT_O_ID++;
                 res.resultObject = new Tuple<float, long>(myState.district.D_TAX, O_ID);
             }

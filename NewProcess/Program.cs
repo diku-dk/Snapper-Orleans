@@ -156,7 +156,7 @@ namespace NewProcess
                             reqs.Add(newTask, asyncReqStartTime);
                             tasks.Add(newTask);
                         }*/
-                        
+
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);
                     }
@@ -204,7 +204,7 @@ namespace NewProcess
                 //while (numEmit < numTxn);
                 while (globalWatch.ElapsedMilliseconds < config.epochDurationMSecs && (queue.Count != 0 || !isProducerFinish[eIndex]));
                 isEpochFinish[eIndex] = true;   // which means producer doesn't need to produce more requests
-                
+
                 //Wait for the tasks exceeding epoch time and also count them into results
                 while (tasks.Count != 0)
                 {
@@ -254,7 +254,7 @@ namespace NewProcess
                 {
                     if (config.grainImplementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
                     else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
-                } 
+                }
                 WorkloadResults res;
                 if (config.grainImplementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResults(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
                 else res = new WorkloadResults(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
@@ -268,8 +268,8 @@ namespace NewProcess
         {
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = siloCPU / 4;
-            numNonDetConsumer = siloCPU / 4;
+            numDetConsumer = siloCPU;
+            numNonDetConsumer = siloCPU;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 

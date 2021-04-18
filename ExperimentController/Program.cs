@@ -346,7 +346,7 @@ namespace ExperimentController
                 {
                     for (int i = 0; i < Constants.NUM_OrderGrain_PER_D; i++)
                     {
-                        index = W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + 2 * Constants.NUM_D_PER_W + Constants.NUM_StockGrain_PER_W + i;
+                        index = W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + 2 * Constants.NUM_D_PER_W + Constants.NUM_StockGrain_PER_W + D_ID * Constants.NUM_OrderGrain_PER_D + i;
                         var input = new Tuple<int, int, int>(W_ID, D_ID, i);
                         if (workload.grainImplementationType == ImplementationType.ORLEANSEVENTUAL)
                         {
@@ -366,7 +366,6 @@ namespace ExperimentController
                     }
                 }
             }
-            Debug.Assert(index == workload.numOrderGrain - 1);
             if (tasks.Count > 0) await Task.WhenAll(tasks);
             Console.WriteLine($"Finish re-setting {workload.numOrderGrain} OrderGrain. ");
             resetFinish = true;
@@ -484,9 +483,9 @@ namespace ExperimentController
             var start = DateTime.Now;
 
             // load ItemGrain
-            for (int i = 0; i < workload.numItemGrain; i++)
+            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
-                var grainID = i * Constants.NUM_GRAIN_PER_W;
+                var grainID = Helper.GetItemGrain(W_ID);
                 if (eventual)
                 {
                     var grain = client.GetGrain<IEventualItemGrain>(grainID);
@@ -501,18 +500,18 @@ namespace ExperimentController
             Console.WriteLine($"Finish loading {workload.numItemGrain} ItemGrain. ");
 
             // load WarehouseGrain
-            for (int i = 0; i < workload.numWarehouseGrain; i++)
+            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
             {
-                var grainID = i * Constants.NUM_GRAIN_PER_W + 1;
+                var grainID = Helper.GetWarehouseGrain(W_ID);
                 if (eventual)
                 {
                     var grain = client.GetGrain<IEventualWarehouseGrain>(grainID);
-                    await grain.StartTransaction("Init", grainID);
+                    await grain.StartTransaction("Init", W_ID);
                 }
                 else
                 {
                     var grain = client.GetGrain<IWarehouseGrain>(grainID);
-                    await grain.StartTransaction("Init", grainID);
+                    await grain.StartTransaction("Init", W_ID);
                 }
             }
             Console.WriteLine($"Finish loading {workload.numWarehouseGrain} WarehouseGrain. ");
@@ -525,8 +524,8 @@ namespace ExperimentController
             {
                 for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
                 {
-                    districtGrainID = W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + D_ID;
-                    customerGrainID = W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + Constants.NUM_D_PER_W + D_ID;
+                    districtGrainID = Helper.GetDistrictGrain(W_ID, D_ID);
+                    customerGrainID = Helper.GetCustomerGrain(W_ID, D_ID);
                     var input = new Tuple<int, int>(W_ID, D_ID);
                     if (eventual)
                     {
@@ -550,7 +549,6 @@ namespace ExperimentController
                 }
             }
             if (tasks.Count > 0) await Task.WhenAll(tasks);
-            Debug.Assert(districtGrainID == workload.numDistrictGrain - 1 && customerGrainID == workload.numCustomerGrain - 1);
             Console.WriteLine($"Finish loading {workload.numDistrictGrain} DistrictGrain and {workload.numCustomerGrain} CustomerGrain. ");
 
             // load StockGrain
@@ -580,7 +578,6 @@ namespace ExperimentController
                 }
             }
             if (tasks.Count > 0) await Task.WhenAll(tasks);
-            Debug.Assert(stockGrainID == workload.numStockGrain - 1);
             Console.WriteLine($"Finish loading {workload.numStockGrain} StockGrain. ");
 
             // load OrderGrain
@@ -612,7 +609,6 @@ namespace ExperimentController
                     }
                 }
             }
-            Debug.Assert(orderGrainID == workload.numOrderGrain - 1);
             if (tasks.Count > 0) await Task.WhenAll(tasks);
             Console.WriteLine($"Finish loading {workload.numOrderGrain} OrderGrain. ");
 
