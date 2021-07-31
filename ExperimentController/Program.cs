@@ -654,7 +654,7 @@ namespace ExperimentController
             if (workload.benchmark == BenchmarkType.SMALLBANK) workload.numAccounts = 5000 * vCPU;
             if (workload.benchmark == BenchmarkType.TPCC)
             {
-                workload.numWarehouse = vCPU * Constants.NUM_W_PER_4CORE / 4;
+                workload.numWarehouse = vCPU * Constants.NUM_W_PER_SILO / Constants.numCPUPerSilo;
                 workload.numItemGrain = workload.numWarehouse;
                 workload.numWarehouseGrain = workload.numWarehouse;
                 workload.numCustomerGrain = workload.numWarehouse * Constants.NUM_D_PER_W;

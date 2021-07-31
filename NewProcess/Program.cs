@@ -268,7 +268,7 @@ namespace NewProcess
         {
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = siloCPU;
+            numDetConsumer = siloCPU * Constants.numSilo / 2;
             numNonDetConsumer = siloCPU;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
@@ -478,6 +478,18 @@ namespace NewProcess
             }
         }
 
+        private static IDiscreteDistribution numSiloDist = new DiscreteUniform(0, 99, new Random());
+        private static int SelectNumSilo(int txnSize)
+        {
+            Debug.Assert(txnSize == 4);
+            // 1 silo: 0%
+            // 2 silo: 100%
+            // 4 silo: 0%
+            var sample = numSiloDist.Sample();
+            if (sample < 25) return 2;
+            else return 1;
+        }
+
         private static void InitializeSmallBankWorkload()
         {
             if (config.mixture[0] == 100)
@@ -490,29 +502,50 @@ namespace NewProcess
             if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
             var numGrain = config.numAccounts / config.numAccountsPerGroup;
             var numGrainPerTxn = config.numGrainsMultiTransfer;
+            var siloDist = new DiscreteUniform(0, Constants.numSilo - 1, new Random());           // [0, numSilo - 1]
             switch (config.distribution)
             {
                 case Distribution.UNIFORM:
                     Console.WriteLine($"Generate UNIFORM data for SmallBank..");
-                    var dist = new DiscreteUniform(0, numGrain - 1, new Random());
-                    for (int epoch = 0; epoch < config.numEpochs; epoch++)
                     {
-                        for (int txn = 0; txn < numTxnPerEpoch; txn++)
+                        var grainDist = new DiscreteUniform(0, Constants.numGrainPerSilo - 1, new Random());  // [0, numGrainPerSilo - 1]
+                        for (int epoch = 0; epoch < Constants.numEpoch; epoch++)
                         {
-                            var grainsPerTxn = new List<int>();
-                            for (int i = 0; i < numGrainPerTxn; i++)
+                            for (int txn = 0; txn < numTxnPerEpoch; txn++)
                             {
-                                var grain = dist.Sample();
-                                while (grainsPerTxn.Contains(grain)) grain = dist.Sample();
-                                grainsPerTxn.Add(grain);
+                                var grainsPerTxn = new List<int>();
+                                var numSiloAccess = SelectNumSilo(numGrainPerTxn);
+                                Debug.Assert(numSiloAccess <= numGrainPerTxn);
+                                var siloList = new List<int>();
+                                for (int j = 0; j < numSiloAccess; j++)   // how many silos the txn will access
+                                {
+                                    var silo = siloDist.Sample();
+                                    while (siloList.Contains(silo)) silo = siloDist.Sample();
+                                    siloList.Add(silo);
+                                }
+                                Debug.Assert(siloList.Count == numSiloAccess);
+
+                                for (int k = 0; k < numGrainPerTxn; k++)
+                                {
+                                    var silo = siloList[k % numSiloAccess];
+                                    var grainInSilo = grainDist.Sample();
+                                    var grainID = silo * Constants.numGrainPerSilo + grainInSilo;
+                                    while (grainsPerTxn.Contains(grainID))
+                                    {
+                                        grainInSilo = grainDist.Sample();
+                                        grainID = silo * Constants.numGrainPerSilo + grainInSilo;
+                                    }
+                                    grainsPerTxn.Add(grainID);
+                                }
+                                Debug.Assert(grainsPerTxn.Count == numGrainPerTxn);
+                                shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
                             }
-                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
                         }
                     }
                     break;
                 case Distribution.HOTRECORD:
-                    int numHotGrain = (int)(Constants.skewness * numGrain);
-                    var numHotGrainPerTxn = Constants.hotRatio * numGrainPerTxn;
+                    int numHotGrain = (int)(Constants.grainSkewness * numGrain);
+                    var numHotGrainPerTxn = Constants.txnSkewness * numGrainPerTxn;
                     Console.WriteLine($"Generate data for HOTRECORD, {numHotGrain} hot grains, {numHotGrainPerTxn} hot grain per txn...");
                     var normal_dist = new DiscreteUniform(numHotGrain, numGrain - 1, new Random());
                     DiscreteUniform hot_dist = null;

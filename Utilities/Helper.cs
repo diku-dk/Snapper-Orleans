@@ -43,29 +43,12 @@ namespace Utilities
             return grainID % numPersistItem;
         }
 
-        public static int MapGrainIDToCoordID(int numCoord, int grainID)
-        {
-            return grainID % numCoord;
-        }
-
         public static int NURand(int A, int x, int y, int C)
         {
             var rnd = new Random();
             var part1 = rnd.Next(0, A + 1);
             var part2 = rnd.Next(x, y + 1);
             return (((part1 | part2) + C) % (y - x + 1)) + x;
-        }
-
-        public static int GetSiloNumber(long coordID)
-        {
-            return (int)coordID / Constants.numCoordPerSilo;
-        }
-
-        public static int GetSiloNumber(long grainID, int siloLen)
-        {
-            var numCoord = siloLen * Constants.numCoordPerSilo;
-            var coordID = grainID % numCoord;
-            return (int)coordID / Constants.numCoordPerSilo;
         }
 
         public static bool intraSilo(int numCoord, int source, bool isSourceCoord, int dest, bool isDestCoord)

@@ -43,7 +43,7 @@ namespace Concurrency.Implementation
             myFullID = new Tuple<int, string>(myID, myClassName);
             var configTuple = await GrainFactory.GetGrain<IConfigurationManagerGrain>(0).GetConfiguration();
             // <nonDetCCType, loggingConfig, numCoord>
-            coordID = Helper.MapGrainIDToCoordID(configTuple.Item3, myID);
+            coordID = myID % configTuple.Item3;
             myCoord = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(coordID);
             state = new HybridState<TState>(configTuple.Item1);
             var loggingConfig = configTuple.Item2;

@@ -14,7 +14,11 @@ namespace Concurrency.Implementation
         {
             var silos = context.GetCompatibleSilos(target).OrderBy(s => s).ToArray();
             var silo = 0;
-            if (Constants.multiSilo) silo = Helper.GetSiloNumber(target.GrainIdentity.PrimaryKeyLong, silos.Length);
+            if (Constants.multiSilo)
+            {
+                var grainID = (int)target.GrainIdentity.PrimaryKeyLong;
+                silo = grainID / Constants.numGrainPerSilo;
+            } 
             return Task.FromResult(silos[silo]);
         }
     }

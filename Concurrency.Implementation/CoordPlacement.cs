@@ -5,6 +5,7 @@ using Orleans.Runtime;
 using Orleans.Placement;
 using System.Threading.Tasks;
 using Orleans.Runtime.Placement;
+using System.Diagnostics;
 
 namespace Concurrency.Implementation
 {
@@ -14,7 +15,11 @@ namespace Concurrency.Implementation
         {
             var silos = context.GetCompatibleSilos(target).OrderBy(s => s).ToArray();
             var silo = 0;
-            if (Constants.multiSilo) silo = Helper.GetSiloNumber(target.GrainIdentity.PrimaryKeyLong);
+            if (Constants.multiSilo)
+            {
+                Debug.Assert(silos.Length == Constants.numSilo + 1);
+                silo = Constants.numSilo;               // put all coords in last silo
+            } 
             return Task.FromResult(silos[silo]);
         }
     }
