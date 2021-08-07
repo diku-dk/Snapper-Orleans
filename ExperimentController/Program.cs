@@ -647,11 +647,11 @@ namespace ExperimentController
 
             if (workload.grainImplementationType == ImplementationType.SNAPPER)
             {
-                numCoordinators = vCPU * 2;
+                numCoordinators = vCPU * 2 * Constants.numSilo;
                 loggingConfig.numPersistItem = vCPU * 2;
                 numPersistItem = loggingConfig.numPersistItem;
             }
-            if (workload.benchmark == BenchmarkType.SMALLBANK) workload.numAccounts = 5000 * vCPU;
+            if (workload.benchmark == BenchmarkType.SMALLBANK) workload.numAccounts = 5000 * vCPU * Constants.numSilo;
             if (workload.benchmark == BenchmarkType.TPCC)
             {
                 workload.numWarehouse = vCPU * Constants.NUM_W_PER_SILO / Constants.numCPUPerSilo;

@@ -26,8 +26,11 @@ namespace OrleansSiloHost
         {
             if (Constants.multiSilo)
             {
-                siloPort = int.Parse(args[0]);
-                gatewayPort = int.Parse(args[1]);
+                //siloPort = int.Parse(args[0]);
+                //gatewayPort = int.Parse(args[1]);
+                var siloID = 0;
+                siloPort = 11111 + siloID;
+                gatewayPort = 30000 + siloID;
             }
             else
             {

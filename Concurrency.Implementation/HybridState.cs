@@ -6,9 +6,9 @@ using Concurrency.Interface.Deterministic;
 using Concurrency.Interface.Nondeterministic;
 
 namespace Concurrency.Implementation
-{    
+{
     public class HybridState<TState> : ITransactionalState<TState> where TState : ICloneable, new()
-    {        
+    {
         private IDetTransactionalState<TState> detStateManager;
         private INonDetTransactionalState<TState> nonDetStateManager;
         private CommittedState<TState> myState;
@@ -42,7 +42,7 @@ namespace Concurrency.Implementation
             {
                 nonDetStateManager.Abort(tid);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Console.WriteLine($"\n Exception(Abort)::transaction {tid} exception {e.Message}");
             }
@@ -53,7 +53,7 @@ namespace Concurrency.Implementation
         {
             try
             {
-                nonDetStateManager.Commit(tid, myState);                
+                nonDetStateManager.Commit(tid, myState);
             }
             catch (Exception e)
             {
@@ -68,13 +68,13 @@ namespace Concurrency.Implementation
         }
 
         TState ITransactionalState<TState>.GetPreparedState(int tid)
-        {            
+        {
             return nonDetStateManager.GetPreparedState(tid);
         }
 
         Task<bool> ITransactionalState<TState>.Prepare(int tid)
         {
-            return nonDetStateManager.Prepare(tid);            
+            return nonDetStateManager.Prepare(tid);
         }
 
         Task<TState> ITransactionalState<TState>.Read(TransactionContext ctx)

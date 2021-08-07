@@ -486,7 +486,7 @@ namespace NewProcess
             // 2 silo: 100%
             // 4 silo: 0%
             var sample = numSiloDist.Sample();
-            if (sample < 25) return 2;
+            if (sample < 75) return 2;
             else return 1;
         }
 

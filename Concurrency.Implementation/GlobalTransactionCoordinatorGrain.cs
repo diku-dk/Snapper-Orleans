@@ -27,7 +27,7 @@ namespace Concurrency.Implementation
         private List<IGlobalTransactionCoordinatorGrain> coordList;
         private Dictionary<int, TaskCompletionSource<bool>> batchesWaitingForCommit;
         Dictionary<int, TaskCompletionSource<bool>> detEmitPromiseMap, nonDetEmitPromiseMap;
-        
+
         private Dictionary<int, Dictionary<int, DeterministicBatchSchedule>> batchSchedulePerGrain;  // <bid, GrainID, batch schedule>
         private Dictionary<int, string> grainClassName;   // GrainID, namespace
 
@@ -226,7 +226,7 @@ namespace Concurrency.Implementation
         private async Task EmitBatch(int curBatchID)
         {
             var curScheduleMap = batchSchedulePerGrain[curBatchID];
-            
+
             if (log != null)
             {
                 var participants = new HashSet<int>();  // <grain namespace, grainIDs>

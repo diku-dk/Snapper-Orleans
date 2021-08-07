@@ -18,7 +18,7 @@ namespace Concurrency.Implementation
             {
                 var grainID = (int)target.GrainIdentity.PrimaryKeyLong;
                 silo = grainID / Constants.numGrainPerSilo;
-            } 
+            }
             return Task.FromResult(silos[silo]);
         }
     }

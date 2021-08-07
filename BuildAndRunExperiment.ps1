@@ -15,11 +15,11 @@ if ($LastExitCode -ne 0) { return; }
 dotnet build --no-restore
 if ($LastExitCode -ne 0) { return; }
 
-$zipF = 0.9, 1.0, 1.25, 1.5, 2.0
+$zipF = 0.0, 0.9, 1.0, 1.25, 1.5, 2.0
 $percent = 100, 90, 50, 0
-$detPipe = 64
-$nonDetPipeAll = 64, 8, 4, 4, 4
-$cpu = 32
+$detPipe = 128
+$nonDetPipeAll = 0, 64, 8, 4, 4, 4
+$cpu = 4
 
 for ($j = 0; $j -le 0; $j++)
 {
@@ -33,7 +33,7 @@ for ($j = 0; $j -le 0; $j++)
             #$detPipe = $pipe
             #$nonDetPipe = $pipe
             Start-Process "dotnet" -ArgumentList "run --project ExperimentController --no-build -- $zipF $detPercent $cpu"
-            Start-Sleep 15
+            Start-Sleep 8
             Start-Process "dotnet" -ArgumentList "run --project NewProcess --no-build -- $cpu $detPipe $nonDetPipe"
             #Start-Process "dotnet" -ArgumentList "run --project ExperimentProcess --no-build -- $cpu $pipe"
             #Start-Sleep 62

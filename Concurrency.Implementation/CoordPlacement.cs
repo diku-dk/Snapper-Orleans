@@ -19,7 +19,7 @@ namespace Concurrency.Implementation
             {
                 Debug.Assert(silos.Length == Constants.numSilo + 1);
                 silo = Constants.numSilo;               // put all coords in last silo
-            } 
+            }
             return Task.FromResult(silos[silo]);
         }
     }
