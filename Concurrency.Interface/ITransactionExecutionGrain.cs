@@ -33,6 +33,9 @@ namespace Concurrency.Interface
         Task<FunctionResult> Execute(FunctionCall call, TransactionContext ctx);
 
         [AlwaysInterleave]
+        Task<bool> PrepareA(int tid, bool doLogging);
+
+        [AlwaysInterleave]
         Task<Tuple<bool, int, int, bool>> Prepare(int tid, bool doLogging);    // <vote, maxBeforeBid, minAfterBid, isConsecutive>
 
         [AlwaysInterleave]

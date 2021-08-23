@@ -268,8 +268,8 @@ namespace NewProcess
         {
             numProducer = 1;
             detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = siloCPU * Constants.numSilo / 2;
-            numNonDetConsumer = siloCPU;
+            numDetConsumer = siloCPU / 4;
+            numNonDetConsumer = siloCPU / 4;
             if (detPercent == 100) numNonDetConsumer = 0;
             else if (detPercent == 0) numDetConsumer = 0;
 
@@ -296,16 +296,8 @@ namespace NewProcess
             // some initialization for generating workload
             if (detBufferSize == 0 && nonDetBufferSize == 0)
             {
-                if (numDetConsumer > 0)
-                {
-                    //detBufferSize = detPercent * 100 * siloCPU / (4 * numDetConsumer);
-                    detBufferSize = detPipeSize * 10;
-                }
-                if (numNonDetConsumer > 0)
-                {
-                    //nonDetBufferSize = (100 - detPercent) * 100 * siloCPU / (4 * numNonDetConsumer);
-                    nonDetBufferSize = nonDetPipeSize * 10;
-                }
+                if (numDetConsumer > 0) detBufferSize = detPipeSize * 10;
+                if (numNonDetConsumer > 0) nonDetBufferSize = nonDetPipeSize * 10;
             }
             Console.WriteLine($"detPercent = {detPercent}%, detBuffer = {detBufferSize}, nonDetBuffer = {nonDetBufferSize}");
             shared_requests = new Dictionary<int, Queue<Tuple<bool, RequestData>>>();   // <epoch, <producerID, <isDet, grainIDs>>>
@@ -506,7 +498,7 @@ namespace NewProcess
             switch (config.distribution)
             {
                 case Distribution.UNIFORM:
-                    Console.WriteLine($"Generate UNIFORM data for SmallBank..");
+                    Console.WriteLine($"Generate UNIFORM data for SmallBank, txnSize = {numGrainPerTxn}");
                     {
                         var grainDist = new DiscreteUniform(0, Constants.numGrainPerSilo - 1, new Random());  // [0, numGrainPerSilo - 1]
                         for (int epoch = 0; epoch < Constants.numEpoch; epoch++)
@@ -766,6 +758,10 @@ namespace NewProcess
             serializer = new BinarySerializer();
 
             Console.WriteLine("Worker is Started...");
+
+            //siloCPU = 4;
+            //detPipeSize = 64;
+            //nonDetPipeSize = 1;
 
             //inject the specially required arguments into workload setting
             siloCPU = int.Parse(args[0]);

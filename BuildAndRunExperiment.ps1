@@ -16,9 +16,9 @@ dotnet build --no-restore
 if ($LastExitCode -ne 0) { return; }
 
 $zipF = 0.0, 0.9, 1.0, 1.25, 1.5, 2.0
-$percent = 100, 90, 50, 0
-$detPipe = 128
-$nonDetPipeAll = 0, 64, 8, 4, 4, 4
+$percent = 50, 90, 50, 0
+$detPipe = 64
+$nonDetPipeAll = 64, 64, 8, 4, 4, 4
 $cpu = 4
 
 for ($j = 0; $j -le 0; $j++)

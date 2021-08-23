@@ -123,6 +123,7 @@ namespace Concurrency.Implementation
                 var maxBeforeBid = -1;
                 if (canCommit)
                 {
+
                     var result = await Prepare_2PC(context.tid, myID, t1.Result.grainsInNestedFunctions, res);
                     canCommit = result.Item1;
                     maxBeforeBid = result.Item2;
@@ -161,6 +162,44 @@ namespace Concurrency.Implementation
                 }
             }
             return res;
+        }
+
+        public async Task<bool> PrepareA(int tid, bool doLogging)
+        {
+            if (state == null) return true;  // Stateless grain always vote "yes" for 2PC
+            var prepareResult = await state.Prepare(tid);
+            if (prepareResult && log != null && doLogging) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
+            return prepareResult;
+        }
+
+        private async Task<bool> Prepare_2PC(int tid, int coordinatorKey, FunctionResult result)
+        {
+            var grainIDsInTransaction = new HashSet<int>();
+            grainIDsInTransaction.UnionWith(result.grainsInNestedFunctions.Keys);
+            var hasException = result.exception;
+            var canCommit = !hasException;
+            if (!hasException)
+            {
+                var logTask = Task.CompletedTask;
+                if (log != null) logTask = log.HandleBeforePrepareIn2PC(tid, coordinatorKey, grainIDsInTransaction);
+
+                var prepareResult = new List<Task<bool>>();
+                foreach (var item in result.grainsInNestedFunctions)
+                {
+                    if (item.Key == myID) prepareResult.Add(PrepareA(tid, !item.Value.Item2));
+                    else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.Item1).PrepareA(tid, !item.Value.Item2));
+                }
+                await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
+                foreach (var vote in prepareResult)
+                {
+                    if (vote.Result == false)
+                    {
+                        canCommit = false;
+                        break;
+                    }
+                }
+            }
+            return canCommit;
         }
 
         /**

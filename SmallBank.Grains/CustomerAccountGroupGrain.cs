@@ -134,7 +134,7 @@ namespace SmallBank.Grains
             }
             return res;
         }
-        
+
         public async Task<TransactionResult> MultiTransfer(TransactionContext context, object funcInput)
         {
             var res = new TransactionResult();
@@ -170,6 +170,7 @@ namespace SmallBank.Grains
                             tasks.Add(CallGrain(context, gID, "SmallBank.Grains.CustomerAccountGroupGrain", funcCall));
                         }
                     }
+                    await Task.WhenAll(tasks);
                 }
             }
             catch (Exception)
