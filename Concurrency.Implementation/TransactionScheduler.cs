@@ -208,5 +208,10 @@ namespace Concurrency.Implementation
         {
             return scheduleInfo.getAfterSet(maxBeforeBid, out minAfterBid);
         }
+
+        public Tuple<int, int, bool> getBeforeAfter(int tid)
+        {
+            return scheduleInfo.getBeforeAfter(tid);
+        }
     }
 }

@@ -31,6 +31,8 @@ namespace Concurrency.Implementation
         private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
         private Dictionary<int, IGlobalTransactionCoordinatorGrain> coordList;  // <coordID, coord>
 
+        private int maxBeforeBidOnGrain;
+
         public TransactionExecutionGrain(IPersistSingletonGroup persistSingletonGroup, string myClassName)
         {
             this.persistSingletonGroup = persistSingletonGroup;
@@ -39,6 +41,7 @@ namespace Concurrency.Implementation
 
         public async override Task OnActivateAsync()
         {
+            maxBeforeBidOnGrain = -1;
             myID = (int)this.GetPrimaryKeyLong();
             myFullID = new Tuple<int, string>(myID, myClassName);
             var configTuple = await GrainFactory.GetGrain<IConfigurationManagerGrain>(0).GetConfiguration();
@@ -117,8 +120,13 @@ namespace Concurrency.Implementation
                 await t1;
                 canCommit = !t1.Result.exception;
                 Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myID));
+                var maxBeforeBid = -1;
                 if (canCommit)
                 {
+                    var result = await Prepare_2PC(context.tid, myID, t1.Result.grainsInNestedFunctions, res);
+                    canCommit = result.Item1;
+                    maxBeforeBid = result.Item2;
+                    /*
                     var result = CheckSerializability(t1.Result);
                     canCommit = result.Item1;
                     if (canCommit) canCommit = await Prepare_2PC(context.tid, myID, t1.Result);
@@ -126,11 +134,11 @@ namespace Concurrency.Implementation
                     {
                         if (result.Item2) res.Exp_Serializable = true;
                         else res.Exp_NotSureSerializable = true;
-                    }
+                    }*/
                 }
                 else res.Exp_Deadlock |= t1.Result.Exp_Deadlock;  // when deadlock = false, exception may from RW conflict
 
-                if (canCommit) await Commit_2PC(context.tid, t1.Result);
+                if (canCommit) await Commit_2PC(context.tid, maxBeforeBid, t1.Result.grainsInNestedFunctions);
                 else
                 {
                     res.exception = true;
@@ -306,6 +314,55 @@ namespace Concurrency.Implementation
             return await t;
         }
 
+        // <isCommit, maxBeforeBid>
+        private async Task<Tuple<bool, int>> Prepare_2PC(int tid, int coordinatorKey, Dictionary<int, Tuple<string, bool>> grainsInNestedFunctions, TransactionResult res)
+        {
+            var grainIDsInTransaction = new HashSet<int>();
+            grainIDsInTransaction.UnionWith(grainsInNestedFunctions.Keys);
+            var logTask = Task.CompletedTask;
+            if (log != null) logTask = log.HandleBeforePrepareIn2PC(tid, coordinatorKey, grainIDsInTransaction);
+
+            var prepareResult = new List<Task<Tuple<bool, int, int, bool>>>();
+            foreach (var item in grainsInNestedFunctions)
+            {
+                if (item.Key == myID) prepareResult.Add(Prepare(tid, !item.Value.Item2));
+                else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.Item1).Prepare(tid, !item.Value.Item2));
+            }
+            await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
+
+            var maxBefore = -1;
+            var minAfter = -1;
+            var isConsecutive = true;
+            foreach (var vote in prepareResult)
+            {
+                if (vote.Result.Item1 == false) return new Tuple<bool, int>(false, -1);
+                if (vote.Result.Item2 != -1)
+                {
+                    if (maxBefore == -1) maxBefore = vote.Result.Item2;
+                    else maxBefore = Math.Max(maxBefore, vote.Result.Item2);
+                }
+                if (vote.Result.Item3 != -1)
+                {
+                    if (minAfter == -1) minAfter = vote.Result.Item3;
+                    else minAfter = Math.Min(minAfter, vote.Result.Item3);
+                }
+                isConsecutive &= vote.Result.Item4;
+            }
+
+            // check serializability
+            if (maxBefore <= highestCommittedBid) return new Tuple<bool, int>(true, maxBefore);
+            if (isConsecutive && maxBefore < minAfter) return new Tuple<bool, int>(true, maxBefore);
+            if (maxBefore >= minAfter)
+            {
+                res.exception = true;
+                res.Exp_Serializable = true;
+                return new Tuple<bool, int>(false, -1);
+            }
+            res.exception = true;
+            res.Exp_NotSureSerializable = true;
+            return new Tuple<bool, int>(false, -1);
+        }
+
         // serializable or not, sure or not sure
         public Tuple<bool, bool> CheckSerializability(FunctionResult result)
         {
@@ -316,44 +373,14 @@ namespace Concurrency.Implementation
             return new Tuple<bool, bool>(false, false);
         }
 
-        private async Task<bool> Prepare_2PC(int tid, int coordinatorKey, FunctionResult result)
-        {
-            var grainIDsInTransaction = new HashSet<int>();
-            grainIDsInTransaction.UnionWith(result.grainsInNestedFunctions.Keys);
-            var hasException = result.exception;
-            var canCommit = !hasException;
-            if (!hasException)
-            {
-                var logTask = Task.CompletedTask;
-                if (log != null) logTask = log.HandleBeforePrepareIn2PC(tid, coordinatorKey, grainIDsInTransaction);
-
-                var prepareResult = new List<Task<bool>>();
-                foreach (var item in result.grainsInNestedFunctions)
-                {
-                    if (item.Key == myID) prepareResult.Add(Prepare(tid, !item.Value.Item2));
-                    else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.Item1).Prepare(tid, !item.Value.Item2));
-                }
-                await Task.WhenAll(logTask, Task.WhenAll(prepareResult));
-                foreach (var vote in prepareResult)
-                {
-                    if (vote.Result == false)
-                    {
-                        canCommit = false;
-                        break;
-                    }
-                }
-            }
-            return canCommit;
-        }
-
-        private async Task Commit_2PC(int tid, FunctionResult result)
+        private async Task Commit_2PC(int tid, int maxBeforeBid, Dictionary<int, Tuple<string, bool>> grainsInNestedFunctions)
         {
             var commitTasks = new List<Task>();
             if (log != null) commitTasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));
-            foreach (var item in result.grainsInNestedFunctions)
+            foreach (var item in grainsInNestedFunctions)
             {
-                if (item.Key == myID) commitTasks.Add(Commit(tid, !item.Value.Item2));
-                else commitTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.Item1).Commit(tid, !item.Value.Item2));
+                if (item.Key == myID) commitTasks.Add(Commit(tid, maxBeforeBid, !item.Value.Item2));
+                else commitTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.Item1).Commit(tid, maxBeforeBid, !item.Value.Item2));
             }
             await Task.WhenAll(commitTasks);
         }
@@ -380,9 +407,13 @@ namespace Concurrency.Implementation
             await Task.WhenAll(tasks);
         }
 
-        public async Task Commit(int tid, bool doLogging)
+        public async Task Commit(int tid, int maxBeforeBid, bool doLogging)
         {
             if (state == null) return;
+
+            Debug.Assert(maxBeforeBidOnGrain <= maxBeforeBid);
+            maxBeforeBidOnGrain = maxBeforeBid;
+
             var tasks = new List<Task>();
             tasks.Add(state.Commit(tid));
             if (log != null && doLogging) tasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));
@@ -391,12 +422,18 @@ namespace Concurrency.Implementation
             await Task.WhenAll(tasks);
         }
 
-        public async Task<bool> Prepare(int tid, bool doLogging)
+        // <vote, maxBeforeBid, minAfterBid, isConsecutive>
+        public async Task<Tuple<bool, int, int, bool>> Prepare(int tid, bool doLogging)
         {
-            if (state == null) return true;  // Stateless grain always vote "yes" for 2PC
+            if (state == null) return new Tuple<bool, int, int, bool>(true, -1, -1, true);  // Stateless grain always vote "yes" for 2PC
             var prepareResult = await state.Prepare(tid);
             if (prepareResult && log != null && doLogging) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
-            return prepareResult;
+            if (prepareResult == false) return new Tuple<bool, int, int, bool>(false, -1, -1, true);
+
+            // get maxBefore and minAfter
+            var result = myScheduler.getBeforeAfter(tid);
+            var maxBefore = Math.Max(result.Item1, maxBeforeBidOnGrain);
+            return new Tuple<bool, int, int, bool>(true, maxBefore, result.Item2, result.Item3);
         }
 
         private void Cleanup(int tid)

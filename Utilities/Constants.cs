@@ -14,8 +14,8 @@
         // client config
         public const int numWorker = 1;
         public const bool multiWorker = numWorker > 1;
-        public const int numEpoch = 3;
-        public const int numWarmupEpoch = 0;
+        public const int numEpoch = 6;
+        public const int numWarmupEpoch = 2;
         public const int epochDurationMSecs = 8000;
         public const int numThreadsPerWorkerNode = 1;
         public const int numConnToClusterPerWorkerNode = 1;
@@ -28,7 +28,7 @@
         public const int BASE_NUM_NEWORDER = 20000;
 
         // silo config
-        public const int numSilo = 2;
+        public const int numSilo = 1;
         public const int numCPUPerSilo = 4;
         public const bool multiSilo = numSilo > 1;
         // for snapper

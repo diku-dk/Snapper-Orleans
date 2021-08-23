@@ -6,29 +6,23 @@ namespace Utilities
     [Serializable]
     public class TransactionResult
     {
-        public bool exception;
-        public object resultObject;
-        public bool Exp_Serializable;
-        public bool Exp_NotSureSerializable;
-        public bool Exp_Deadlock;
         public bool isDet = false;
+        public object resultObject;
 
+        public bool exception = false;
+        public bool Exp_Deadlock = false;
+        public bool Exp_Serializable = false;
+        public bool Exp_NotSureSerializable = false;
+        
         public TransactionResult(object res = null)
         {
             resultObject = res;
-            exception = false;
-            Exp_Serializable = false;
-            Exp_NotSureSerializable = false;
-            Exp_Deadlock = false;
         }
 
         public TransactionResult(bool exp, object res)
         {
             resultObject = res;
             exception = exp;
-            Exp_Serializable = false;
-            Exp_NotSureSerializable = false;
-            Exp_Deadlock = false;
         }
     }
 

@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System;
 
 namespace Concurrency.Implementation
 {
@@ -111,6 +112,32 @@ namespace Concurrency.Implementation
         {
             if (isDet) return nodes[id].prev;
             else return nodes[nonDetTxnToScheduleMap[id]].prev;
+        }
+
+        public Tuple<int, int, bool> getBeforeAfter(int tid)   // <max, min, isConsecutive>
+        {
+            var node = nodes[nonDetTxnToScheduleMap[tid]];
+            var prevNode = node.prev;
+            var maxBeforeBid = prevNode.id;
+
+            int minAfterBid;
+            if (node.next != null)
+            {
+                Debug.Assert(node.next.isDet);
+                minAfterBid = node.next.id;
+                return new Tuple<int, int, bool>(maxBeforeBid, minAfterBid, true);
+            }
+
+            minAfterBid = -1;
+            foreach (var key in nodes.Keys)
+            {
+                if (nodes[key].isDet && key > maxBeforeBid)
+                {
+                    if (minAfterBid == -1) minAfterBid = key;
+                    else minAfterBid = Math.Min(minAfterBid, key);
+                }
+            } 
+            return new Tuple<int, int, bool>(maxBeforeBid, minAfterBid, false);    // both may be -1
         }
 
         public HashSet<int> getBeforeSet(int tid, out int maxBeforeBid)
