@@ -123,11 +123,12 @@ namespace Concurrency.Implementation
                 var maxBeforeBid = -1;
                 if (canCommit)
                 {
-
-                    var result = await Prepare_2PC(context.tid, myID, t1.Result.grainsInNestedFunctions, res);
-                    canCommit = result.Item1;
-                    maxBeforeBid = result.Item2;
                     /*
+                     var result = await Prepare_2PC(context.tid, myID, t1.Result.grainsInNestedFunctions, res);
+                     canCommit = result.Item1;
+                     maxBeforeBid = result.Item2;*/
+
+                    maxBeforeBid = t1.Result.maxBeforeBid;
                     var result = CheckSerializability(t1.Result);
                     canCommit = result.Item1;
                     if (canCommit) canCommit = await Prepare_2PC(context.tid, myID, t1.Result);
@@ -135,7 +136,7 @@ namespace Concurrency.Implementation
                     {
                         if (result.Item2) res.Exp_Serializable = true;
                         else res.Exp_NotSureSerializable = true;
-                    }*/
+                    }
                 }
                 else res.Exp_Deadlock |= t1.Result.Exp_Deadlock;  // when deadlock = false, exception may from RW conflict
 
@@ -150,7 +151,7 @@ namespace Concurrency.Implementation
             {
                 Console.WriteLine($"\n Exception(StartTransaction)::{myID}: transaction {startFunc} {context.tid} exception {e.Message}, {e.StackTrace}");
             }
-            if (canCommit && t1.Result.beforeSet.Count != 0 && highestCommittedBid < t1.Result.maxBeforeBid)
+            if (canCommit && highestCommittedBid < t1.Result.maxBeforeBid)
             {
                 var grainID = t1.Result.grainWithHighestBeforeBid;
                 if (grainID == myFullID) await WaitForBatchCommit(t1.Result.maxBeforeBid);
@@ -327,21 +328,13 @@ namespace Concurrency.Implementation
         {
             if (res.grainWithHighestBeforeBid.Item1 == -1) res.grainWithHighestBeforeBid = myFullID;
 
-            int maxBeforeBid, minAfterBid;
-            bool isBeforeAfterConsecutive;
-
             if (res.grainsInNestedFunctions.ContainsKey(myID) == false)
                 res.grainsInNestedFunctions.Add(myID, new Tuple<string, bool>(myClassName, res.isReadOnlyOnGrain));
 
-            var beforeSet = myScheduler.getBeforeSet(tid, out maxBeforeBid);
-            var afterSet = myScheduler.getAfterSet(maxBeforeBid, out minAfterBid);
-            res.beforeSet.UnionWith(beforeSet);
-            res.afterSet.UnionWith(afterSet);
-            if (minAfterBid == int.MaxValue) isBeforeAfterConsecutive = false;
-            else if (maxBeforeBid == int.MinValue) isBeforeAfterConsecutive = true;
-            else if (batchScheduleMap.ContainsKey(minAfterBid) && batchScheduleMap[minAfterBid].lastBid == maxBeforeBid) isBeforeAfterConsecutive = true;
-            else isBeforeAfterConsecutive = false;
-            res.setSchedulingStatistics(maxBeforeBid, minAfterBid, isBeforeAfterConsecutive, myFullID);
+            var result = myScheduler.getBeforeAfter(tid);   // <maxBeforeBid, minAfterBid, isConsecutive>
+            var maxBeforeBid = result.Item1;
+            //if (maxBeforeBidOnGrain > maxBeforeBid) maxBeforeBid = maxBeforeBidOnGrain;  // !!!!!
+            res.setSchedulingStatistics(maxBeforeBid, result.Item2, result.Item3, myFullID);
         }
 
         private async Task<TransactionResult> InvokeFunction(FunctionCall call, TransactionContext context)
@@ -405,10 +398,9 @@ namespace Concurrency.Implementation
         // serializable or not, sure or not sure
         public Tuple<bool, bool> CheckSerializability(FunctionResult result)
         {
-            if (result.beforeSet.Count == 0) return new Tuple<bool, bool>(true, true);
             if (result.maxBeforeBid <= highestCommittedBid) return new Tuple<bool, bool>(true, true);
             if (result.isBeforeAfterConsecutive && result.maxBeforeBid < result.minAfterBid) return new Tuple<bool, bool>(true, true);
-            if (result.maxBeforeBid >= result.minAfterBid) return new Tuple<bool, bool>(false, true);
+            if (result.maxBeforeBid >= result.minAfterBid && result.minAfterBid != -1) return new Tuple<bool, bool>(false, true);
             return new Tuple<bool, bool>(false, false);
         }
 
@@ -450,8 +442,8 @@ namespace Concurrency.Implementation
         {
             if (state == null) return;
 
-            Debug.Assert(maxBeforeBidOnGrain <= maxBeforeBid);
-            maxBeforeBidOnGrain = maxBeforeBid;
+            //Debug.Assert(maxBeforeBidOnGrain <= maxBeforeBid);
+            //maxBeforeBidOnGrain = maxBeforeBid;
 
             var tasks = new List<Task>();
             tasks.Add(state.Commit(tid));

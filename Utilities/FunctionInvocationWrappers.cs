@@ -13,7 +13,7 @@ namespace Utilities
         public bool Exp_Deadlock = false;
         public bool Exp_Serializable = false;
         public bool Exp_NotSureSerializable = false;
-        
+
         public TransactionResult(object res = null)
         {
             resultObject = res;
@@ -34,8 +34,6 @@ namespace Utilities
         public int maxBeforeBid;
         public bool Exp_Deadlock;
         public object resultObject;
-        public HashSet<int> afterSet;
-        public HashSet<int> beforeSet;
         public bool isReadOnlyOnGrain;
         public bool isBeforeAfterConsecutive;
         public Tuple<int, string> grainWithHighestBeforeBid;
@@ -43,14 +41,12 @@ namespace Utilities
 
         public FunctionResult(object resultObject = null)
         {
+            minAfterBid = -1;
+            maxBeforeBid = -1;
             exception = false;
             Exp_Deadlock = false;
             isReadOnlyOnGrain = false;
-            minAfterBid = int.MaxValue;
-            maxBeforeBid = int.MinValue;
-            afterSet = new HashSet<int>();
-            beforeSet = new HashSet<int>();
-            isBeforeAfterConsecutive = false;
+            isBeforeAfterConsecutive = true;
             this.resultObject = resultObject;
             grainWithHighestBeforeBid = new Tuple<int, string>(-1, "");
             grainsInNestedFunctions = new Dictionary<int, Tuple<string, bool>>();
@@ -72,36 +68,24 @@ namespace Utilities
                 }
             }
 
-            if (beforeSet.Count == 0 && afterSet.Count == 0)
+            if (maxBeforeBid < r.maxBeforeBid)   // r.maxBeforeBid != -1
             {
-                grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
                 maxBeforeBid = r.maxBeforeBid;
-                minAfterBid = r.minAfterBid;
-                beforeSet = r.beforeSet;
-                afterSet = r.afterSet;
+                grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
             }
-            else
-            {
-                beforeSet.UnionWith(r.beforeSet);
-                afterSet.UnionWith(r.afterSet);
-                if (maxBeforeBid < r.maxBeforeBid)
-                {
-                    maxBeforeBid = r.maxBeforeBid;
-                    grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
-                }
-                minAfterBid = (minAfterBid > r.minAfterBid) ? r.minAfterBid : minAfterBid;
-                isBeforeAfterConsecutive &= r.isBeforeAfterConsecutive;
-            }
+
+            if (r.minAfterBid != -1 || r.minAfterBid < minAfterBid) minAfterBid = r.minAfterBid;   // r.minAfterBid != -1
+            isBeforeAfterConsecutive &= r.isBeforeAfterConsecutive;
         }
 
         public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, bool consecutive, Tuple<int, string> id)
         {
-            if (this.maxBeforeBid < maxBeforeBid)
+            if (this.maxBeforeBid < maxBeforeBid)   // maxBeforeBid != -1
             {
                 this.maxBeforeBid = maxBeforeBid;
                 grainWithHighestBeforeBid = id;
             }
-            this.minAfterBid = (this.minAfterBid > minAfterBid) ? minAfterBid : this.minAfterBid;
+            if (minAfterBid != -1 && minAfterBid < this.minAfterBid) this.minAfterBid = minAfterBid;
             isBeforeAfterConsecutive &= consecutive;
 
         }
@@ -113,7 +97,7 @@ namespace Utilities
         public readonly string funcName;
         public readonly object funcInput;
         public readonly Type grainClassName;
-        
+
         public FunctionCall(string funcName, object funcInput, Type grainClassName)
         {
             this.funcName = funcName;
