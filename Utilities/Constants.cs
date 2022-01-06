@@ -40,7 +40,7 @@
         public const int NUM_GRAIN_PER_W = 1 + 1 + 2 * NUM_D_PER_W + NUM_StockGrain_PER_W + NUM_D_PER_W * NUM_OrderGrain_PER_D;
 
         public const bool enableAzureClustering = false;
-        public const string connectionString = "";   // primary connection string
+        public const string connectionString = "DefaultEndpointsProtocol=https;AccountName=silo-membership-table;AccountKey=cyNmVPVYxlTeepACZWayOBtK4yuN5N733nBcaolrVtDjQd8Y04e263oZt8nKWLHNLAVPsMvyU6gO7dHUawmy3A==;TableEndpoint=https://silo-membership-table.table.cosmos.azure.com:443/;";   // primary connection string
 
         public const string TPCC_namespace = "TPCC.Grain.";
         public const string SmallBank_namespace = "SmallBank.Grain.";
@@ -64,11 +64,11 @@
         public const string ClusterSilo = "ec2";
         public const string ServiceID = "Snapper";
         public const string LogTable = "SnapperLog";
-        public const string ServiceRegion = "";
-        public const string AccessKey = "";
+        public const string ServiceRegion = "us-east-2a";
+        public const string AccessKey = "AKIAQHVFG6FCI24D3EFV";
         public const string GrainStateTable = "SnapperGrainStateTable";
         public const string SiloMembershipTable = "SnapperMembershipTable";
-        public const string SecretKey = "";
+        public const string SecretKey = "4ZqPYtEtNxht7PwJGySzVqTJtSYmfuGcuVuy3Dsk";
 
         // for workload generation
         public const int BASE_NUM_MULTITRANSFER = 150000;
