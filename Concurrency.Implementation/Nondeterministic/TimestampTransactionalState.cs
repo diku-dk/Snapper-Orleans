@@ -67,7 +67,7 @@ namespace Concurrency.Implementation.Nondeterministic
             copy = (TState)state.Clone();
             info = new TransactionStateInfo(tid, lastNode.data.tid, tid, Status.Executing, copy);
             node = transactionList.Append(info);
-            transactionMap.Add(tid, node);  
+            transactionMap.Add(tid, node);
             return Task.FromResult<TState>(copy);
         }
 
@@ -147,7 +147,7 @@ namespace Concurrency.Implementation.Nondeterministic
             {
                 Debug.Assert(readDependencyMap[tid] <= lastCommitTid);
                 readDependencyMap.Remove(tid);
-            } 
+            }
             if (!transactionMap.ContainsKey(tid)) return;
 
             // Commit read-write transactions (tid's all dependent transactions must have already committed)

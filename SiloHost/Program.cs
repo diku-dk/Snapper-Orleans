@@ -63,7 +63,6 @@ namespace OrleansSiloHost
 
         private static async Task<ISiloHost> StartSilo()
         {
-
             var builder = new SiloHostBuilder()
                 .UseLocalhostClustering()
                 .Configure<ClusterOptions>(options =>
@@ -76,14 +75,10 @@ namespace OrleansSiloHost
                     // Set the value of CollectionAge to 10 minutes for all grain
                     options.CollectionAge = TimeSpan.FromMinutes(1000);
                 })
-                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback);
+                .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
+                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
+                .ConfigureServices(ConfigureServices);
             //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
-
-            if (enableOrleansTxn)
-                builder
-                    .AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; })
-                    .UseTransactions();
-            else builder.AddMemoryGrainStorageAsDefault();
 
             var host = builder.Build();
             await host.StartAsync();
@@ -137,8 +132,6 @@ namespace OrleansSiloHost
                         .AddFileTransactionalStateStorageAsDefault(opts =>
                         {
                             opts.InitStage = ServiceLifecycleStage.ApplicationServices;
-                            opts.numSingleton = 1;
-                            opts.maxNumWaitLog = 1;
                         });
                     //.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
                 }

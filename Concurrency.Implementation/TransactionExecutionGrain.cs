@@ -44,31 +44,30 @@ namespace Concurrency.Implementation
             maxBeforeBidOnGrain = -1;
             myID = (int)this.GetPrimaryKeyLong();
             myFullID = new Tuple<int, string>(myID, myClassName);
-            var configTuple = await GrainFactory.GetGrain<IConfigurationManagerGrain>(0).GetConfiguration();
             // <nonDetCCType, loggingConfig, numCoord>
-            coordID = myID % configTuple.Item3;
+            coordID = myID % Constants.numCoordPerSilo;
             myCoord = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(coordID);
-            state = new HybridState<TState>(configTuple.Item1);
-            var loggingConfig = configTuple.Item2;
-            switch (loggingConfig.loggingType)
+            state = new HybridState<TState>(Constants.ccType);
+
+            switch (Constants.loggingType)
             {
                 case LoggingType.NOLOGGING:
                     break;
                 case LoggingType.ONGRAIN:
-                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, loggingConfig);
+                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID);
                     break;
                 case LoggingType.PERSISTGRAIN:
-                    var persistGrainID = Helper.MapGrainIDToPersistItemID(loggingConfig.numPersistItem, myID);
+                    var persistGrainID = Helper.MapGrainIDToPersistItemID(Constants.numPersistItemPerSilo, myID);
                     var persistGrain = GrainFactory.GetGrain<IPersistGrain>(persistGrainID);
-                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, loggingConfig, persistGrain);
+                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, persistGrain);
                     break;
                 case LoggingType.PERSISTSINGLETON:
-                    var persistWorkerID = Helper.MapGrainIDToPersistItemID(loggingConfig.numPersistItem, myID);
+                    var persistWorkerID = Helper.MapGrainIDToPersistItemID(Constants.numPersistItemPerSilo, myID);
                     var persistWorker = persistSingletonGroup.GetSingleton(persistWorkerID);
-                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, loggingConfig, persistWorker);
+                    log = new Simple2PCLoggingProtocol<TState>(GetType().ToString(), myID, persistWorker);
                     break;
                 default:
-                    throw new Exception($"Exception: Unknown loggingType {loggingConfig.loggingType}");
+                    throw new Exception($"Exception: Unknown loggingType {Constants.loggingType}");
             }
 
             highestCommittedBid = -1;
@@ -333,7 +332,7 @@ namespace Concurrency.Implementation
 
             var result = myScheduler.getBeforeAfter(tid);   // <maxBeforeBid, minAfterBid, isConsecutive>
             var maxBeforeBid = result.Item1;
-            //if (maxBeforeBidOnGrain > maxBeforeBid) maxBeforeBid = maxBeforeBidOnGrain;  // !!!!!
+            if (maxBeforeBidOnGrain > maxBeforeBid) maxBeforeBid = maxBeforeBidOnGrain;
             res.setSchedulingStatistics(maxBeforeBid, result.Item2, result.Item3, myFullID);
         }
 

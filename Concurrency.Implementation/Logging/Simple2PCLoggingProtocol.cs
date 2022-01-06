@@ -21,17 +21,17 @@ namespace Concurrency.Implementation.Logging
         private bool usePersistSingleton = false;
         private IPersistWorker persistWorker;
 
-        public Simple2PCLoggingProtocol(string grainType, int grainID, LoggingConfiguration loggingConfig, object persistItem = null)
+        public Simple2PCLoggingProtocol(string grainType, int grainID, object persistItem = null)
         {
             this.grainID = grainID;
             sequenceNumber = 0;
 
-            switch (loggingConfig.loggingType)
+            switch (Constants.loggingType)
             {
                 case LoggingType.NOLOGGING:
                     break;
                 case LoggingType.ONGRAIN:
-                    switch (loggingConfig.storageType)
+                    switch (Constants.storageType)
                     {
                         case StorageType.FILESYSTEM:
                             logStorage = new FileKeyValueStorageWrapper(grainType, grainID);
@@ -43,7 +43,7 @@ namespace Concurrency.Implementation.Logging
                             logStorage = new InMemoryStorageWrapper();
                             break;
                         default:
-                            throw new Exception($"Exception: Unknown StorageWrapper {loggingConfig.storageType}");
+                            throw new Exception($"Exception: Unknown StorageWrapper {Constants.storageType}");
                     }
                     break;
                 case LoggingType.PERSISTGRAIN:
@@ -57,10 +57,10 @@ namespace Concurrency.Implementation.Logging
                     persistWorker = (IPersistWorker)persistItem;
                     break;
                 default:
-                    throw new Exception($"Exception: Unknown loggingType {loggingConfig.loggingType}");
+                    throw new Exception($"Exception: Unknown loggingType {Constants.loggingType}");
             }
 
-            switch (loggingConfig.serializerType)
+            switch (Constants.serializerType)
             {
                 case SerializerType.BINARY:
                     serializer = new BinarySerializer();
@@ -69,7 +69,7 @@ namespace Concurrency.Implementation.Logging
                     serializer = new MsgPackSerializer();
                     break;
                 default:
-                    throw new Exception($"Exception: Unknown serailizer {loggingConfig.serializerType}");
+                    throw new Exception($"Exception: Unknown serailizer {Constants.serializerType}");
             }
         }
 

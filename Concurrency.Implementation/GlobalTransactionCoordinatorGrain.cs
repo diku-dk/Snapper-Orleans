@@ -298,7 +298,7 @@ namespace Concurrency.Implementation
             if (batchesWaitingForCommit.ContainsKey(bid)) batchesWaitingForCommit.Remove(bid);
         }
 
-        public Task SpawnCoordinator(int numCoord, LoggingConfiguration loggingConfig)
+        public Task SpawnCoordinator()
         {
             Debug.Assert(deterministicTransactionRequests.Count == 0);
 
@@ -310,34 +310,34 @@ namespace Concurrency.Implementation
             numtidsPreAllocated = 0;
             smoothingPreAllocationFactor = 0.5f;
 
-            neighborID = (myID + 1) % numCoord;
-            for (int i = 0; i < numCoord; i++)
+            neighborID = (myID + 1) % Constants.numCoordPerSilo;
+            for (int i = 0; i < Constants.numCoordPerSilo; i++)
             {
                 var coord = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(i);
                 coordList.Add(coord);
             }
 
-            switch (loggingConfig.loggingType)
+            switch (Constants.loggingType)
             {
                 case LoggingType.NOLOGGING:
                     break;
                 case LoggingType.ONGRAIN:
-                    log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, loggingConfig);
+                    log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID);
                     break;
                 case LoggingType.PERSISTGRAIN:
-                    var persistGrainID = Helper.MapGrainIDToPersistItemID(loggingConfig.numPersistItem, myID);
+                    var persistGrainID = Helper.MapGrainIDToPersistItemID(Constants.numPersistItemPerSilo, myID);
                     var persistGrain = GrainFactory.GetGrain<IPersistGrain>(persistGrainID);
-                    log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, loggingConfig, persistGrain);
+                    log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, persistGrain);
                     break;
                 case LoggingType.PERSISTSINGLETON:
-                    var persistWorkerID = Helper.MapGrainIDToPersistItemID(loggingConfig.numPersistItem, myID);
+                    var persistWorkerID = Helper.MapGrainIDToPersistItemID(Constants.numPersistItemPerSilo, myID);
                     var persistWorker = persistSingletonGroup.GetSingleton(persistWorkerID);
-                    log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, loggingConfig, persistWorker);
+                    log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, persistWorker);
                     break;
                 default:
-                    throw new Exception($"Exception: Unknown loggingType {loggingConfig.loggingType}");
+                    throw new Exception($"Exception: Unknown loggingType {Constants.loggingType}");
             }
-            Console.WriteLine($"Coord {myID} initialize logging {loggingConfig.loggingType}.");
+            Console.WriteLine($"Coord {myID} initialize logging {Constants.loggingType}.");
 
             return Task.CompletedTask;
         }

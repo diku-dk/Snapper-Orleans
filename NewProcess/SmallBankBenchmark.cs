@@ -19,14 +19,14 @@ namespace NewProcess
         {
             this.isDet = isDet;
             config = workloadConfig;
-            if (config.grainImplementationType == ImplementationType.SNAPPER) grain_namespace = "SmallBank.Grains.CustomerAccountGroupGrain";
+            if (Constants.implementationType == ImplementationType.SNAPPER) grain_namespace = "SmallBank.Grains.CustomerAccountGroupGrain";
             else grain_namespace = "";
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
         }
 
         private Task<TransactionResult> Execute(IClusterClient client, int grainId, string startFunc, object funcInput, Dictionary<int, Tuple<string, int>> grainAccessInfo)
         {
-            switch (config.grainImplementationType)
+            switch (Constants.implementationType)
             {
                 case ImplementationType.SNAPPER:
                     var grain = client.GetGrain<ICustomerAccountGroupGrain>(grainId);
@@ -43,21 +43,14 @@ namespace NewProcess
             }
         }
 
-        private int getAccountForGrain(int grainId)
-        {
-            return grainId * config.numAccountsPerGroup;
-        }
-
         public Task<TransactionResult> newTransaction(IClusterClient client, RequestData data)
         {
             var accountGrains = data.grains;
             //accountGrains.Sort();
             var grainAccessInfo = new Dictionary<int, Tuple<string, int>>();
-            if (config.mixture[0] == 100)
-            {
-                grainAccessInfo.Add(accountGrains[0], new Tuple<string, int>(grain_namespace, 1));
-                return Execute(client, accountGrains[0], "Balance", null, grainAccessInfo);
-            }
+            /*
+            grainAccessInfo.Add(accountGrains[0], new Tuple<string, int>(grain_namespace, 1));
+            return Execute(client, accountGrains[0], "Balance", null, grainAccessInfo);*/
 
             // no deadlock
             /*
@@ -82,13 +75,11 @@ namespace NewProcess
                 {
                     first = false;
                     groupId = item;
-                    grainAccessInfo.Add(groupId, new Tuple<string, int>(grain_namespace, 1));
-                    int sourceId = getAccountForGrain(item);
-                    item1 = new Tuple<string, int>(sourceId.ToString(), sourceId);
+                    grainAccessInfo.Add(item, new Tuple<string, int>(grain_namespace, 1));
+                    item1 = new Tuple<string, int>(item.ToString(), item);
                     continue;
                 }
-                int destAccountId = getAccountForGrain(item);
-                item3.Add(new Tuple<string, int>(destAccountId.ToString(), destAccountId));
+                item3.Add(new Tuple<string, int>(item.ToString(), item));
                 grainAccessInfo.Add(item, new Tuple<string, int>(grain_namespace, 1));
             }
             var args = new Tuple<Tuple<string, int>, float, List<Tuple<string, int>>>(item1, item2, item3);

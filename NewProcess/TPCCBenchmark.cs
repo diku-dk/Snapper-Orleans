@@ -20,7 +20,7 @@ namespace NewProcess
 
         private Task<TransactionResult> Execute(IClusterClient client, int grainId, string startFunc, object funcInput, Dictionary<int, Tuple<string, int>> grainAccessInfo)
         {
-            switch (config.grainImplementationType)
+            switch (Constants.implementationType)
             {
                 case ImplementationType.SNAPPER:
                     var grain = client.GetGrain<ICustomerGrain>(grainId);

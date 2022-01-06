@@ -51,19 +51,6 @@ namespace Utilities
             return (((part1 | part2) + C) % (y - x + 1)) + x;
         }
 
-        public static bool intraSilo(int numCoord, int source, bool isSourceCoord, int dest, bool isDestCoord)
-        {
-            int sourceSilo;
-            int destSilo;
-            if (isSourceCoord) sourceSilo = source / Constants.numCoordPerSilo;
-            else sourceSilo = (source % numCoord) / Constants.numCoordPerSilo;
-
-            if (isDestCoord) destSilo = dest / Constants.numCoordPerSilo;
-            else destSilo = (dest % numCoord) / Constants.numCoordPerSilo;
-
-            return sourceSilo == destSilo;
-        }
-
         public static string GetLocalIPAddress()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());

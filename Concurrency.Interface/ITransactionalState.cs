@@ -3,7 +3,7 @@ using Orleans.Concurrency;
 using System.Threading.Tasks;
 
 namespace Concurrency.Interface
-{    
+{
     public interface ITransactionalState<TState>
     {
         [AlwaysInterleave]

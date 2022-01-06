@@ -136,7 +136,7 @@ namespace Concurrency.Implementation
                     if (minAfterBid == -1) minAfterBid = key;
                     else minAfterBid = Math.Min(minAfterBid, key);
                 }
-            } 
+            }
             return new Tuple<int, int, bool>(maxBeforeBid, minAfterBid, false);    // both may be -1
         }
 

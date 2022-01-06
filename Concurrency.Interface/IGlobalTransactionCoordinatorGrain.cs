@@ -7,9 +7,6 @@ using System.Collections.Generic;
 
 namespace Concurrency.Interface
 {
-    struct Message<T>
-    {
-    }
     public interface IGlobalTransactionCoordinatorGrain : IGrainWithIntegerKey
     {
         /// <summary>
@@ -38,7 +35,7 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task PassToken(BatchToken token);
 
-        Task SpawnCoordinator(int numCoord, LoggingConfiguration loggingConfig);
+        Task SpawnCoordinator();
 
         /// <summary>
         /// Actors call this function to notify coordinator that a transaction has been completed locally. 

@@ -5,7 +5,7 @@ using Utilities;
 namespace Concurrency.Implementation.Logging
 {
     public enum LogType { PREPARE, COMMIT, ABORT, DET_PREPARE, DET_COMPLETE, DET_COMMIT };
-    
+
     [Serializable]
     public class LogFormat<TState>
     {

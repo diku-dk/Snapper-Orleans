@@ -6,34 +6,23 @@ namespace Utilities
     [Serializable]
     public class WorkloadConfiguration
     {
-        public int numConnToClusterPerWorkerNode;
-        public int numWorkerNodes;
-        public int numThreadsPerWorkerNode;
-        public int asyncMsgLengthPerThread;
-        public BenchmarkType benchmark;
+        // benchmarkframework setting
         public int numEpochs;
         public int epochDurationMSecs;
-        public Distribution distribution;
-        public float zipfianConstant;
-        public float deterministicTxnPercent;
-        public ImplementationType grainImplementationType;
+        public int numThreadsPerWorkerNode;
+        public int numConnToClusterPerWorkerNode;
         public int[] percentilesToCalculate;
 
-        // SmallBank specific configurations
-        public int numAccounts;
-        public int numAccountsPerGroup;
-        public int[] mixture;                  // {getBalance, depositChecking, transder, transacSaving, writeCheck, multiTransfer}
-        public int numAccountsMultiTransfer;
-        public int numGrainsMultiTransfer;
-
-        // TPCC specific configurations
-        public int numWarehouse;
-        public int numItemGrain;
-        public int numOrderGrain;
-        public int numStockGrain;
-        public int numCustomerGrain;
-        public int numDistrictGrain;
-        public int numWarehouseGrain;
+        // workload config
+        public BenchmarkType benchmark;
+        public int txnSize;
+        public int actPipeSize;
+        public int pactPipeSize;
+        public Distribution distribution;
+        public float txnSkewness;
+        public float grainSkewness;
+        public float zipfianConstant;
+        public int pactPercent;
     }
 
     [Serializable]

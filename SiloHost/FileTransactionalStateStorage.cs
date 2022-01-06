@@ -31,7 +31,7 @@ namespace OrleansSiloHost
             this.name = name;
             this.options = options;
             this.persistSingletonGroup = persistSingletonGroup;
-            persistSingletonGroup.Init(options.numSingleton, options.maxNumWaitLog, true);
+            persistSingletonGroup.Init();
         }
 
         public ITransactionalStateStorage<TState> Create<TState>(string stateName, IGrainActivationContext context) where TState : class, new()
@@ -40,7 +40,7 @@ namespace OrleansSiloHost
             var strs = str.Split('/', StringSplitOptions.RemoveEmptyEntries);
             var partitionKey = strs[strs.Length - 1];    // use grainID (long) as partitionKey
             var grainID = int.Parse(partitionKey);
-            var persistWorker = persistSingletonGroup.GetSingleton(Helper.MapGrainIDToPersistItemID(options.numSingleton, grainID));
+            var persistWorker = persistSingletonGroup.GetSingleton(Helper.MapGrainIDToPersistItemID(Constants.numPersistItemPerSilo, grainID));
             return ActivatorUtilities.CreateInstance<FileTransactionalStateStorage<TState>>(context.ActivationServices, persistWorker, partitionKey);
         }
 

@@ -14,12 +14,12 @@ namespace Concurrency.Implementation
         private CommittedState<TState> myState;
 
         // when execution grain is initialized, its hybrid state is initialized
-        public HybridState(ConcurrencyType type = ConcurrencyType.TIMESTAMP) : this(new TState(), type)
+        public HybridState(CCType type = CCType.S2PL) : this(new TState(), type)
         {
             ;
         }
 
-        public HybridState(TState state, ConcurrencyType type = ConcurrencyType.TIMESTAMP)
+        public HybridState(TState state, CCType type = CCType.S2PL)
         {
             this.myState = new CommittedState<TState>(state);
             // detStateManager: it's read and write operation will return the state directly
@@ -27,10 +27,10 @@ namespace Concurrency.Implementation
             detStateManager = new Deterministic.DeterministicTransactionalState<TState>();
             switch (type)
             {
-                case ConcurrencyType.S2PL:
+                case CCType.S2PL:
                     nonDetStateManager = new Nondeterministic.S2PLTransactionalState<TState>();
                     break;
-                case ConcurrencyType.TIMESTAMP:
+                case CCType.TS:
                     nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
                     break;
             }

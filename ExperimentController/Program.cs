@@ -16,83 +16,54 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using MathNet.Numerics.Statistics;
 using System.Collections.Specialized;
-using Concurrency.Interface.Nondeterministic;
 
 namespace ExperimentController
 {
     class Program
     {
-        static int vCPU = 0;
         static string filePath;
         static StreamWriter file;
-        static int batchInterval;
         static string sinkAddress;
-        static int numWorkerNodes;
         static int numWarmupEpoch;
-        static int numCoordinators;
         static string workerAddress;
         static IClusterClient client;
         static ISerializer serializer;
         static WorkloadResults[,] results;
         static CountdownEvent ackedWorkers;
-        static ConcurrencyType nonDetCCType;
         static WorkloadConfiguration workload;
         static volatile bool loadingDone = false;
-        static LoggingConfiguration loggingConfig;
         static IConfigurationManagerGrain configGrain;
         static volatile bool asyncInitializationDone = false;
 
         private static void GenerateWorkLoadFromSettingsFile()
         {
-            //Parse and initialize benchmarkframework section
+            // Parse and initialize benchmarkframework section
             var benchmarkFrameWorkSection = ConfigurationManager.GetSection("BenchmarkFrameworkConfig") as NameValueCollection;
-            workload.numWorkerNodes = int.Parse(benchmarkFrameWorkSection["numWorkerNodes"]);
-            workload.numConnToClusterPerWorkerNode = int.Parse(benchmarkFrameWorkSection["numConnToClusterPerWorkerNode"]);
-            workload.numThreadsPerWorkerNode = int.Parse(benchmarkFrameWorkSection["numThreadsPerWorkerNode"]);
-            workload.epochDurationMSecs = int.Parse(benchmarkFrameWorkSection["epochDurationMSecs"]);
-            workload.numEpochs = int.Parse(benchmarkFrameWorkSection["numEpochs"]);
+            workload.numEpochs = int.Parse(benchmarkFrameWorkSection["numEpoch"]);
             numWarmupEpoch = int.Parse(benchmarkFrameWorkSection["numWarmupEpoch"]);
-            workload.asyncMsgLengthPerThread = int.Parse(benchmarkFrameWorkSection["asyncMsgLengthPerThread"]);
+            workload.epochDurationMSecs = int.Parse(benchmarkFrameWorkSection["epochDurationMSecs"]);
+            workload.numThreadsPerWorkerNode = int.Parse(benchmarkFrameWorkSection["numThreadsPerWorkerNode"]);
+            workload.numConnToClusterPerWorkerNode = int.Parse(benchmarkFrameWorkSection["numConnToClusterPerWorkerNode"]);
             workload.percentilesToCalculate = Array.ConvertAll(benchmarkFrameWorkSection["percentilesToCalculate"].Split(","), x => int.Parse(x));
 
-            //Parse Snapper configuration
-            var snapperConfigSection = ConfigurationManager.GetSection("SnapperConfig") as NameValueCollection;
-            nonDetCCType = Enum.Parse<ConcurrencyType>(snapperConfigSection["nonDetCCType"]);
-            var maxNonDetWaitingLatencyInMSecs = int.Parse(snapperConfigSection["maxNonDetWaitingLatencyInMSecs"]);
-            batchInterval = int.Parse(snapperConfigSection["batchIntervalMSecs"]);
-            var idleIntervalTillBackOffSecs = int.Parse(snapperConfigSection["idleIntervalTillBackOffSecs"]);
-            var backoffIntervalMsecs = int.Parse(snapperConfigSection["backoffIntervalMsecs"]);
-            numCoordinators = int.Parse(snapperConfigSection["numCoordinators"]);
-            var loggingType = Enum.Parse<LoggingType>(snapperConfigSection["loggingType"]);
-            var storageType = Enum.Parse<StorageType>(snapperConfigSection["storageType"]);
-            var serializerType = Enum.Parse<SerializerType>(snapperConfigSection["serializerType"]);
-            numPersistItem = int.Parse(snapperConfigSection["numPersistItem"]);
-            var loggingBatchSize = int.Parse(snapperConfigSection["loggingBatchSize"]);
-
-            //Parse workload specific configuration, assumes only one defined in file
+            // Parse workload specific configuration, assumes only one defined in file
             var benchmarkConfigSection = ConfigurationManager.GetSection("BenchmarkConfig") as NameValueCollection;
             workload.benchmark = Enum.Parse<BenchmarkType>(benchmarkConfigSection["benchmark"]);
+            workload.txnSize = int.Parse(benchmarkConfigSection["txnSize"]);
+            workload.actPipeSize = int.Parse(benchmarkConfigSection["actPipeSize"]);
+            workload.pactPipeSize = int.Parse(benchmarkConfigSection["pactPipeSize"]);
             workload.distribution = Enum.Parse<Distribution>(benchmarkConfigSection["distribution"]);
+            workload.txnSkewness = float.Parse(benchmarkConfigSection["txnSkewness"]);
+            workload.grainSkewness = float.Parse(benchmarkConfigSection["grainSkewness"]);
             workload.zipfianConstant = float.Parse(benchmarkConfigSection["zipfianConstant"]);
-            workload.deterministicTxnPercent = float.Parse(benchmarkConfigSection["deterministicTxnPercent"]);
-            workload.mixture = Array.ConvertAll(benchmarkConfigSection["mixture"].Split(","), x => int.Parse(x));
-
-            workload.numAccounts = int.Parse(benchmarkConfigSection["numAccounts"]);
-            workload.numAccountsPerGroup = int.Parse(benchmarkConfigSection["numAccountsPerGroup"]);
-            workload.numAccountsMultiTransfer = int.Parse(benchmarkConfigSection["numAccountsMultiTransfer"]);
-            workload.numGrainsMultiTransfer = int.Parse(benchmarkConfigSection["numGrainsMultiTransfer"]);
-            workload.grainImplementationType = Enum.Parse<ImplementationType>(benchmarkConfigSection["grainImplementationType"]);
-
-            var batching = false;
-            if (workload.benchmark == BenchmarkType.TPCC) batching = false;
-            loggingConfig = new LoggingConfiguration(loggingType, storageType, serializerType, numPersistItem, loggingBatchSize, batching);
+            workload.pactPercent = int.Parse(benchmarkConfigSection["pactPercent"]);
             Console.WriteLine("Generated workload configuration");
         }
 
         private static void AggregateResultsAndPrint()
         {
             Trace.Assert(workload.numEpochs >= 1);
-            Trace.Assert(numWorkerNodes >= 1);
+            Trace.Assert(Constants.numWorker >= 1);
             var aggLatencies = new List<double>();
             var aggDetLatencies = new List<double>();
             var detThroughPutAccumulator = new List<float>();
@@ -116,7 +87,7 @@ namespace ExperimentController
                 long aggEndTime = results[epochNumber, 0].endTime;
                 aggLatencies.AddRange(results[epochNumber, 0].latencies);
                 aggDetLatencies.AddRange(results[epochNumber, 0].det_latencies);
-                for (int workerNode = 1; workerNode < numWorkerNodes; workerNode++)
+                for (int workerNode = 1; workerNode < Constants.numWorker; workerNode++)
                 {
                     aggNumDetCommitted += results[epochNumber, workerNode].numDetCommitted;
                     aggNumNonDetCommitted += results[epochNumber, workerNode].numNonDetCommitted;
@@ -135,7 +106,7 @@ namespace ExperimentController
                 float nonDetCommittedTxnThroughput = (float)aggNumNonDetCommitted * 1000 / time;
                 double abortRate = 0;
                 var numAbort = aggNumNonDetTransactions - aggNumNonDetCommitted;
-                if (workload.deterministicTxnPercent < 100)
+                if (workload.pactPercent < 100)
                 {
                     abortRate = numAbort * 100.0 / aggNumNonDetTransactions;    // the abort rate is based on all non-det txns
                     if (numAbort > 0)
@@ -163,26 +134,26 @@ namespace ExperimentController
             var notSureSerializableRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(notSureSerializableRateAccumulator.ToArray());
             var deadlockRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(deadlockRateAccumulator.ToArray());
             var ioThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(ioThroughputAccumulator.ToArray());
-            using (file = new System.IO.StreamWriter(filePath, true))
+            using (file = new StreamWriter(filePath, true))
             {
-                file.Write($"numWarehouse={workload.numWarehouse} siloCPU={vCPU} distribution={workload.distribution} benchmark={workload.benchmark} ");
-                file.Write($"{workload.deterministicTxnPercent}% ");
-                if (workload.deterministicTxnPercent > 0) file.Write($"{detThroughputMeanAndSd.Item1} {detThroughputMeanAndSd.Item2} ");
-                if (workload.deterministicTxnPercent < 100)
+                file.Write($"numWarehouse={Constants.NUM_W_PER_SILO} siloCPU={Constants.numCPUPerSilo} distribution={workload.distribution} benchmark={workload.benchmark} ");
+                file.Write($"{workload.pactPercent}% ");
+                if (workload.pactPercent > 0) file.Write($"{detThroughputMeanAndSd.Item1} {detThroughputMeanAndSd.Item2} ");
+                if (workload.pactPercent < 100)
                 {
                     file.Write($"{nonDetThroughputMeanAndSd.Item1} {nonDetThroughputMeanAndSd.Item2} ");
                     file.Write($"{abortRateMeanAndSd.Item1}% ");
-                    if (workload.deterministicTxnPercent > 0)
+                    if (workload.pactPercent > 0)
                     {
                         var abortRWConflict = 100 - deadlockRateMeanAndSd.Item1 - notSerializableRateMeanAndSd.Item1 - notSureSerializableRateMeanAndSd.Item1;
                         file.Write($"{abortRWConflict}% {deadlockRateMeanAndSd.Item1}% {notSerializableRateMeanAndSd.Item1}% {notSureSerializableRateMeanAndSd.Item1}% ");
                     }
                 }
-                if (workload.grainImplementationType == ImplementationType.SNAPPER)
+                if (Constants.implementationType == ImplementationType.SNAPPER)
                 {
                     //file.Write($"{ioThroughputMeanAndSd.Item1} {ioThroughputMeanAndSd.Item2} ");   // number of IOs per second
                 }
-                if (workload.deterministicTxnPercent > 0)
+                if (workload.pactPercent > 0)
                 {
                     foreach (var percentile in workload.percentilesToCalculate)
                     {
@@ -190,7 +161,7 @@ namespace ExperimentController
                         file.Write($"{lat} ");
                     }
                 }
-                if (workload.deterministicTxnPercent < 100)
+                if (workload.pactPercent < 100)
                 {
                     foreach (var percentile in workload.percentilesToCalculate)
                     {
@@ -201,8 +172,8 @@ namespace ExperimentController
                 file.WriteLine();
             }
             /*
-            if (workload.deterministicTxnPercent == 100) filePath = Constants.dataPath + $"PACT_{workload.numAccountsMultiTransfer}.txt";
-            if (workload.deterministicTxnPercent == 0)
+            if (workload.pactPercent == 100) filePath = Constants.dataPath + $"PACT_{workload.numAccountsMultiTransfer}.txt";
+            if (workload.pactPercent == 0)
             {
                 if (nonDetCCType == ConcurrencyType.TIMESTAMP) filePath = Constants.dataPath + $"TS_{workload.numAccountsMultiTransfer}.txt";
                 if (nonDetCCType == ConcurrencyType.S2PL) filePath = Constants.dataPath + $"2PL_{workload.numAccountsMultiTransfer}.txt";
@@ -218,7 +189,7 @@ namespace ExperimentController
         private static void WaitForWorkerAcksAndReset()
         {
             ackedWorkers.Wait();
-            ackedWorkers.Reset(numWorkerNodes); //Reset for next ack, not thread-safe but provides visibility, ok for us to use due to lock-stepped (distributed producer/consumer) usage pattern i.e., Reset will never called concurrently with other functions (Signal/Wait)            
+            ackedWorkers.Reset(Constants.numWorker); //Reset for next ack, not thread-safe but provides visibility, ok for us to use due to lock-stepped (distributed producer/consumer) usage pattern i.e., Reset will never called concurrently with other functions (Signal/Wait)            
         }
 
         static void PushToWorkers()
@@ -232,21 +203,21 @@ namespace ExperimentController
                 Console.WriteLine($"wait for worker to connect");
                 //Wait for the workers to connect to controller
                 WaitForWorkerAcksAndReset();
-                Console.WriteLine($"{numWorkerNodes} worker nodes have connected to Controller");
+                Console.WriteLine($"{Constants.numWorker} worker nodes have connected to Controller");
                 //Send the workload configuration
-                Console.WriteLine($"Sent workload configuration to {numWorkerNodes} worker nodes");
+                Console.WriteLine($"Sent workload configuration to {Constants.numWorker} worker nodes");
                 var msg = new NetworkMessageWrapper(Utilities.MsgType.WORKLOAD_INIT);
                 msg.contents = serializer.serialize(workload);
                 workers.SendMoreFrame("WORKLOAD_INIT").SendFrame(serializer.serialize(msg));
                 Console.WriteLine($"Coordinator waits for WORKLOAD_INIT_ACK");
                 //Wait for acks for the workload configuration
                 WaitForWorkerAcksAndReset();
-                Console.WriteLine($"Receive workload configuration ack from {numWorkerNodes} worker nodes");
+                Console.WriteLine($"Receive workload configuration ack from {Constants.numWorker} worker nodes");
 
                 IOcount = new long[workload.numEpochs];
                 for (int i = 0; i < workload.numEpochs; i++)
                 {
-                    if (workload.grainImplementationType == ImplementationType.SNAPPER)
+                    if (Constants.implementationType == ImplementationType.SNAPPER)
                     {
                         SetIOCount();
                         while (!setCountFinish) Thread.Sleep(100);
@@ -254,13 +225,13 @@ namespace ExperimentController
                     }
 
                     //Send the command to run an epoch
-                    Console.WriteLine($"Running Epoch {i} on {numWorkerNodes} worker nodes");
+                    Console.WriteLine($"Running Epoch {i} on {Constants.numWorker} worker nodes");
                     msg = new NetworkMessageWrapper(Utilities.MsgType.RUN_EPOCH);
                     workers.SendMoreFrame("RUN_EPOCH").SendFrame(serializer.serialize(msg));
                     WaitForWorkerAcksAndReset();
-                    Console.WriteLine($"Finished running epoch {i} on {numWorkerNodes} worker nodes");
+                    Console.WriteLine($"Finished running epoch {i} on {Constants.numWorker} worker nodes");
 
-                    if (workload.grainImplementationType == ImplementationType.SNAPPER)
+                    if (Constants.implementationType == ImplementationType.SNAPPER)
                     {
                         GetIOCount(i);
                         while (!getCountFinish) Thread.Sleep(100);
@@ -278,19 +249,18 @@ namespace ExperimentController
 
         static bool setCountFinish = false;
         static bool getCountFinish = false;
-        static int numPersistItem = 0;
         static long[] IOcount;
 
         static async void SetIOCount()
         {
-            switch (workload.grainImplementationType)
+            switch (Constants.implementationType)
             {
                 case ImplementationType.SNAPPER:
-                    if (loggingConfig.loggingType == LoggingType.PERSISTSINGLETON) await configGrain.SetIOCount();
-                    if (loggingConfig.loggingType == LoggingType.PERSISTGRAIN)
+                    if (Constants.loggingType == LoggingType.PERSISTSINGLETON) await configGrain.SetIOCount();
+                    if (Constants.loggingType == LoggingType.PERSISTGRAIN)
                     {
                         var tasks = new List<Task>();
-                        for (int i = 0; i < numPersistItem; i++)
+                        for (int i = 0; i < Constants.numPersistItemPerSilo; i++)
                         {
                             var grain = client.GetGrain<IPersistGrain>(i);
                             tasks.Add(grain.SetIOCount());
@@ -300,7 +270,7 @@ namespace ExperimentController
                     break;
                 case ImplementationType.ORLEANSTXN:
                     var txngrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(0);
-                    if (loggingConfig.loggingType == LoggingType.PERSISTSINGLETON) await txngrain.SetIOCount();
+                    if (Constants.loggingType == LoggingType.PERSISTSINGLETON) await txngrain.SetIOCount();
                     break;
             }
             setCountFinish = true;
@@ -309,14 +279,14 @@ namespace ExperimentController
         static async void GetIOCount(int epoch)
         {
             IOcount[epoch] = 0;
-            switch (workload.grainImplementationType)
+            switch (Constants.implementationType)
             {
                 case ImplementationType.SNAPPER:
-                    if (loggingConfig.loggingType == LoggingType.PERSISTSINGLETON) IOcount[epoch] = await configGrain.GetIOCount();
-                    if (loggingConfig.loggingType == LoggingType.PERSISTGRAIN)
+                    if (Constants.loggingType == LoggingType.PERSISTSINGLETON) IOcount[epoch] = await configGrain.GetIOCount();
+                    if (Constants.loggingType == LoggingType.PERSISTGRAIN)
                     {
                         var tasks = new List<Task<long>>();
-                        for (int i = 0; i < numPersistItem; i++)
+                        for (int i = 0; i < Constants.numPersistItemPerSilo; i++)
                         {
                             var grain = client.GetGrain<IPersistGrain>(i);
                             tasks.Add(grain.GetIOCount());
@@ -327,7 +297,7 @@ namespace ExperimentController
                     break;
                 case ImplementationType.ORLEANSEVENTUAL:
                     var txngrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(0);
-                    Debug.Assert(loggingConfig.loggingType == LoggingType.PERSISTSINGLETON);
+                    Debug.Assert(Constants.loggingType == LoggingType.PERSISTSINGLETON);
                     await txngrain.GetIOCount();
                     break;
             }
@@ -340,7 +310,7 @@ namespace ExperimentController
             // set OrderGrain as empty table
             var index = 0;
             var tasks = new List<Task<TransactionResult>>();
-            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
+            for (int W_ID = 0; W_ID < Constants.NUM_W_PER_SILO; W_ID++)
             {
                 for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
                 {
@@ -348,7 +318,7 @@ namespace ExperimentController
                     {
                         index = W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + 2 * Constants.NUM_D_PER_W + Constants.NUM_StockGrain_PER_W + D_ID * Constants.NUM_OrderGrain_PER_D + i;
                         var input = new Tuple<int, int, int>(W_ID, D_ID, i);
-                        if (workload.grainImplementationType == ImplementationType.ORLEANSEVENTUAL)
+                        if (Constants.implementationType == ImplementationType.ORLEANSEVENTUAL)
                         {
                             var grain = client.GetGrain<IEventualOrderGrain>(index);
                             tasks.Add(grain.StartTransaction("Init", input));
@@ -367,7 +337,7 @@ namespace ExperimentController
                 }
             }
             if (tasks.Count > 0) await Task.WhenAll(tasks);
-            Console.WriteLine($"Finish re-setting {workload.numOrderGrain} OrderGrain. ");
+            Console.WriteLine($"Finish re-setting OrderGrain. ");
             resetFinish = true;
         }
 
@@ -378,11 +348,11 @@ namespace ExperimentController
             // Collects results from workers via that socket
             Console.WriteLine("====== PULL FROM WORKERS ======");
 
-            results = new WorkloadResults[workload.numEpochs, numWorkerNodes];
+            results = new WorkloadResults[workload.numEpochs, Constants.numWorker];
             //socket to receive results on
             using (var sink = new PullSocket(sinkAddress))
             {
-                for (int i = 0; i < numWorkerNodes; i++)
+                for (int i = 0; i < Constants.numWorker; i++)
                 {
                     var msg = serializer.deserialize<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
                     Trace.Assert(msg.msgType == Utilities.MsgType.WORKER_CONNECT);
@@ -390,7 +360,7 @@ namespace ExperimentController
                     ackedWorkers.Signal();
                 }
 
-                for (int i = 0; i < numWorkerNodes; i++)
+                for (int i = 0; i < Constants.numWorker; i++)
                 {
                     var msg = serializer.deserialize<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
                     Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT_ACK);
@@ -401,7 +371,7 @@ namespace ExperimentController
                 //Wait for epoch acks
                 for (int i = 0; i < workload.numEpochs; i++)
                 {
-                    for (int j = 0; j < numWorkerNodes; j++)
+                    for (int j = 0; j < Constants.numWorker; j++)
                     {
                         var msg = serializer.deserialize<NetworkMessageWrapper>(sink.ReceiveFrameBytes());
                         Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH_ACK);
@@ -422,12 +392,10 @@ namespace ExperimentController
                 else client = await config.StartClientWithRetriesToCluster();
             }
 
-            if (workload.grainImplementationType == ImplementationType.SNAPPER)
+            if (Constants.implementationType == ImplementationType.SNAPPER)
             {
                 configGrain = client.GetGrain<IConfigurationManagerGrain>(0);
-                await configGrain.UpdateConfiguration(loggingConfig);
-                await configGrain.UpdateConfiguration(nonDetCCType);
-                await configGrain.UpdateConfiguration(numCoordinators);
+                await configGrain.Initialize();
                 Console.WriteLine("Spawned the configuration grain.");
             }
             asyncInitializationDone = true;
@@ -435,16 +403,16 @@ namespace ExperimentController
 
         private static async void LoadSmallBankGrains()
         {
-            int numGrain = workload.numAccounts / workload.numAccountsPerGroup;
+            int numGrain = Constants.numGrainPerSilo;
             Console.WriteLine($"Load grains, benchmark {workload.benchmark}, numGrains = {numGrain}");
             var tasks = new List<Task<TransactionResult>>();
             var sequence = false;   // load the grains in sequence instead of all concurrent
-            if (loggingConfig.loggingType != LoggingType.NOLOGGING) sequence = true;
+            if (Constants.loggingType != LoggingType.NOLOGGING) sequence = true;
             var start = DateTime.Now;
             for (int i = 0; i < numGrain; i++)
             {
-                var input = new Tuple<int, int>(workload.numAccountsPerGroup, i);
-                switch (workload.grainImplementationType)
+                var input = new Tuple<int, int>(1, i);
+                switch (Constants.implementationType)
                 {
                     case ImplementationType.ORLEANSEVENTUAL:
                         var etxnGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(i);
@@ -476,14 +444,14 @@ namespace ExperimentController
 
         private static async void LoadTPCCGrains()
         {
-            Debug.Assert(workload.grainImplementationType != ImplementationType.ORLEANSTXN);
-            var eventual = workload.grainImplementationType == ImplementationType.ORLEANSEVENTUAL;
-            Console.WriteLine($"Load grains, benchmark {workload.benchmark}, {workload.grainImplementationType}. ");
+            Debug.Assert(Constants.implementationType != ImplementationType.ORLEANSTXN);
+            var eventual = Constants.implementationType == ImplementationType.ORLEANSEVENTUAL;
+            Console.WriteLine($"Load grains, benchmark {workload.benchmark}, {Constants.implementationType}. ");
             var sequence = true;   // load the grains in sequence instead of all concurrent
             var start = DateTime.Now;
 
             // load ItemGrain
-            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
+            for (int W_ID = 0; W_ID < Constants.NUM_W_PER_SILO; W_ID++)
             {
                 var grainID = Helper.GetItemGrain(W_ID);
                 if (eventual)
@@ -497,10 +465,10 @@ namespace ExperimentController
                     await grain.StartTransaction("Init", null);
                 }
             }
-            Console.WriteLine($"Finish loading {workload.numItemGrain} ItemGrain. ");
+            Console.WriteLine($"Finish loading {Constants.NUM_W_PER_SILO} ItemGrain. ");
 
             // load WarehouseGrain
-            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
+            for (int W_ID = 0; W_ID < Constants.NUM_W_PER_SILO; W_ID++)
             {
                 var grainID = Helper.GetWarehouseGrain(W_ID);
                 if (eventual)
@@ -514,13 +482,13 @@ namespace ExperimentController
                     await grain.StartTransaction("Init", W_ID);
                 }
             }
-            Console.WriteLine($"Finish loading {workload.numWarehouseGrain} WarehouseGrain. ");
+            Console.WriteLine($"Finish loading {Constants.NUM_W_PER_SILO} WarehouseGrain. ");
 
             // load DistrictGrain and CustomerGrain
-            var districtGrainID = 0;
-            var customerGrainID = 0;
+            int districtGrainID;
+            int customerGrainID;
             var tasks = new List<Task<TransactionResult>>();
-            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
+            for (int W_ID = 0; W_ID < Constants.NUM_W_PER_SILO; W_ID++)
             {
                 for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
                 {
@@ -549,12 +517,12 @@ namespace ExperimentController
                 }
             }
             if (tasks.Count > 0) await Task.WhenAll(tasks);
-            Console.WriteLine($"Finish loading {workload.numDistrictGrain} DistrictGrain and {workload.numCustomerGrain} CustomerGrain. ");
+            Console.WriteLine($"Finish loading {Constants.NUM_W_PER_SILO * Constants.NUM_D_PER_W} DistrictGrain and {Constants.NUM_W_PER_SILO * Constants.NUM_D_PER_W} CustomerGrain. ");
 
             // load StockGrain
-            var stockGrainID = 0;
+            int stockGrainID;
             tasks = new List<Task<TransactionResult>>();
-            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
+            for (int W_ID = 0; W_ID < Constants.NUM_W_PER_SILO; W_ID++)
             {
                 for (int i = 0; i < Constants.NUM_StockGrain_PER_W; i++)
                 {
@@ -578,12 +546,12 @@ namespace ExperimentController
                 }
             }
             if (tasks.Count > 0) await Task.WhenAll(tasks);
-            Console.WriteLine($"Finish loading {workload.numStockGrain} StockGrain. ");
+            Console.WriteLine($"Finish loading {Constants.NUM_W_PER_SILO * Constants.NUM_StockGrain_PER_W} StockGrain. ");
 
             // load OrderGrain
-            var orderGrainID = 0;
+            int orderGrainID;
             tasks = new List<Task<TransactionResult>>();
-            for (int W_ID = 0; W_ID < workload.numWarehouse; W_ID++)
+            for (int W_ID = 0; W_ID < Constants.NUM_W_PER_SILO; W_ID++)
             {
                 for (int D_ID = 0; D_ID < Constants.NUM_D_PER_W; D_ID++)
                 {
@@ -610,7 +578,7 @@ namespace ExperimentController
                 }
             }
             if (tasks.Count > 0) await Task.WhenAll(tasks);
-            Console.WriteLine($"Finish loading {workload.numOrderGrain} OrderGrain. ");
+            Console.WriteLine($"Finish loading {Constants.NUM_W_PER_SILO * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D} OrderGrain. ");
 
             Console.WriteLine($"Finish loading grains, it takes {(DateTime.Now - start).TotalSeconds}s.");
             loadingDone = true;
@@ -622,9 +590,9 @@ namespace ExperimentController
             GenerateWorkLoadFromSettingsFile();
         }
 
-        static void Main(string[] args)
+        static void Main()
         {
-            if (Constants.multiWorker)
+            if (Constants.numWorker > 1)
             {
                 sinkAddress = Constants.controller_Remote_SinkAddress;
                 workerAddress = Constants.controller_Remote_WorkerAddress;
@@ -637,34 +605,11 @@ namespace ExperimentController
 
             serializer = new BinarySerializer();
 
-            //Generate workload configurations interactively            
+            // Generate workload configurations interactively            
             GetWorkloadSettings();
 
-            //inject the specially required arguments into workload setting
-            workload.zipfianConstant = float.Parse(args[0]);
-            workload.deterministicTxnPercent = float.Parse(args[1]);
-            vCPU = int.Parse(args[2]);
-
-            if (workload.grainImplementationType == ImplementationType.SNAPPER)
-            {
-                numCoordinators = vCPU * 2 * Constants.numSilo;
-                loggingConfig.numPersistItem = vCPU * 2;
-                numPersistItem = loggingConfig.numPersistItem;
-            }
-            if (workload.benchmark == BenchmarkType.SMALLBANK) workload.numAccounts = 5000 * vCPU * Constants.numSilo;
-            if (workload.benchmark == BenchmarkType.TPCC)
-            {
-                workload.numWarehouse = vCPU * Constants.NUM_W_PER_SILO / Constants.numCPUPerSilo;
-                workload.numItemGrain = workload.numWarehouse;
-                workload.numWarehouseGrain = workload.numWarehouse;
-                workload.numCustomerGrain = workload.numWarehouse * Constants.NUM_D_PER_W;
-                workload.numDistrictGrain = workload.numWarehouse * Constants.NUM_D_PER_W;
-                workload.numStockGrain = workload.numWarehouse * Constants.NUM_StockGrain_PER_W;
-                workload.numOrderGrain = workload.numWarehouse * Constants.NUM_D_PER_W * Constants.NUM_OrderGrain_PER_D;
-            }
-            Console.WriteLine($"worker node = {workload.numWorkerNodes}, silo_vCPU = {vCPU}, detPercent = {workload.deterministicTxnPercent}%, num_coord = {numCoordinators}, num_warehouse = {workload.numWarehouse}, numPersistItem = {numPersistItem}");
-            numWorkerNodes = workload.numWorkerNodes;
-            ackedWorkers = new CountdownEvent(numWorkerNodes);
+            Console.WriteLine($"worker node = {Constants.numWorker}, silo_vCPU = {Constants.numCPUPerSilo}, detPercent = {workload.pactPercent}%");
+            ackedWorkers = new CountdownEvent(Constants.numWorker);
 
             //Initialize the client to silo cluster, create configurator grain
             InitiateClientAndSpawnConfigurationCoordinator();

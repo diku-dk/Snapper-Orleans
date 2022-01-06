@@ -33,12 +33,8 @@ namespace NewProcess
         static Dictionary<int, Queue<Tuple<bool, RequestData>>> shared_requests;  // <epoch, <isDet, grainIDs>>
         static Dictionary<int, Dictionary<int, ConcurrentQueue<RequestData>>> thread_requests;     // <epoch, <consumerID, grainIDs>>
 
-        static int siloCPU;
-        static int detPercent;
         static bool[] isEpochFinish;
         static bool[] isProducerFinish;
-        static int detPipeSize;
-        static int nonDetPipeSize;
         static int detBufferSize;
         static int nonDetBufferSize;
         static int numDetConsumer;
@@ -115,7 +111,7 @@ namespace NewProcess
             var input = (Tuple<int, bool>)obj;
             int threadIndex = input.Item1;
             var isDet = input.Item2;
-            var pipeSize = isDet ? detPipeSize : nonDetPipeSize;
+            var pipeSize = isDet ? config.pactPipeSize : config.actPipeSize;
             var globalWatch = new Stopwatch();
             var benchmark = benchmarks[threadIndex];
             var client = clients[threadIndex % (numDetConsumer + numNonDetConsumer)];
@@ -252,11 +248,11 @@ namespace NewProcess
                 if (isDet) Console.WriteLine($"det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
                 else
                 {
-                    if (config.grainImplementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
+                    if (Constants.implementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
                     else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
                 }
                 WorkloadResults res;
-                if (config.grainImplementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResults(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
+                if (Constants.implementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResults(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
                 else res = new WorkloadResults(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
                 res.setLatency(latencies, det_latencies);
                 results[threadIndex] = res;
@@ -267,11 +263,10 @@ namespace NewProcess
         private static async void Initialize()
         {
             numProducer = 1;
-            detPercent = (int)config.deterministicTxnPercent;
-            numDetConsumer = siloCPU / 4;
-            numNonDetConsumer = siloCPU / 4;
-            if (detPercent == 100) numNonDetConsumer = 0;
-            else if (detPercent == 0) numDetConsumer = 0;
+            numDetConsumer = Constants.numCPUPerSilo / Constants.numCPUBasic;
+            numNonDetConsumer = Constants.numCPUPerSilo / Constants.numCPUBasic;
+            if (config.pactPercent == 100) numNonDetConsumer = 0;
+            else if (config.pactPercent == 0) numDetConsumer = 0;
 
             switch (config.benchmark)
             {
@@ -296,10 +291,10 @@ namespace NewProcess
             // some initialization for generating workload
             if (detBufferSize == 0 && nonDetBufferSize == 0)
             {
-                if (numDetConsumer > 0) detBufferSize = detPipeSize * 10;
-                if (numNonDetConsumer > 0) nonDetBufferSize = nonDetPipeSize * 10;
+                if (numDetConsumer > 0) detBufferSize = config.pactPipeSize * 10;
+                if (numNonDetConsumer > 0) nonDetBufferSize = config.actPipeSize * 10;
             }
-            Console.WriteLine($"detPercent = {detPercent}%, detBuffer = {detBufferSize}, nonDetBuffer = {nonDetBufferSize}");
+            Console.WriteLine($"detPercent = {config.pactPercent}%, detBuffer = {detBufferSize}, nonDetBuffer = {nonDetBufferSize}");
             shared_requests = new Dictionary<int, Queue<Tuple<bool, RequestData>>>();   // <epoch, <producerID, <isDet, grainIDs>>>
             for (int epoch = 0; epoch < config.numEpochs; epoch++) shared_requests.Add(epoch, new Queue<Tuple<bool, RequestData>>());
 
@@ -323,8 +318,8 @@ namespace NewProcess
 
         private static void GenerateNewOrder(int epoch)
         {
-            var numRound = siloCPU / 4;
-            if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) numRound *= 3;
+            var numRound = Constants.numCPUPerSilo / Constants.numCPUBasic;
+            if (Constants.implementationType == ImplementationType.ORLEANSEVENTUAL) numRound *= 3;
 
             var remote_count = 0;
             var txn_size = new List<int>();
@@ -336,14 +331,14 @@ namespace NewProcess
                 DiscreteUniform hot_wh_dist = null;
                 DiscreteUniform district_dist = null;
                 DiscreteUniform hot_district_dist = null;
-                var all_wh_dist = new DiscreteUniform(0, config.numWarehouse - 1, new Random());
+                var all_wh_dist = new DiscreteUniform(0, Constants.NUM_W_PER_SILO - 1, new Random());
                 if (config.distribution == Distribution.HOTRECORD)
                 {
                     // hot set
-                    var num_hot_wh = (int)(0.5 * config.numWarehouse);
+                    var num_hot_wh = (int)(0.5 * Constants.NUM_W_PER_SILO);
                     var num_hot_district = (int)(0.1 * Constants.NUM_D_PER_W);
                     hot_wh_dist = new DiscreteUniform(0, num_hot_wh - 1, new Random());
-                    wh_dist = new DiscreteUniform(num_hot_wh, config.numWarehouse - 1, new Random());
+                    wh_dist = new DiscreteUniform(num_hot_wh, Constants.NUM_W_PER_SILO - 1, new Random());
                     hot_district_dist = new DiscreteUniform(0, num_hot_district - 1, new Random());
                     district_dist = new DiscreteUniform(num_hot_district, Constants.NUM_D_PER_W - 1, new Random());
                     hot = new DiscreteUniform(0, 99, new Random());
@@ -351,7 +346,7 @@ namespace NewProcess
                 else
                 {
                     Debug.Assert(config.distribution == Distribution.UNIFORM);
-                    wh_dist = new DiscreteUniform(0, config.numWarehouse - 1, new Random());
+                    wh_dist = new DiscreteUniform(0, Constants.NUM_W_PER_SILO - 1, new Random());
                     district_dist = new DiscreteUniform(0, Constants.NUM_D_PER_W - 1, new Random());
                 }
                 var ol_cnt_dist_uni = new DiscreteUniform(5, 15, new Random());
@@ -412,7 +407,7 @@ namespace NewProcess
 
                         int supply_wh;
                         var local = local_dist_uni.Sample() > 1;
-                        if (config.numWarehouse == 1 || local) supply_wh = W_ID;    // supply by home warehouse
+                        if (Constants.NUM_W_PER_SILO == 1 || local) supply_wh = W_ID;    // supply by home warehouse
                         else   // supply by remote warehouse
                         {
                             remote_flag = true;
@@ -436,7 +431,7 @@ namespace NewProcess
                 }
             }
             var numTxn = Constants.BASE_NUM_NEWORDER * numRound;
-            Console.WriteLine($"siloCPU = {siloCPU}, epoch = {epoch}, remote wh rate = {remote_count * 100.0 / numTxn}%, txn_size_ave = {txn_size.Average()}");
+            Console.WriteLine($"siloCPU = {Constants.numCPUPerSilo}, epoch = {epoch}, remote wh rate = {remote_count * 100.0 / numTxn}%, txn_size_ave = {txn_size.Average()}");
         }
 
         private static void InitializeTPCCWorkload()
@@ -448,13 +443,12 @@ namespace NewProcess
 
         private static void InitializeGetBalanceWorkload()
         {
-            var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * 4 * siloCPU / 4;
-            if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
-            var numGrain = config.numAccounts / config.numAccountsPerGroup;
+            var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * 4 * Constants.numCPUPerSilo / Constants.numCPUBasic;
+            if (Constants.implementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
             switch (config.distribution)
             {
                 case Distribution.UNIFORM:
-                    var dist = new DiscreteUniform(0, numGrain - 1, new Random());
+                    var dist = new DiscreteUniform(0, Constants.numGrainPerSilo - 1, new Random());
                     for (int epoch = 0; epoch < config.numEpochs; epoch++)
                     {
                         for (int txn = 0; txn < numTxnPerEpoch; txn++)
@@ -484,30 +478,26 @@ namespace NewProcess
 
         private static void InitializeSmallBankWorkload()
         {
-            if (config.mixture[0] == 100)
-            {
-                InitializeGetBalanceWorkload();
-                return;
-            }
-            if (config.mixture.Sum() > 0) throw new Exception("Exception: NewProcess only support MultiTransfer for SmallBankBenchmark");
-            var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * 10 * siloCPU / 4;   // changed!!
-            if (config.grainImplementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
-            var numGrain = config.numAccounts / config.numAccountsPerGroup;
-            var numGrainPerTxn = config.numGrainsMultiTransfer;
+            /*
+            InitializeGetBalanceWorkload();
+            return;*/
+
+            var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * 10 * Constants.numCPUPerSilo / Constants.numCPUBasic;
+            if (Constants.implementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
             var siloDist = new DiscreteUniform(0, Constants.numSilo - 1, new Random());           // [0, numSilo - 1]
             switch (config.distribution)
             {
                 case Distribution.UNIFORM:
-                    Console.WriteLine($"Generate UNIFORM data for SmallBank, txnSize = {numGrainPerTxn}");
+                    Console.WriteLine($"Generate UNIFORM data for SmallBank, txnSize = {config.txnSize}");
                     {
                         var grainDist = new DiscreteUniform(0, Constants.numGrainPerSilo - 1, new Random());  // [0, numGrainPerSilo - 1]
-                        for (int epoch = 0; epoch < Constants.numEpoch; epoch++)
+                        for (int epoch = 0; epoch < config.numEpochs; epoch++)
                         {
                             for (int txn = 0; txn < numTxnPerEpoch; txn++)
                             {
                                 var grainsPerTxn = new List<int>();
-                                var numSiloAccess = SelectNumSilo(numGrainPerTxn);
-                                Debug.Assert(numSiloAccess <= numGrainPerTxn);
+                                var numSiloAccess = SelectNumSilo(config.txnSize);
+                                Debug.Assert(numSiloAccess <= config.txnSize);
                                 var siloList = new List<int>();
                                 for (int j = 0; j < numSiloAccess; j++)   // how many silos the txn will access
                                 {
@@ -517,7 +507,7 @@ namespace NewProcess
                                 }
                                 Debug.Assert(siloList.Count == numSiloAccess);
 
-                                for (int k = 0; k < numGrainPerTxn; k++)
+                                for (int k = 0; k < config.txnSize; k++)
                                 {
                                     var silo = siloList[k % numSiloAccess];
                                     var grainInSilo = grainDist.Sample();
@@ -529,17 +519,17 @@ namespace NewProcess
                                     }
                                     grainsPerTxn.Add(grainID);
                                 }
-                                Debug.Assert(grainsPerTxn.Count == numGrainPerTxn);
+                                Debug.Assert(grainsPerTxn.Count == config.txnSize);
                                 shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
                             }
                         }
                     }
                     break;
                 case Distribution.HOTRECORD:
-                    int numHotGrain = (int)(Constants.grainSkewness * numGrain);
-                    var numHotGrainPerTxn = Constants.txnSkewness * numGrainPerTxn;
+                    int numHotGrain = (int)(config.grainSkewness * Constants.numGrainPerSilo);
+                    var numHotGrainPerTxn = config.txnSkewness * config.txnSize;
                     Console.WriteLine($"Generate data for HOTRECORD, {numHotGrain} hot grains, {numHotGrainPerTxn} hot grain per txn...");
-                    var normal_dist = new DiscreteUniform(numHotGrain, numGrain - 1, new Random());
+                    var normal_dist = new DiscreteUniform(numHotGrain, Constants.numGrainPerSilo - 1, new Random());
                     DiscreteUniform hot_dist = null;
                     if (numHotGrain > 0) hot_dist = new DiscreteUniform(0, numHotGrain - 1, new Random());
                     for (int epoch = 0; epoch < config.numEpochs; epoch++)
@@ -547,7 +537,7 @@ namespace NewProcess
                         for (int txn = 0; txn < numTxnPerEpoch; txn++)
                         {
                             var grainsPerTxn = new List<int>();
-                            for (int normal = 0; normal < numGrainPerTxn - numHotGrainPerTxn; normal++)
+                            for (int normal = 0; normal < config.txnSize - numHotGrainPerTxn; normal++)
                             {
                                 var normalGrain = normal_dist.Sample();
                                 while (grainsPerTxn.Contains(normalGrain)) normalGrain = normal_dist.Sample();
@@ -565,9 +555,8 @@ namespace NewProcess
                     break;
                 case Distribution.ZIPFIAN:    // read data from file
                     var zipf = config.zipfianConstant;
-                    var txnSize = config.numGrainsMultiTransfer;
-                    Console.WriteLine($"read data from files, txnsize = {numGrainPerTxn}, zipf = {zipf}");
-                    var prefix = Constants.dataPath + $@"MultiTransfer\{numGrainPerTxn}\zipf{zipf}_";
+                    Console.WriteLine($"read data from files, txnsize = {config.txnSize}, zipf = {zipf}");
+                    var prefix = Constants.dataPath + $@"MultiTransfer\{config.txnSize}\zipf{zipf}_";
 
                     // read data from files
                     for (int epoch = 0; epoch < config.numEpochs; epoch++)
@@ -578,7 +567,7 @@ namespace NewProcess
                         while ((line = file.ReadLine()) != null)
                         {
                             var grainsPerTxn = new List<int>();
-                            for (int i = 0; i < txnSize; i++)
+                            for (int i = 0; i < config.txnSize; i++)
                             {
                                 if (i > 0) line = file.ReadLine();  // the 0th line has been read by while() loop
                                 var id = int.Parse(line);
@@ -596,11 +585,11 @@ namespace NewProcess
 
         private static bool isDet()
         {
-            if (detPercent == 0) return false;
-            else if (detPercent == 100) return true;
+            if (config.pactPercent == 0) return false;
+            else if (config.pactPercent == 100) return true;
 
             var sample = detDistribution.Sample();
-            if (sample < detPercent) return true;
+            if (sample < config.pactPercent) return true;
             else return false;
         }
 
@@ -674,6 +663,7 @@ namespace NewProcess
                 controller.Subscribe("RUN_EPOCH");
                 config = serializer.deserialize<WorkloadConfiguration>(msg.contents);
                 Console.WriteLine("Received workload message from controller");
+                Console.WriteLine($"detPipe per thread = {config.pactPipeSize}, nonDetPipe per thread = {config.actPipeSize}");
 
                 //Initialize threads and other data-structures for epoch runs
                 Initialize();
@@ -742,9 +732,9 @@ namespace NewProcess
             return res;
         }
 
-        static void Main(string[] args)
+        static void Main()
         {
-            if (Constants.multiWorker)
+            if (Constants.numWorker > 1)
             {
                 sinkAddress = Constants.worker_Remote_SinkAddress;
                 controllerAddress = Constants.worker_Remote_ControllerAddress;
@@ -758,17 +748,6 @@ namespace NewProcess
             serializer = new BinarySerializer();
 
             Console.WriteLine("Worker is Started...");
-
-            //siloCPU = 4;
-            //detPipeSize = 64;
-            //nonDetPipeSize = 1;
-
-            //inject the specially required arguments into workload setting
-            siloCPU = int.Parse(args[0]);
-            detPipeSize = int.Parse(args[1]);
-            nonDetPipeSize = int.Parse(args[2]);
-            Console.WriteLine($"detPipe per thread = {detPipeSize}, nonDetPipe per thread = {nonDetPipeSize}");
-
             ProcessWork();
             //Console.ReadLine();
         }

@@ -110,7 +110,7 @@ namespace Concurrency.Implementation.Nondeterministic
                 throw new DeadlockAvoidanceException($"txn {tid} is aborted to avoid deadlock. ");
             }
             // otherwise, if there is a writer working
-            if (tid < waitinglist.First().Key) 
+            if (tid < waitinglist.First().Key)
             {
                 var mylock = new TaskCompletionSource<bool>();
                 waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(false, mylock));

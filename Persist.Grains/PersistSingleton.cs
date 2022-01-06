@@ -14,13 +14,14 @@ namespace Persist.Grains
     {
         private IPersistWorker[] persistWorkers = null;
 
-        public void Init(int numSingleton, int maxNumWaitLog, bool batching)
+        public void Init()
         {
             if (persistWorkers != null) foreach (var worker in persistWorkers) worker.CleanFile();
             else
             {
-                persistWorkers = new IPersistWorker[numSingleton];
-                for (int i = 0; i < numSingleton; i++) persistWorkers[i] = new PersistWorker(i, maxNumWaitLog, batching);
+                persistWorkers = new IPersistWorker[Constants.numPersistItemPerSilo];
+                for (int i = 0; i < Constants.numPersistItemPerSilo; i++)
+                    persistWorkers[i] = new PersistWorker(i);
             }
         }
 
@@ -48,30 +49,25 @@ namespace Persist.Grains
     {
         private int myID;
         private int index;
-        private bool batching;
         private byte[] buffer;
         private int numWaitLog;
         private FileStream file;
         private string fileName;
-        private int maxNumWaitLog;
         private int maxBufferSize;
         private SemaphoreSlim instanceLock;
         private TaskCompletionSource<bool> waitFlush;
 
         private long IOcount = 0;
 
-        public PersistWorker(int myID, int maxNumWaitLog, bool batching)
+        public PersistWorker(int myID)
         {
             index = 0;
-            numWaitLog = 0;
             this.myID = myID;
-            this.batching = batching;
-            if (batching)
+            if (Constants.loggingBatching)
             {
                 maxBufferSize = 15000;    // 3 * 64 * 75 = 14400 bytes
                 //maxBufferSize = 5 * (int)Math.Pow(10, 5);    // tpcc
                 buffer = new byte[maxBufferSize];
-                this.maxNumWaitLog = 1;
                 waitFlush = new TaskCompletionSource<bool>();
             }
             fileName = Constants.logPath + myID;
@@ -93,7 +89,6 @@ namespace Persist.Grains
 
         public void SetIOCount()
         {
-            maxNumWaitLog = 1;   // maxNumWaitLog
             IOcount = 0;
 
             file.Close();
@@ -103,7 +98,7 @@ namespace Persist.Grains
 
         public async Task Write(byte[] value)
         {
-            if (!batching)
+            if (!Constants.loggingBatching)
             {
                 await instanceLock.WaitAsync();
                 var sizeBytes = BitConverter.GetBytes(value.Length);
@@ -127,7 +122,7 @@ namespace Persist.Grains
                 numWaitLog++;
 
                 // STEP 2: check if need to flush
-                if (numWaitLog == maxNumWaitLog)
+                if (numWaitLog == Constants.loggingBatchSize)
                 {
                     await Flush();
                     instanceLock.Release();

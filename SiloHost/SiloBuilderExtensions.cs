@@ -60,7 +60,5 @@ namespace OrleansSiloHost
     public class MyTransactionalStateOptions
     {
         public int InitStage { get; set; }
-        public int numSingleton { get; set; }
-        public int maxNumWaitLog { get; set; }
     }
 }

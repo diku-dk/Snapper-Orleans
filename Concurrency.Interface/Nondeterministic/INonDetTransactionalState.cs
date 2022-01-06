@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 
 namespace Concurrency.Interface.Nondeterministic
 {
-    public enum ConcurrencyType { S2PL, TIMESTAMP };
     public interface INonDetTransactionalState<TState>
     {
         [AlwaysInterleave]

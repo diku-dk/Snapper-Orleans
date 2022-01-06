@@ -12,7 +12,7 @@ namespace Concurrency.Implementation.Logging
 {
     class DynamoDBStorageWrapper : IKeyValueStorageWrapper
     {
-        AmazonDynamoDBClient client;        
+        AmazonDynamoDBClient client;
         string grainType;
         byte[] grainKey;
         string logName;
@@ -23,7 +23,7 @@ namespace Concurrency.Implementation.Logging
         const string DYNAMODB_ACCESS_KEY_VALUE = Constants.SecretKey;
         const int READ_CAPACITY_UNITS = 10;
         const int WRITE_CAPACITY_UNITS = 10;
-        
+
         bool singleTable = true;
         bool tableExists = false;
 
@@ -37,16 +37,16 @@ namespace Concurrency.Implementation.Logging
             if (singleTable) logName = Constants.ServiceID;
             else logName = grainType + grainKey;
         }
-                
+
         async Task createTableIfNotExists()
         {
             var describeTableRequest = new DescribeTableRequest()
             {
                 TableName = logName
-            };        
+            };
             try
             {
-                DescribeTableResponse response;                
+                DescribeTableResponse response;
                 do
                 {
                     response = await client.DescribeTableAsync(describeTableRequest);
@@ -54,12 +54,12 @@ namespace Concurrency.Implementation.Logging
                     await Task.Delay(TimeSpan.FromSeconds(5));
                 } while (response.Table.TableStatus != TableStatus.ACTIVE);
                 tableExists = true;
-            } 
-            catch(ResourceNotFoundException)
+            }
+            catch (ResourceNotFoundException)
             {
                 tableExists = false;
             }
-            if(!tableExists)
+            if (!tableExists)
             {
                 var request = new CreateTableRequest()
                 {
@@ -97,12 +97,12 @@ namespace Concurrency.Implementation.Logging
                     }
                 };
                 await client.CreateTableAsync(request);
-                while(true)
-                {                    
+                while (true)
+                {
                     var response = await client.DescribeTableAsync(describeTableRequest);
                     if (response.Table.TableStatus == TableStatus.ACTIVE) break;
                     else await Task.Delay(TimeSpan.FromSeconds(5));
-                }                    
+                }
             }
         }
 
@@ -137,7 +137,7 @@ namespace Concurrency.Implementation.Logging
 
         async Task IKeyValueStorageWrapper.Write(byte[] key, byte[] value)
         {
-            if(!tableExists)
+            if (!tableExists)
             {
                 await createTableIfNotExists();
             }
