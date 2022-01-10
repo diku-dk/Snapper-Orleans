@@ -59,16 +59,16 @@
         public const string worker_Remote_SinkAddress = ">tcp://1.1.1.1.212:5558";    // controller public IP
         public const string worker_Remote_ControllerAddress = ">tcp://1.1.1.1:5575";  // controller public IP
 
-        public const bool localCluster = true;
+        public const bool localCluster = false;
         public const string LocalSilo = "dev";
         public const string ClusterSilo = "ec2";
         public const string ServiceID = "Snapper";
         public const string LogTable = "SnapperLog";
-        public const string ServiceRegion = "us-east-2a";
-        public const string AccessKey = "AKIAQHVFG6FCI24D3EFV";
+        public const string ServiceRegion = "us-east-2";
+        public const string AccessKey = "AKIAQHVFG6FCCHBDLIAX";
         public const string GrainStateTable = "SnapperGrainStateTable";
         public const string SiloMembershipTable = "SnapperMembershipTable";
-        public const string SecretKey = "4ZqPYtEtNxht7PwJGySzVqTJtSYmfuGcuVuy3Dsk";
+        public const string SecretKey = "slhma5d8ge1lzzURRxJVMzYKAC3muvgxcqWtseEY";
 
         // for workload generation
         public const int BASE_NUM_MULTITRANSFER = 150000;

@@ -131,7 +131,7 @@ namespace OrleansSiloHost
                 .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .ConfigureServices(ConfigureServices);
-            //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
             if (enableOrleansTxn)
             {
@@ -146,11 +146,12 @@ namespace OrleansSiloHost
                 else
                 {
                     builder
+                        /*
                         .AddFileTransactionalStateStorageAsDefault(opts =>
                         {
                             opts.InitStage = ServiceLifecycleStage.ApplicationServices;
-                        });
-                    //.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                        });*/
+                        .AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
                 }
 
                 builder
