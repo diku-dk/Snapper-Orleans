@@ -22,6 +22,7 @@ namespace OrleansSiloHost
 
         public static ITransactionalStateStorageFactory Create(IServiceProvider services, string name)
         {
+            Console.WriteLine($"Create FileStorageFactory");
             var optionsMonitor = services.GetRequiredService<IOptionsMonitor<MyTransactionalStateOptions>>();
             return ActivatorUtilities.CreateInstance<FileTransactionalStateStorageFactory>(services, name, optionsMonitor.Get(name));
         }

@@ -20,7 +20,7 @@
         public const int numCPUPerSilo = 4;
         public const bool multiSilo = numSilo > 1;
         public const CCType ccType = CCType.S2PL;
-        public const ImplementationType implementationType = ImplementationType.SNAPPER;
+        public const ImplementationType implementationType = ImplementationType.ORLEANSTXN;
         public const LoggingType loggingType = LoggingType.NOLOGGING;
         public const StorageType storageType = StorageType.FILESYSTEM;
         public const SerializerType serializerType = SerializerType.MSGPACK;
@@ -29,7 +29,7 @@
         public const bool loggingBatching = false;
         public const int numPersistItemPerSilo = numCPUPerSilo / numCPUBasic * 8;
         // for SmallBank
-        public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;
+        public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
         // for TPCC
         public const int NUM_W_PER_SILO = 2 * numCPUPerSilo / numCPUBasic;
         public const int NUM_D_PER_W = 10;
@@ -45,8 +45,8 @@
         public const string TPCC_namespace = "TPCC.Grain.";
         public const string SmallBank_namespace = "SmallBank.Grain.";
 
-        public const string logPath = @"D:\log\";
-        //public const string logPath = @"C:\Users\Administrator\Desktop\log\";
+        //public const string logPath = @"D:\log\";
+        public const string logPath = @"C:\Users\Administrator\Desktop\log\";
         public const string dataPath = @"C:\Users\Administrator\Desktop\data\";
 
         public const string controller_Local_SinkAddress = "@tcp://localhost:5558";

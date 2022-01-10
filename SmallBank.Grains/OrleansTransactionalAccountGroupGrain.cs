@@ -27,6 +27,8 @@ namespace SmallBank.Grains
         public int numAccountPerGroup = 1;
         private readonly ITransactionalState<CustomerAccountGroup> state;
 
+        private long grainKey;
+
         public OrleansTransactionalAccountGroupGrain(IPersistSingletonGroup persistSingletonGroup, [TransactionalState("state")] ITransactionalState<CustomerAccountGroup> state)
         {
             this.persistSingletonGroup = persistSingletonGroup;
@@ -66,39 +68,6 @@ namespace SmallBank.Grains
                     ret.resultObject = myState.savingAccount[id] + myState.checkingAccount[id];
                 }
                 else
-                {
-                    ret.exception = true;
-                    return ret;
-                }
-            }
-            catch (Exception)
-            {
-                ret.exception = true;
-            }
-            return ret;
-        }
-
-        private async Task<TransactionResult> DepositChecking(object funcInput)
-        {
-            var ret = new TransactionResult();
-            try
-            {
-                var success = false;
-                var inputTuple = (DepositCheckingInput)funcInput;
-                var custName = inputTuple.Item1.Item1;
-                var id = inputTuple.Item1.Item2;
-
-                await state.PerformUpdate(myState =>
-                {
-                    if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
-                    if (myState.checkingAccount.ContainsKey(id))
-                    {
-                        myState.checkingAccount[id] += inputTuple.Item2;
-                        success = true;
-                    }
-                });
-
-                if (!success)
                 {
                     ret.exception = true;
                     return ret;
@@ -224,21 +193,21 @@ namespace SmallBank.Grains
             var ret = new TransactionResult();
             try
             {
-                var success = false;
                 var myGroupID = -1;
                 var inputTuple = (MultiTransferInput)funcInput;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
 
-                await state.PerformUpdate(myState =>
+                var success = await state.PerformUpdate(myState =>
                 {
                     myGroupID = myState.GroupID;
                     if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
                     if (myState.checkingAccount.ContainsKey(id) && myState.checkingAccount[id] >= inputTuple.Item2 * inputTuple.Item3.Count)
                     {
                         myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
-                        success = true;
+                        return true;
                     }
+                    else return false;
                 });
 
                 if (!success)
@@ -249,55 +218,50 @@ namespace SmallBank.Grains
                 else
                 {
                     Debug.Assert(myGroupID >= 0);
+                    var tasks = new List<Task>();
                     var destinations = inputTuple.Item3;
-                    var tasks = new List<Task<TransactionResult>>();
                     foreach (var tuple in destinations)
                     {
                         var gID = MapCustomerIdToGroup(tuple.Item2);
-                        var funcInput = new FunctionInput(fin, new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2));
-                        if (gID == myGroupID)
-                        {
-                            var localCall = DepositChecking(funcInput);
-                            tasks.Add(localCall);
-                        }
+                        var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2);
+                        if (gID == myGroupID) tasks.Add(DepositChecking(input)); 
                         else
                         {
                             var destination = GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(gID);
-                            var task = destination.StartTransaction("DepositChecking", funcInput);
-                            tasks.Add(task);
+                            tasks.Add(destination.StartTransaction("DepositChecking", input));
                         }
                     }
                     await Task.WhenAll(tasks);
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
                 ret.exception = true;
             }
             return ret;
         }*/
-
+        
         // no deadlock
         public async Task<TransactionResult> MultiTransfer(object funcInput)
         {
             var ret = new TransactionResult();
             try
             {
-                var success = false;
                 var myGroupID = -1;
                 var inputTuple = (MultiTransferInput)funcInput;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
 
-                await state.PerformUpdate(myState =>
+                var success = await state.PerformUpdate(myState =>
                 {
                     myGroupID = myState.GroupID;
                     if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
                     if (myState.checkingAccount.ContainsKey(id) && myState.checkingAccount[id] >= inputTuple.Item2 * inputTuple.Item3.Count)
                     {
                         myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
-                        success = true;
+                        return true;
                     }
+                    else return false;
                 });
 
                 if (!success)
@@ -327,7 +291,40 @@ namespace SmallBank.Grains
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception e)
+            {
+                ret.exception = true;
+            }
+            return ret;
+        }
+        
+        private async Task<TransactionResult> DepositChecking(object funcInput)
+        {
+            var ret = new TransactionResult();
+            try
+            {
+                var inputTuple = (DepositCheckingInput)funcInput;
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+
+                var success = await state.PerformUpdate(myState =>
+                {
+                    if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                    if (myState.checkingAccount.ContainsKey(id))
+                    {
+                        myState.checkingAccount[id] += inputTuple.Item2;
+                        return true;
+                    }
+                    else return false;
+                });
+
+                if (!success)
+                {
+                    ret.exception = true;
+                    return ret;
+                }
+            }
+            catch (Exception e)
             {
                 ret.exception = true;
             }
@@ -342,15 +339,19 @@ namespace SmallBank.Grains
                 var tuple = (InitAccountInput)funcInput;
                 numAccountPerGroup = tuple.Item1;
                 var groupId = tuple.Item2;
-                await state.PerformUpdate<CustomerAccountGroup>(s => s.GroupID = groupId);
+                grainKey = groupId;
                 var minAccountID = groupId * numAccountPerGroup;
-                for (int i = 0; i < numAccountPerGroup; i++)
+                await state.PerformUpdate(s =>
                 {
-                    int accountId = minAccountID + i;
-                    await state.PerformUpdate(s => s.account.Add(accountId.ToString(), accountId));
-                    await state.PerformUpdate(s => s.savingAccount.Add(accountId, int.MaxValue));
-                    await state.PerformUpdate(s => s.checkingAccount.Add(accountId, int.MaxValue));
-                }
+                    s.GroupID = groupId;
+                    for (int i = 0; i < numAccountPerGroup; i++)
+                    {
+                        int accountId = minAccountID + i;
+                        s.account.Add(accountId.ToString(), accountId);
+                        s.savingAccount.Add(accountId, int.MaxValue);
+                        s.checkingAccount.Add(accountId, int.MaxValue);
+                    }
+                });
             }
             catch (Exception)
             {
@@ -376,6 +377,7 @@ namespace SmallBank.Grains
                 case AllTxnTypes.Transfer:
                     return Transfer(funcInput);
                 case AllTxnTypes.MultiTransfer:
+                    //Console.WriteLine($"AccountGrain {grainKey}: StartTransaction MultiTransfer!!!!!!!!!!!!!!!!!!!");
                     return MultiTransfer(funcInput);
                 case AllTxnTypes.Init:
                     return Init(funcInput);

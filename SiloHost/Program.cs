@@ -20,7 +20,7 @@ namespace OrleansSiloHost
     {
         static private int siloPort;
         static private int gatewayPort;
-        static readonly bool enableOrleansTxn = false;
+        static readonly bool enableOrleansTxn = true;
 
         public static int Main(string[] args)
         {
@@ -75,10 +75,27 @@ namespace OrleansSiloHost
                     // Set the value of CollectionAge to 10 minutes for all grain
                     options.CollectionAge = TimeSpan.FromMinutes(1000);
                 })
-                .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
-                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .ConfigureServices(ConfigureServices);
-            //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+
+            if (enableOrleansTxn)
+            {
+                builder
+                    /*
+                    .AddFileTransactionalStateStorageAsDefault(opts =>
+                    {
+                        opts.InitStage = ServiceLifecycleStage.ApplicationServices;
+                    });*/
+                    .AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                
+                builder
+                    //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Microsoft", LogLevel.Information))
+                    //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))
+                    //.Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(200))
+                    //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20))
+                    .UseTransactions();
+            }
+            else builder.AddMemoryGrainStorageAsDefault();
 
             var host = builder.Build();
             await host.StartAsync();
