@@ -92,6 +92,7 @@ namespace Concurrency.Implementation
             var c1 = new FunctionCall(startFunc, funcInput, GetType());
             var t1 = Execute(c1, context);
             await t1;
+            var time = DateTime.Now;
             if (highestCommittedBid < context.bid)
             {
                 Debug.Assert(batchCommit.ContainsKey(context.bid));
@@ -100,6 +101,7 @@ namespace Concurrency.Implementation
             funcResults.Remove(context.tid);
             var res = new TransactionResult(false, t1.Result.resultObject);  // PACT never abort
             res.isDet = true;
+            res.prepareTime = time;
             return res;
         }
 

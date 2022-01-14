@@ -186,7 +186,6 @@ namespace SmallBank.Grains
             }
             return ret;
         }
-
         /*
         public async Task<TransactionResult> MultiTransfer(object funcInput)
         {
@@ -242,19 +241,21 @@ namespace SmallBank.Grains
         }*/
         
         // no deadlock
-        public async Task<TransactionResult> MultiTransfer(object funcInput)
+        public async Task<TransactionResult> MultiTransfer(object funcInput, DateTime time)
         {
+            Console.WriteLine($"grain: MultiTransfer");
             var ret = new TransactionResult();
+            ret.callGrainTime = time;
             try
             {
                 var myGroupID = -1;
                 var inputTuple = (MultiTransferInput)funcInput;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
-
                 var success = await state.PerformUpdate(myState =>
                 {
                     myGroupID = myState.GroupID;
+                    Console.WriteLine($"MultiTransfer: grain {myGroupID} perform update");
                     if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
                     if (myState.checkingAccount.ContainsKey(id) && myState.checkingAccount[id] >= inputTuple.Item2 * inputTuple.Item3.Count)
                     {
@@ -263,7 +264,7 @@ namespace SmallBank.Grains
                     }
                     else return false;
                 });
-
+     
                 if (!success)
                 {
                     ret.exception = true;
@@ -271,6 +272,7 @@ namespace SmallBank.Grains
                 }
                 else
                 {
+                    //ret.callGrainTime = DateTime.Now;
                     Debug.Assert(myGroupID >= 0);
                     var destinations = inputTuple.Item3;
                     foreach (var tuple in destinations)
@@ -288,8 +290,11 @@ namespace SmallBank.Grains
                             var task = destination.StartTransaction("DepositChecking", input);
                             await task;
                         }
+                        Console.WriteLine($"MultiTransfer: call grain {gID}");
                     }
                 }
+                
+                ret.prepareTime = DateTime.Now;
             }
             catch (Exception e)
             {
@@ -300,6 +305,7 @@ namespace SmallBank.Grains
         
         private async Task<TransactionResult> DepositChecking(object funcInput)
         {
+            Console.WriteLine($"grain: Deposit");
             var ret = new TransactionResult();
             try
             {
@@ -309,6 +315,7 @@ namespace SmallBank.Grains
 
                 var success = await state.PerformUpdate(myState =>
                 {
+                    Console.WriteLine($"Deposit: grain {myState.GroupID} perform update");
                     if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
                     if (myState.checkingAccount.ContainsKey(id))
                     {
@@ -362,6 +369,7 @@ namespace SmallBank.Grains
 
         Task<TransactionResult> IOrleansTransactionalAccountGroupGrain.StartTransaction(string startFunc, object funcInput)
         {
+            var time = DateTime.Now;
             AllTxnTypes fnType;
             if (!Enum.TryParse(startFunc.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunc}");
             switch (fnType)
@@ -377,8 +385,8 @@ namespace SmallBank.Grains
                 case AllTxnTypes.Transfer:
                     return Transfer(funcInput);
                 case AllTxnTypes.MultiTransfer:
-                    //Console.WriteLine($"AccountGrain {grainKey}: StartTransaction MultiTransfer!!!!!!!!!!!!!!!!!!!");
-                    return MultiTransfer(funcInput);
+                    Console.WriteLine($"grain: StartTransaction");
+                    return MultiTransfer(funcInput, time);
                 case AllTxnTypes.Init:
                     return Init(funcInput);
                 default:

@@ -46,7 +46,7 @@ namespace NewProcess
         public Task<TransactionResult> newTransaction(IClusterClient client, RequestData data)
         {
             var accountGrains = data.grains;
-            //accountGrains.Sort();
+            accountGrains.Sort();
             var grainAccessInfo = new Dictionary<int, Tuple<string, int>>();
             /*
             grainAccessInfo.Add(accountGrains[0], new Tuple<string, int>(grain_namespace, 1));

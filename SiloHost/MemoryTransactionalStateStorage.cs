@@ -115,6 +115,8 @@ namespace OrleansSiloHost
 
         public async Task<string> Store(string expectedETag, TransactionalStateMetaData metadata, List<PendingTransactionState<TState>> statesToPrepare, long? commitUpTo, long? abortAfter)
         {
+            /*
+            //Console.WriteLine($"MemoryStorage: Store()");
             if (key.ETag != expectedETag) throw new ArgumentException(nameof(expectedETag), "Etag does not match");
 
             // first, clean up aborted records
@@ -158,7 +160,8 @@ namespace OrleansSiloHost
                 states.RemoveRange(0, pos);
             }
 
-            return key.ETag;
+            return key.ETag;*/
+            return "";
         }
 
         // find the StateEntity who's Key == sequenceId

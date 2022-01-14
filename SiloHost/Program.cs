@@ -20,7 +20,7 @@ namespace OrleansSiloHost
     {
         static private int siloPort;
         static private int gatewayPort;
-        static readonly bool enableOrleansTxn = true;
+        static readonly bool enableOrleansTxn = Constants.implementationType == ImplementationType.ORLEANSTXN ? true : false;
 
         public static int Main(string[] args)
         {
@@ -91,7 +91,7 @@ namespace OrleansSiloHost
                 builder
                     //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Microsoft", LogLevel.Information))
                     //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))
-                    //.Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(200))
+                    .Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(8000))
                     //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20))
                     .UseTransactions();
             }

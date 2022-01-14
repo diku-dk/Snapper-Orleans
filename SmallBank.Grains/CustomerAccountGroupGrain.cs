@@ -134,7 +134,7 @@ namespace SmallBank.Grains
             }
             return res;
         }
-
+        /*
         public async Task<TransactionResult> MultiTransfer(TransactionContext context, object funcInput)
         {
             var res = new TransactionResult();
@@ -178,8 +178,8 @@ namespace SmallBank.Grains
                 res.exception = true;
             }
             return res;
-        }
-        /*
+        }*/
+        
         // no deadlock
         public async Task<TransactionResult> MultiTransfer(TransactionContext context, object funcInput)
         {
@@ -223,7 +223,7 @@ namespace SmallBank.Grains
                 res.exception = true;
             }
             return res;
-        }*/
+        }
 
         public async Task<TransactionResult> TransactSaving(TransactionContext context, object funcInput)
         {

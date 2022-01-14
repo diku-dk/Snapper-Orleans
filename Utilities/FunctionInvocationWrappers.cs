@@ -14,6 +14,9 @@ namespace Utilities
         public bool Exp_Serializable = false;
         public bool Exp_NotSureSerializable = false;
 
+        public DateTime callGrainTime = DateTime.Now;
+        public DateTime prepareTime = DateTime.Now;
+
         public TransactionResult(object res = null)
         {
             resultObject = res;

@@ -29,7 +29,7 @@
         public const bool loggingBatching = false;
         public const int numPersistItemPerSilo = numCPUPerSilo / numCPUBasic * 8;
         // for SmallBank
-        public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
+        public const int numGrainPerSilo = 10 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
         // for TPCC
         public const int NUM_W_PER_SILO = 2 * numCPUPerSilo / numCPUBasic;
         public const int NUM_D_PER_W = 10;
@@ -59,7 +59,7 @@
         public const string worker_Remote_SinkAddress = ">tcp://1.1.1.1.212:5558";    // controller public IP
         public const string worker_Remote_ControllerAddress = ">tcp://1.1.1.1:5575";  // controller public IP
 
-        public const bool localCluster = false;
+        public const bool localCluster = true;
         public const string LocalSilo = "dev";
         public const string ClusterSilo = "ec2";
         public const string ServiceID = "Snapper";
@@ -71,7 +71,7 @@
         public const string SecretKey = "slhma5d8ge1lzzURRxJVMzYKAC3muvgxcqWtseEY";
 
         // for workload generation
-        public const int BASE_NUM_MULTITRANSFER = 150000;
+        public const int BASE_NUM_MULTITRANSFER = 5000;
         public const int BASE_NUM_NEWORDER = 20000;
     }
 }
