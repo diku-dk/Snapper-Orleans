@@ -48,22 +48,7 @@ namespace NewProcess
             var accountGrains = data.grains;
             accountGrains.Sort();
             var grainAccessInfo = new Dictionary<int, Tuple<string, int>>();
-            /*
-            grainAccessInfo.Add(accountGrains[0], new Tuple<string, int>(grain_namespace, 1));
-            return Execute(client, accountGrains[0], "Balance", null, grainAccessInfo);*/
-
-            // no deadlock
-            /*
-            accountGrains = new List<int>();
-            for (int i = 0; i < 4; i++)
-            {
-                var id = index % 10000;
-                accountGrains.Add(id);
-                index++;
-                if (index == 10000) index = 0;
-                //Console.Write($"{id} ");
-            }*/
-
+           
             int groupId = 0;
             Tuple<string, int> item1 = null;
             float item2 = transferAmountDistribution.Sample();
@@ -75,11 +60,10 @@ namespace NewProcess
                 {
                     first = false;
                     groupId = item;
-                    grainAccessInfo.Add(item, new Tuple<string, int>(grain_namespace, 1));
                     item1 = new Tuple<string, int>(item.ToString(), item);
                     continue;
                 }
-                item3.Add(new Tuple<string, int>(item.ToString(), item));
+                else item3.Add(new Tuple<string, int>(item.ToString(), item));
                 grainAccessInfo.Add(item, new Tuple<string, int>(grain_namespace, 1));
             }
             var args = new Tuple<Tuple<string, int>, float, List<Tuple<string, int>>>(item1, item2, item3);

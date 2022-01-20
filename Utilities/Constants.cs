@@ -29,7 +29,7 @@
         public const bool loggingBatching = false;
         public const int numPersistItemPerSilo = numCPUPerSilo / numCPUBasic * 8;
         // for SmallBank
-        public const int numGrainPerSilo = 10 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
+        public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
         // for TPCC
         public const int NUM_W_PER_SILO = 2 * numCPUPerSilo / numCPUBasic;
         public const int NUM_D_PER_W = 10;
@@ -47,7 +47,8 @@
 
         //public const string logPath = @"D:\log\";
         public const string logPath = @"C:\Users\Administrator\Desktop\log\";
-        public const string dataPath = @"C:\Users\Administrator\Desktop\data\";
+        //public const string dataPath = @"C:\Users\Administrator\Desktop\data\";
+        public const string dataPath = @"C:\Users\jhs316\Desktop\data\";
 
         public const string controller_Local_SinkAddress = "@tcp://localhost:5558";
         public const string controller_Local_WorkerAddress = "@tcp://localhost:5575";
@@ -71,7 +72,7 @@
         public const string SecretKey = "slhma5d8ge1lzzURRxJVMzYKAC3muvgxcqWtseEY";
 
         // for workload generation
-        public const int BASE_NUM_MULTITRANSFER = 5000;
+        public const int BASE_NUM_MULTITRANSFER = 50000;
         public const int BASE_NUM_NEWORDER = 20000;
     }
 }

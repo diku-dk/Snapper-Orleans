@@ -92,7 +92,6 @@ namespace Concurrency.Implementation
             var c1 = new FunctionCall(startFunc, funcInput, GetType());
             var t1 = Execute(c1, context);
             await t1;
-            var time = DateTime.Now;
             if (highestCommittedBid < context.bid)
             {
                 Debug.Assert(batchCommit.ContainsKey(context.bid));
@@ -101,7 +100,6 @@ namespace Concurrency.Implementation
             funcResults.Remove(context.tid);
             var res = new TransactionResult(false, t1.Result.resultObject);  // PACT never abort
             res.isDet = true;
-            res.prepareTime = time;
             return res;
         }
 
@@ -117,8 +115,11 @@ namespace Concurrency.Implementation
                 if (highestCommittedBid < context.highestCommittedBid) highestCommittedBid = context.highestCommittedBid;
                 context.coordID = myID;
                 var c1 = new FunctionCall(startFunc, funcInput, GetType());
+                res.startExeTime = DateTime.Now;
                 t1 = Execute(c1, context);
                 await t1;
+                res.callGrainTime = t1.Result.callGrainTime;
+                res.prepareTime = DateTime.Now;
                 canCommit = !t1.Result.exception;
                 Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myID));
                 var maxBeforeBid = -1;
@@ -169,7 +170,7 @@ namespace Concurrency.Implementation
         public async Task<bool> PrepareA(int tid, bool doLogging)
         {
             if (state == null) return true;  // Stateless grain always vote "yes" for 2PC
-            var prepareResult = await state.Prepare(tid);
+            var prepareResult = await state.Prepare(tid, doLogging);
             if (prepareResult && log != null && doLogging) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
             return prepareResult;
         }
@@ -188,6 +189,7 @@ namespace Concurrency.Implementation
                 var prepareResult = new List<Task<bool>>();
                 foreach (var item in result.grainsInNestedFunctions)
                 {
+                    if (item.Value.Item3) continue;    // is it's no-op on the grain, no need to prepare
                     if (item.Key == myID) prepareResult.Add(PrepareA(tid, !item.Value.Item2));
                     else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.Item1).PrepareA(tid, !item.Value.Item2));
                 }
@@ -240,9 +242,11 @@ namespace Concurrency.Implementation
             switch (mode)
             {
                 case AccessMode.Read:
-                    funcResults[context.tid].isReadOnlyOnGrain = true;
+                    funcResults[context.tid].isNoOpOnGrain = false;
                     return await state.Read(context);
                 case AccessMode.ReadWrite:
+                    funcResults[context.tid].isNoOpOnGrain = false;
+                    funcResults[context.tid].isReadOnlyOnGrain = false;
                     return await state.ReadWrite(context);
                 default:
                     throw new Exception("Exception: Unknown access mode. ");
@@ -276,6 +280,7 @@ namespace Concurrency.Implementation
                         var txnRes = await InvokeFunction(call, context);
                         res.exception |= txnRes.exception;
                         res.resultObject = txnRes.resultObject;
+                        res.callGrainTime = txnRes.callGrainTime;
                         updateExecutionResult(tid, res);
                     }
                     else
@@ -321,7 +326,7 @@ namespace Concurrency.Implementation
         private void updateExecutionResult(FunctionResult res)
         {
             if (res.grainsInNestedFunctions.ContainsKey(myID) == false)
-                res.grainsInNestedFunctions.Add(myID, new Tuple<string, bool>(myClassName, true));
+                res.grainsInNestedFunctions.Add(myID, new Tuple<string, bool, bool>(myClassName, true, true));
         }
 
         // Update the metadata of the execution results, including accessed grains, before/after set, etc.
@@ -330,7 +335,7 @@ namespace Concurrency.Implementation
             if (res.grainWithHighestBeforeBid.Item1 == -1) res.grainWithHighestBeforeBid = myFullID;
 
             if (res.grainsInNestedFunctions.ContainsKey(myID) == false)
-                res.grainsInNestedFunctions.Add(myID, new Tuple<string, bool>(myClassName, res.isReadOnlyOnGrain));
+                res.grainsInNestedFunctions.Add(myID, new Tuple<string, bool, bool>(myClassName, res.isReadOnlyOnGrain, res.isNoOpOnGrain));
 
             var result = myScheduler.getBeforeAfter(tid);   // <maxBeforeBid, minAfterBid, isConsecutive>
             var maxBeforeBid = result.Item1;
@@ -348,7 +353,7 @@ namespace Concurrency.Implementation
         }
 
         // <isCommit, maxBeforeBid>
-        private async Task<Tuple<bool, int>> Prepare_2PC(int tid, int coordinatorKey, Dictionary<int, Tuple<string, bool>> grainsInNestedFunctions, TransactionResult res)
+        private async Task<Tuple<bool, int>> Prepare_2PC(int tid, int coordinatorKey, Dictionary<int, Tuple<string, bool, bool>> grainsInNestedFunctions, TransactionResult res)
         {
             var grainIDsInTransaction = new HashSet<int>();
             grainIDsInTransaction.UnionWith(grainsInNestedFunctions.Keys);
@@ -358,6 +363,7 @@ namespace Concurrency.Implementation
             var prepareResult = new List<Task<Tuple<bool, int, int, bool>>>();
             foreach (var item in grainsInNestedFunctions)
             {
+                if (item.Value.Item3) continue;
                 if (item.Key == myID) prepareResult.Add(Prepare(tid, !item.Value.Item2));
                 else prepareResult.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.Item1).Prepare(tid, !item.Value.Item2));
             }
@@ -405,12 +411,13 @@ namespace Concurrency.Implementation
             return new Tuple<bool, bool>(false, false);
         }
 
-        private async Task Commit_2PC(int tid, int maxBeforeBid, Dictionary<int, Tuple<string, bool>> grainsInNestedFunctions)
+        private async Task Commit_2PC(int tid, int maxBeforeBid, Dictionary<int, Tuple<string, bool, bool>> grainsInNestedFunctions)
         {
             var commitTasks = new List<Task>();
             if (log != null) commitTasks.Add(log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]));
             foreach (var item in grainsInNestedFunctions)
             {
+                if (item.Value.Item2 || item.Value.Item3) continue;   // if the grain has only been read or it's no-op, no need 2nd phase
                 if (item.Key == myID) commitTasks.Add(Commit(tid, maxBeforeBid, !item.Value.Item2));
                 else commitTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.Item1).Commit(tid, maxBeforeBid, !item.Value.Item2));
             }
@@ -423,6 +430,7 @@ namespace Concurrency.Implementation
             //Presume Abort
             foreach (var item in result.grainsInNestedFunctions)
             {
+                if (item.Value.Item2 || item.Value.Item3) continue;   // if the grain has only been read or it's no-op, no need 2nd phase
                 if (item.Key == myID) abortTasks.Add(Abort(tid));
                 else abortTasks.Add(GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.Item1).Abort(tid));
             }
@@ -458,7 +466,7 @@ namespace Concurrency.Implementation
         public async Task<Tuple<bool, int, int, bool>> Prepare(int tid, bool doLogging)
         {
             if (state == null) return new Tuple<bool, int, int, bool>(true, -1, -1, true);  // Stateless grain always vote "yes" for 2PC
-            var prepareResult = await state.Prepare(tid);
+            var prepareResult = await state.Prepare(tid, doLogging);
             if (prepareResult && log != null && doLogging) await log.HandleOnPrepareIn2PC(state, tid, coordinatorMap[tid]);
             if (prepareResult == false) return new Tuple<bool, int, int, bool>(false, -1, -1, true);
 

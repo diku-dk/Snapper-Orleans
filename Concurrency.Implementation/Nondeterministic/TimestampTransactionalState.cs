@@ -123,6 +123,11 @@ namespace Concurrency.Implementation.Nondeterministic
             return lastNode;
         }
 
+        public async Task<bool> Prepare(int tid, bool isWriter)
+        {
+            throw new NotImplementedException();
+        }
+
         public async Task<bool> Prepare(int tid)   // check if the dependent transaction has committed
         {
             Debug.Assert(readDependencyMap.ContainsKey(tid) || transactionMap.ContainsKey(tid));

@@ -40,6 +40,11 @@ namespace Utilities
         public List<double> latencies;
         public List<double> det_latencies;
 
+        public List<double> startTxnTime;
+        public List<double> update1Time;
+        public List<double> update2Time;
+        public List<double> endTxnTime;
+
         public WorkloadResults(int numDetTxn, int numNonDetTxn, int numDetCommitted, int numNonDetCommitted, long startTime, long endTime, int numNotSerializable, int numNotSureSerializable, int numDeadlock)
         {
             this.numDetTxn = numDetTxn;
@@ -57,6 +62,14 @@ namespace Utilities
         {
             this.latencies = latencies;
             this.det_latencies = det_latencies;
+        }
+
+        public void setBreakdownLatency(List<double> startTxnTime, List<double> update2Time, List<double> update1Time, List<double> endTxnTime)
+        {
+            this.startTxnTime = startTxnTime;
+            this.update1Time = update1Time;
+            this.update2Time = update2Time;
+            this.endTxnTime = endTxnTime;
         }
     }
 }

@@ -13,7 +13,7 @@ namespace Concurrency.Interface
         Task<TState> ReadWrite(TransactionContext ctx);
 
         [AlwaysInterleave]
-        Task<bool> Prepare(int tid);
+        Task<bool> Prepare(int tid, bool isWriter);
 
         [AlwaysInterleave]
         Task Commit(int tid);

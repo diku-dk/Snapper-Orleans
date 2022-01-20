@@ -13,7 +13,7 @@ namespace Concurrency.Interface.Nondeterministic
         Task<TState> ReadWrite(TransactionContext ctx, CommittedState<TState> committedState);
 
         [AlwaysInterleave]
-        Task<bool> Prepare(int tid);
+        Task<bool> Prepare(int tid, bool isWriter);
 
         [AlwaysInterleave]
         void Commit(int tid, CommittedState<TState> committedState);

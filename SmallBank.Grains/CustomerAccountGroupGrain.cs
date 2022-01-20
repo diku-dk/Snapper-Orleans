@@ -10,9 +10,8 @@ namespace SmallBank.Grains
 {
     using WriteCheckInput = Tuple<string, float>;
     using TransactSavingInput = Tuple<string, float>;
-    using DepositCheckingInput = Tuple<Tuple<string, int>, float>;
-    using BalanceInput = String;
-    //Source AccountID, Amount, List<Tuple<Account Name, Account ID, Grain ID>>
+    using DepositCheckingInput = Tuple<Tuple<string, int>, float, bool>;
+    // <Source AccountID>, Amount, List<Dest AccountID>
     using MultiTransferInput = Tuple<Tuple<string, int>, float, List<Tuple<string, int>>>;
     using InitAccountInput = Tuple<int, int>;
 
@@ -81,59 +80,6 @@ namespace SmallBank.Grains
             return res;
         }
 
-        public async Task<TransactionResult> Balance(TransactionContext context, object funcInput)
-        {
-            TransactionResult res = new TransactionResult(-1);
-            try
-            {
-                var myState = await GetState(context, AccessMode.Read);
-                var custName = (BalanceInput)funcInput;
-                if (myState.account.ContainsKey(custName))
-                {
-                    var id = myState.account[custName];
-                    if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
-                    {
-                        res.exception = true;
-                        return res;
-                    }
-                    res.resultObject = myState.savingAccount[id] + myState.checkingAccount[id];
-                }
-                else
-                {
-                    res.exception = true;
-                    return res;
-                }
-            }
-            catch (Exception)
-            {
-                res.exception = true;
-            }
-            return res;
-        }
-
-        public async Task<TransactionResult> DepositChecking(TransactionContext context, object funcInput)
-        {
-            TransactionResult res = new TransactionResult();
-            try
-            {
-                var myState = await GetState(context, AccessMode.ReadWrite);
-                var inputTuple = (DepositCheckingInput)funcInput;
-                var custName = inputTuple.Item1.Item1;
-                var id = inputTuple.Item1.Item2;
-                if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
-                if (!myState.checkingAccount.ContainsKey(id))
-                {
-                    res.exception = true;
-                    return res;
-                }
-                myState.checkingAccount[id] += inputTuple.Item2;
-            }
-            catch (Exception)
-            {
-                res.exception = true;
-            }
-            return res;
-        }
         /*
         public async Task<TransactionResult> MultiTransfer(TransactionContext context, object funcInput)
         {
@@ -179,7 +125,7 @@ namespace SmallBank.Grains
             }
             return res;
         }*/
-        
+        /*
         // no deadlock
         public async Task<TransactionResult> MultiTransfer(TransactionContext context, object funcInput)
         {
@@ -187,7 +133,7 @@ namespace SmallBank.Grains
             try
             {
                 var myState = await GetState(context, AccessMode.ReadWrite);
-                var inputTuple = (MultiTransferInput)funcInput;
+                var inputTuple = (MultiTransferInput)funcInput;   // <Source AccountID>, Amount, List<Dest AccountID>
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
                 if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
@@ -200,10 +146,15 @@ namespace SmallBank.Grains
                 {
                     myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
                     var destinations = inputTuple.Item3;
+                    res.callGrainTime = DateTime.Now;
+                    var count = 0;
+                    var write = true;
                     foreach (var tuple in destinations)
                     {
+                        count++;
+                        if (count == 4) write = false;
                         var gID = MapCustomerIdToGroup(tuple.Item2);
-                        var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2);
+                        var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, write);
                         if (gID == myState.GroupID)
                         {
                             var task = DepositChecking(context, input);
@@ -211,9 +162,17 @@ namespace SmallBank.Grains
                         }
                         else
                         {
-                            var funcCall = new FunctionCall("DepositChecking", input, typeof(CustomerAccountGroupGrain));
-                            var task = CallGrain(context, gID, "SmallBank.Grains.CustomerAccountGroupGrain", funcCall);
-                            await task;
+                            if (write)
+                            {
+                                var funcCall = new FunctionCall("DepositChecking", input, typeof(CustomerAccountGroupGrain));
+                                var task = CallGrain(context, gID, "SmallBank.Grains.CustomerAccountGroupGrain", funcCall);
+                                await task;
+                            }
+                            else 
+                            {
+                                var grain = GrainFactory.GetGrain<ICustomerAccountGroupGrain>(gID);
+                                await grain.DepositChecking(null, input);
+                            }
                         }
                     }
                 }
@@ -223,8 +182,66 @@ namespace SmallBank.Grains
                 res.exception = true;
             }
             return res;
+        }*/
+        
+        public async Task<TransactionResult> MultiTransfer(TransactionContext context, object funcInput)    // read only / no-op
+        {
+            var res = new TransactionResult();
+            try
+            {
+                //_ = await GetState(context, AccessMode.Read);
+                var inputTuple = (MultiTransferInput)funcInput;
+                var destinations = inputTuple.Item3;
+                res.callGrainTime = DateTime.Now;
+                foreach (var tuple in destinations)
+                {
+                    var gID = MapCustomerIdToGroup(tuple.Item2);
+                    var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, false);
+                    var funcCall = new FunctionCall("DepositChecking", input, typeof(CustomerAccountGroupGrain));
+                    var task = CallGrain(context, gID, "SmallBank.Grains.CustomerAccountGroupGrain", funcCall);
+                    await task;
+                }
+            }
+            catch (Exception)
+            {
+                res.exception = true;
+            }
+            return res;
         }
 
+        public async Task<TransactionResult> DepositChecking(TransactionContext context, object funcInput)
+        {
+;           var res = new TransactionResult();
+            try
+            {
+                
+                var inputTuple = (DepositCheckingInput)funcInput;
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+
+                var write = inputTuple.Item3;
+                if (write == false)
+                {
+                    //_ = await GetState(context, AccessMode.Read);
+                    return res;
+                } 
+
+                var myState = await GetState(context, AccessMode.ReadWrite);
+                if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                if (!myState.checkingAccount.ContainsKey(id))
+                {
+                    res.exception = true;
+                    return res;
+                }
+                myState.checkingAccount[id] += inputTuple.Item2;
+            }
+            catch (Exception)
+            {
+                res.exception = true;
+            }
+            return res;
+        }
+        
         public async Task<TransactionResult> TransactSaving(TransactionContext context, object funcInput)
         {
             TransactionResult res = new TransactionResult();
@@ -274,6 +291,36 @@ namespace SmallBank.Grains
                         myState.checkingAccount[id] -= (inputTuple.Item2 + 1);    // Pay a penalty  
                     else myState.checkingAccount[id] -= inputTuple.Item2;
                     myState.checkingAccount[id] -= inputTuple.Item2;
+                }
+                else
+                {
+                    res.exception = true;
+                    return res;
+                }
+            }
+            catch (Exception)
+            {
+                res.exception = true;
+            }
+            return res;
+        }
+
+        public async Task<TransactionResult> Balance(TransactionContext context, object funcInput)
+        {
+            TransactionResult res = new TransactionResult(-1);
+            try
+            {
+                var myState = await GetState(context, AccessMode.Read);
+                var custName = (string)funcInput;
+                if (myState.account.ContainsKey(custName))
+                {
+                    var id = myState.account[custName];
+                    if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
+                    {
+                        res.exception = true;
+                        return res;
+                    }
+                    res.resultObject = myState.savingAccount[id] + myState.checkingAccount[id];
                 }
                 else
                 {

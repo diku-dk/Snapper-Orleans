@@ -73,6 +73,12 @@ namespace ExperimentController
             var notSureSerializableRateAccumulator = new List<float>();
             var deadlockRateAccumulator = new List<float>();
             var ioThroughputAccumulator = new List<float>();
+
+            var aggStartTxnTime = new List<double>();
+            var aggUpdate1Time = new List<double>();
+            var aggUpdate2Time = new List<double>();
+            var aggEndTxnTime = new List<double>();
+
             //Skip the epochs upto warm up epochs
             for (int epochNumber = numWarmupEpoch; epochNumber < workload.numEpochs; epochNumber++)
             {
@@ -87,6 +93,12 @@ namespace ExperimentController
                 long aggEndTime = results[epochNumber, 0].endTime;
                 aggLatencies.AddRange(results[epochNumber, 0].latencies);
                 aggDetLatencies.AddRange(results[epochNumber, 0].det_latencies);
+
+                aggStartTxnTime.AddRange(results[epochNumber, 0].startTxnTime);
+                aggUpdate1Time.AddRange(results[epochNumber, 0].update1Time);
+                aggUpdate2Time.AddRange(results[epochNumber, 0].update2Time);
+                aggEndTxnTime.AddRange(results[epochNumber, 0].endTxnTime);
+
                 for (int workerNode = 1; workerNode < Constants.numWorker; workerNode++)
                 {
                     aggNumDetCommitted += results[epochNumber, workerNode].numDetCommitted;
@@ -100,6 +112,11 @@ namespace ExperimentController
                     aggEndTime = (results[epochNumber, workerNode].endTime < aggEndTime) ? results[epochNumber, workerNode].endTime : aggEndTime;
                     aggLatencies.AddRange(results[epochNumber, workerNode].latencies);
                     aggDetLatencies.AddRange(results[epochNumber, workerNode].det_latencies);
+
+                    aggStartTxnTime.AddRange(results[epochNumber, workerNode].startTxnTime);
+                    aggUpdate1Time.AddRange(results[epochNumber, workerNode].update1Time);
+                    aggUpdate2Time.AddRange(results[epochNumber, workerNode].update2Time);
+                    aggEndTxnTime.AddRange(results[epochNumber, workerNode].endTxnTime);
                 }
                 var time = aggEndTime - aggStartTime;
                 float detCommittedTxnThroughput = (float)aggNumDetCommitted * 1000 / time;  // the throughput only include committed transactions
@@ -136,17 +153,17 @@ namespace ExperimentController
             var ioThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(ioThroughputAccumulator.ToArray());
             using (file = new StreamWriter(filePath, true))
             {
-                file.Write($"numWarehouse={Constants.NUM_W_PER_SILO} siloCPU={Constants.numCPUPerSilo} distribution={workload.distribution} benchmark={workload.benchmark} ");
-                file.Write($"{workload.pactPercent}% ");
-                if (workload.pactPercent > 0) file.Write($"{detThroughputMeanAndSd.Item1} {detThroughputMeanAndSd.Item2} ");
+                //file.Write($"numWarehouse={Constants.NUM_W_PER_SILO} siloCPU={Constants.numCPUPerSilo} distribution={workload.distribution} benchmark={workload.benchmark} ");
+                //file.Write($"{workload.pactPercent}% ");
+                if (workload.pactPercent > 0) file.Write($"{detThroughputMeanAndSd.Item1:0} {detThroughputMeanAndSd.Item2:0} ");
                 if (workload.pactPercent < 100)
                 {
-                    file.Write($"{nonDetThroughputMeanAndSd.Item1} {nonDetThroughputMeanAndSd.Item2} ");
-                    file.Write($"{abortRateMeanAndSd.Item1}% ");
+                    file.Write($"{nonDetThroughputMeanAndSd.Item1:0} {nonDetThroughputMeanAndSd.Item2:0} ");
+                    //file.Write($"{abortRateMeanAndSd.Item1}% ");
                     if (workload.pactPercent > 0)
                     {
                         var abortRWConflict = 100 - deadlockRateMeanAndSd.Item1 - notSerializableRateMeanAndSd.Item1 - notSureSerializableRateMeanAndSd.Item1;
-                        file.Write($"{abortRWConflict}% {deadlockRateMeanAndSd.Item1}% {notSerializableRateMeanAndSd.Item1}% {notSureSerializableRateMeanAndSd.Item1}% ");
+                        file.Write($"{Math.Round(abortRWConflict, 2).ToString().Replace(',', '.')}% {Math.Round(deadlockRateMeanAndSd.Item1, 2).ToString().Replace(',', '.')}% {Math.Round(notSerializableRateMeanAndSd.Item1, 2).ToString().Replace(',', '.')}% {Math.Round(notSureSerializableRateMeanAndSd.Item1, 2).ToString().Replace(',', '.')}% ");
                     }
                 }
                 if (Constants.implementationType == ImplementationType.SNAPPER)
@@ -158,7 +175,7 @@ namespace ExperimentController
                     foreach (var percentile in workload.percentilesToCalculate)
                     {
                         var lat = ArrayStatistics.PercentileInplace(aggDetLatencies.ToArray(), percentile);
-                        file.Write($"{lat} ");
+                        file.Write($"{Math.Round(lat, 2).ToString().Replace(',', '.')} ");
                     }
                 }
                 if (workload.pactPercent < 100)
@@ -166,8 +183,10 @@ namespace ExperimentController
                     foreach (var percentile in workload.percentilesToCalculate)
                     {
                         var lat = ArrayStatistics.PercentileInplace(aggLatencies.ToArray(), percentile);
-                        file.Write($"{lat} ");
+                        file.Write($"{Math.Round(lat, 2).ToString().Replace(',', '.')} ");
                     }
+
+                    file.Write($"{Math.Round(aggStartTxnTime.Mean(), 4).ToString().Replace(',', '.')} {Math.Round(aggUpdate1Time.Mean(), 4).ToString().Replace(',', '.')} {Math.Round(aggUpdate2Time.Mean(), 4).ToString().Replace(',', '.')} {Math.Round(aggEndTxnTime.Mean(), 4).ToString().Replace(',', '.')}");
                 }
                 file.WriteLine();
             }

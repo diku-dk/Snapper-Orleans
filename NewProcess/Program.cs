@@ -118,11 +118,12 @@ namespace NewProcess
             Console.WriteLine($"thread = {threadIndex}, isDet = {isDet}, pipe = {pipeSize}");
             for (int eIndex = 0; eIndex < config.numEpochs; eIndex++)
             {
-                var txnExeTime = new List<double>();
-                var txnUpdate1Time = new List<double>();
-                var txnUpdate2Time = new List<double>();
-                var txnCommitTime = new List<double>();
-                var txnStartTime = new Dictionary<Task<TransactionResult>, DateTime>();
+                var startTxntime = new List<double>();
+                var update1Time = new List<double>();
+                var update2Time = new List<double>();
+                var endTxnTime = new List<double>();
+
+                var submitTxnTime = new Dictionary<Task<TransactionResult>, DateTime>();
                 int numEmit = 0;
                 int numDetCommit = 0;
                 int numNonDetCommit = 0;
@@ -147,7 +148,7 @@ namespace NewProcess
                 {
                     while (tasks.Count < pipeSize && queue.TryDequeue(out txn))
                     {
-                        Thread.Sleep(5000);
+                        //Thread.Sleep(5000);
                         var now = DateTime.Now;
                         //if (numEmit == 99) startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                         var asyncReqStartTime = globalWatch.Elapsed;
@@ -163,7 +164,7 @@ namespace NewProcess
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);
 
-                        txnStartTime.Add(newTask, now);
+                        submitTxnTime.Add(newTask, now);
                     }
                     if (tasks.Count != 0)
                     {
@@ -199,12 +200,14 @@ namespace NewProcess
                                     latencies.Add(totalTime);
 
                                     // investigate OrleansTxn
-                                    var exeTime = (task.Result.prepareTime - txnStartTime[task]).TotalMilliseconds;
-                                    txnExeTime.Add(exeTime);
-                                    txnCommitTime.Add(totalTime - exeTime);
-                                    var update1 = (task.Result.callGrainTime - txnStartTime[task]).TotalMilliseconds;
-                                    txnUpdate1Time.Add(update1);
-                                    txnUpdate2Time.Add(exeTime - update1);
+                                    var startTxn = (task.Result.startExeTime - submitTxnTime[task]).TotalMilliseconds;
+                                    var update1 = (task.Result.callGrainTime - task.Result.startExeTime).TotalMilliseconds;
+                                    var update2 = (task.Result.prepareTime - task.Result.callGrainTime).TotalMilliseconds;
+                                    var endTxn = totalTime - startTxn - update1 - update2;
+                                    startTxntime.Add(startTxn);
+                                    update1Time.Add(update1);
+                                    update2Time.Add(update2);
+                                    endTxnTime.Add(endTxn);
                                 }
                                 else if (task.Result.Exp_Serializable) numNotSerializable++;
                                 else if (task.Result.Exp_NotSureSerializable) numNotSureSerializable++;
@@ -253,9 +256,14 @@ namespace NewProcess
                                 latencies.Add(totalTime);
 
                                 // investigate OrleansTxn
-                                var exeTime = (task.Result.prepareTime - txnStartTime[task]).TotalMilliseconds;
-                                txnExeTime.Add(exeTime);
-                                txnCommitTime.Add(totalTime - exeTime);
+                                var startTxn = (task.Result.startExeTime - submitTxnTime[task]).TotalMilliseconds;
+                                var update1 = (task.Result.callGrainTime - task.Result.startExeTime).TotalMilliseconds;
+                                var update2 = (task.Result.prepareTime - task.Result.callGrainTime).TotalMilliseconds;
+                                var endTxn = totalTime - startTxn - update1 - update2;
+                                startTxntime.Add(startTxn);
+                                update1Time.Add(update1);
+                                update2Time.Add(update2);
+                                endTxnTime.Add(endTxn);
                             }
                             else if (task.Result.Exp_Serializable) numNotSerializable++;
                             else if (task.Result.Exp_NotSureSerializable) numNotSureSerializable++;
@@ -272,14 +280,15 @@ namespace NewProcess
                 if (isDet) Console.WriteLine($"det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
                 else
                 {
-                    if (Constants.implementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Update1 = {txnUpdate1Time.Average()}, Update2 = {txnUpdate2Time.Average()}");
-                    else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
-                    Console.WriteLine($"exeTime = {txnExeTime.Average()}, commitTime = {txnCommitTime.Average()}, totalTime = {latencies.Average()}");
+                    //if (Constants.implementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}, Update1 = {txnUpdate1Time.Average()}, Update2 = {txnUpdate2Time.Average()}");
+                    //else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
+                    Console.WriteLine($"tp = {1000 * numNonDetCommit / (endTime - startTime)}, startTxn = {startTxntime.Average()}, update1 = {update1Time.Average()}, update2 = {update2Time.Average()}, endTxn = {endTxnTime.Average()}, totalTime = {latencies.Average()}");
                 }
                 WorkloadResults res;
                 if (Constants.implementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResults(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
                 else res = new WorkloadResults(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
                 res.setLatency(latencies, det_latencies);
+                res.setBreakdownLatency(startTxntime, update1Time, update2Time, endTxnTime);
                 results[threadIndex] = res;
                 threadAcks[eIndex].Signal();  // Signal the completion of epoch
             }
@@ -492,7 +501,7 @@ namespace NewProcess
         private static IDiscreteDistribution numSiloDist = new DiscreteUniform(0, 99, new Random());
         private static int SelectNumSilo(int txnSize)
         {
-            Debug.Assert(txnSize == 4);
+            //Debug.Assert(txnSize == 4);
             // 1 silo: 0%
             // 2 silo: 100%
             // 4 silo: 0%
@@ -515,6 +524,8 @@ namespace NewProcess
                 case Distribution.UNIFORM:
                     Console.WriteLine($"Generate UNIFORM data for SmallBank, txnSize = {config.txnSize}");
                     {
+                        var flag = 0;
+
                         var grainDist = new DiscreteUniform(0, Constants.numGrainPerSilo - 1, new Random());  // [0, numGrainPerSilo - 1]
                         for (int epoch = 0; epoch < config.numEpochs; epoch++)
                         {
@@ -534,6 +545,7 @@ namespace NewProcess
 
                                 for (int k = 0; k < config.txnSize; k++)
                                 {
+                                    /*
                                     var silo = siloList[k % numSiloAccess];
                                     var grainInSilo = grainDist.Sample();
                                     var grainID = silo * Constants.numGrainPerSilo + grainInSilo;
@@ -542,7 +554,11 @@ namespace NewProcess
                                         grainInSilo = grainDist.Sample();
                                         grainID = silo * Constants.numGrainPerSilo + grainInSilo;
                                     }
-                                    grainsPerTxn.Add(grainID);
+                                    grainsPerTxn.Add(grainID);*/
+                                    
+                                    if (flag == Constants.numGrainPerSilo) flag = 0;
+                                    grainsPerTxn.Add(flag);
+                                    flag++;
                                 }
                                 Debug.Assert(grainsPerTxn.Count == config.txnSize);
                                 shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
@@ -706,7 +722,7 @@ namespace NewProcess
                     //Wait for EPOCH RUN signal
                     msg = serializer.deserialize<NetworkMessageWrapper>(messageReceived);
                     Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH);
-                    Console.WriteLine($"Received signal from controller. Running epoch {i} across {numDetConsumer + numNonDetConsumer} worker threads");
+                    //Console.WriteLine($"Received signal from controller. Running epoch {i} across {numDetConsumer + numNonDetConsumer} worker threads");
                     //Signal the barrier
                     barriers[i].SignalAndWait();
                     //Wait for all threads to finish the epoch
@@ -738,6 +754,16 @@ namespace NewProcess
             var aggDetLatencies = new List<double>();
             aggLatencies.AddRange(results[0].latencies);
             aggDetLatencies.AddRange(results[0].det_latencies);
+
+            var aggStartTxnTime = new List<double>();
+            var aggUpdate1Time = new List<double>();
+            var aggUpdate2Time = new List<double>();
+            var aggEndTxnTime = new List<double>();
+            aggStartTxnTime.AddRange(results[0].startTxnTime);
+            aggUpdate1Time.AddRange(results[0].update1Time);
+            aggUpdate2Time.AddRange(results[0].update2Time);
+            aggEndTxnTime.AddRange(results[0].endTxnTime);
+
             for (int i = 1; i < results.Length; i++)    // reach thread has a result
             {
                 aggNumDetCommitted += results[i].numDetCommitted;
@@ -751,9 +777,15 @@ namespace NewProcess
                 aggEndTime = (results[i].endTime < aggEndTime) ? results[i].endTime : aggEndTime;
                 aggLatencies.AddRange(results[i].latencies);
                 aggDetLatencies.AddRange(results[i].det_latencies);
+
+                aggStartTxnTime.AddRange(results[i].startTxnTime);
+                aggUpdate1Time.AddRange(results[i].update1Time);
+                aggUpdate2Time.AddRange(results[i].update2Time);
+                aggEndTxnTime.AddRange(results[i].endTxnTime);
             }
             var res = new WorkloadResults(aggNumDetTransactions, aggNumNonDetTransactions, aggNumDetCommitted, aggNumNonDetCommitted, aggStartTime, aggEndTime, aggNumNotSerializable, aggNumNotSureSerializable, aggNumDeadlock);
             res.setLatency(aggLatencies, aggDetLatencies);
+            res.setBreakdownLatency(aggStartTxnTime, aggUpdate1Time, aggUpdate2Time, aggEndTxnTime);
             return res;
         }
 

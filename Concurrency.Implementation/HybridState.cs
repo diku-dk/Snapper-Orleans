@@ -72,9 +72,9 @@ namespace Concurrency.Implementation
             return nonDetStateManager.GetPreparedState(tid);
         }
 
-        Task<bool> ITransactionalState<TState>.Prepare(int tid)
+        Task<bool> ITransactionalState<TState>.Prepare(int tid, bool isWriter)
         {
-            return nonDetStateManager.Prepare(tid);
+            return nonDetStateManager.Prepare(tid, isWriter);
         }
 
         Task<TState> ITransactionalState<TState>.Read(TransactionContext ctx)
