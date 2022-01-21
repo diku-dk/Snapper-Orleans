@@ -125,7 +125,7 @@ namespace SmallBank.Grains
             }
             return res;
         }*/
-        /*
+        
         // no deadlock
         public async Task<TransactionResult> MultiTransfer(TransactionContext context, object funcInput)
         {
@@ -182,21 +182,25 @@ namespace SmallBank.Grains
                 res.exception = true;
             }
             return res;
-        }*/
-        
+        }
+        /*
         public async Task<TransactionResult> MultiTransfer(TransactionContext context, object funcInput)    // read only / no-op
         {
             var res = new TransactionResult();
             try
             {
-                //_ = await GetState(context, AccessMode.Read);
+                _ = await GetState(context, AccessMode.Read);
                 var inputTuple = (MultiTransferInput)funcInput;
                 var destinations = inputTuple.Item3;
                 res.callGrainTime = DateTime.Now;
+                var count = 0;
+                var read = true;
                 foreach (var tuple in destinations)
                 {
+                    count++;
+                    if (count == 4) read = false;
                     var gID = MapCustomerIdToGroup(tuple.Item2);
-                    var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, false);
+                    var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, read);
                     var funcCall = new FunctionCall("DepositChecking", input, typeof(CustomerAccountGroupGrain));
                     var task = CallGrain(context, gID, "SmallBank.Grains.CustomerAccountGroupGrain", funcCall);
                     await task;
@@ -207,11 +211,18 @@ namespace SmallBank.Grains
                 res.exception = true;
             }
             return res;
-        }
-
+        }*/
+        
         public async Task<TransactionResult> DepositChecking(TransactionContext context, object funcInput)
         {
-;           var res = new TransactionResult();
+            /*
+            var inputTuple = (DepositCheckingInput)funcInput;
+            var read = inputTuple.Item3;
+
+            if (read) _ = await GetState(context, AccessMode.Read);
+            return new TransactionResult();*/
+
+            var res = new TransactionResult();
             try
             {
                 
@@ -222,7 +233,7 @@ namespace SmallBank.Grains
                 var write = inputTuple.Item3;
                 if (write == false)
                 {
-                    //_ = await GetState(context, AccessMode.Read);
+                    _ = await GetState(context, AccessMode.Read);
                     return res;
                 } 
 
