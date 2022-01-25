@@ -5,10 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.0.48" />
-    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.0.0-dev-202201211608" />
-    <PackageReference Include="Microsoft.Orleans.Core" Version="3.0.0-dev-202201211608" />
-    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="3.0.0-dev-202201211608" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.2.12" />
+    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.6.0" />
+    <PackageReference Include="Microsoft.Orleans.Core" Version="3.6.0" />
+    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="3.6.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="MsgPack.Cli" Version="1.0.1" />
   </ItemGroup>
 

@@ -133,6 +133,9 @@ namespace SmallBank.Grains
             try
             {
                 var myState = await GetState(context, AccessMode.ReadWrite);
+
+                //for (int i = 1; i < 32; i++) await GetState(context, AccessMode.ReadWrite);
+
                 var inputTuple = (MultiTransferInput)funcInput;   // <Source AccountID>, Amount, List<Dest AccountID>
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
@@ -146,9 +149,9 @@ namespace SmallBank.Grains
                 {
                     myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
                     var destinations = inputTuple.Item3;
-                    res.callGrainTime = DateTime.Now;
                     var count = 0;
                     var write = true;
+                    res.callGrainTime = DateTime.Now;
                     foreach (var tuple in destinations)
                     {
                         count++;
@@ -162,17 +165,9 @@ namespace SmallBank.Grains
                         }
                         else
                         {
-                            if (write)
-                            {
-                                var funcCall = new FunctionCall("DepositChecking", input, typeof(CustomerAccountGroupGrain));
-                                var task = CallGrain(context, gID, "SmallBank.Grains.CustomerAccountGroupGrain", funcCall);
-                                await task;
-                            }
-                            else 
-                            {
-                                var grain = GrainFactory.GetGrain<ICustomerAccountGroupGrain>(gID);
-                                await grain.DepositChecking(null, input);
-                            }
+                            var funcCall = new FunctionCall("DepositChecking", input, typeof(CustomerAccountGroupGrain));
+                            var task = CallGrain(context, gID, "SmallBank.Grains.CustomerAccountGroupGrain", funcCall);
+                            await task;
                         }
                     }
                 }
@@ -189,18 +184,18 @@ namespace SmallBank.Grains
             var res = new TransactionResult();
             try
             {
-                _ = await GetState(context, AccessMode.Read);
+                for (int i = 0; i < 0; i++) await GetState(context, AccessMode.Read);
                 var inputTuple = (MultiTransferInput)funcInput;
                 var destinations = inputTuple.Item3;
-                res.callGrainTime = DateTime.Now;
                 var count = 0;
                 var read = true;
+                res.callGrainTime = DateTime.Now;
                 foreach (var tuple in destinations)
                 {
                     count++;
                     if (count == 4) read = false;
                     var gID = MapCustomerIdToGroup(tuple.Item2);
-                    var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, read);
+                    var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, false);
                     var funcCall = new FunctionCall("DepositChecking", input, typeof(CustomerAccountGroupGrain));
                     var task = CallGrain(context, gID, "SmallBank.Grains.CustomerAccountGroupGrain", funcCall);
                     await task;
@@ -212,7 +207,7 @@ namespace SmallBank.Grains
             }
             return res;
         }*/
-        
+
         public async Task<TransactionResult> DepositChecking(TransactionContext context, object funcInput)
         {
             /*
@@ -221,7 +216,7 @@ namespace SmallBank.Grains
 
             if (read) _ = await GetState(context, AccessMode.Read);
             return new TransactionResult();*/
-
+            
             var res = new TransactionResult();
             try
             {
@@ -233,7 +228,7 @@ namespace SmallBank.Grains
                 var write = inputTuple.Item3;
                 if (write == false)
                 {
-                    _ = await GetState(context, AccessMode.Read);
+                    //_ = await GetState(context, AccessMode.Read);
                     return res;
                 } 
 

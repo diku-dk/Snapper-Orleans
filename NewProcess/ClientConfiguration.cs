@@ -33,10 +33,6 @@ namespace NewProcess
 
                     };
 
-                    Action<AzureStorageGatewayOptions> azureOptions = azureOptions => {
-                        azureOptions.ConnectionString = Constants.connectionString;
-                    };
-
                     var clientBuilder = new ClientBuilder()
                         .Configure<ClusterOptions>(options =>
                         {
@@ -44,8 +40,7 @@ namespace NewProcess
                             options.ServiceId = Constants.ServiceID;
                         });
 
-                    if (Constants.enableAzureClustering) clientBuilder.UseAzureStorageClustering(azureOptions);
-                    else clientBuilder.UseDynamoDBClustering(dynamoDBOptions);
+                    clientBuilder.UseDynamoDBClustering(dynamoDBOptions);
 
                     client = clientBuilder.Build();
                     await client.Connect();

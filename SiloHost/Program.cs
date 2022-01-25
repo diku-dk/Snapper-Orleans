@@ -81,12 +81,11 @@ namespace OrleansSiloHost
             if (enableOrleansTxn)
             {
                 builder
-                    /*
                     .AddFileTransactionalStateStorageAsDefault(opts =>
                     {
                         opts.InitStage = ServiceLifecycleStage.ApplicationServices;
-                    });*/
-                    .AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                    });
+                    //.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
                 
                 builder
                     //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Microsoft", LogLevel.Information))
@@ -113,10 +112,6 @@ namespace OrleansSiloHost
                 options.ReadCapacityUnits = 10;
             };
 
-            Action<AzureStorageClusteringOptions> azureOptions = azureOptions => {
-                azureOptions.ConnectionString = Constants.connectionString;
-            };
-
             var builder = new SiloHostBuilder()
                 .Configure<ClusterOptions>(options =>
                 {
@@ -135,24 +130,12 @@ namespace OrleansSiloHost
 
             if (enableOrleansTxn)
             {
-                if (Constants.enableAzureClustering)
-                {
-                    builder
-                        .AddAzureTableTransactionalStateStorageAsDefault(options =>
-                        {
-                            options.ConnectionString = Constants.connectionString;
-                        });
-                }
-                else
-                {
-                    builder
-                        /*
-                        .AddFileTransactionalStateStorageAsDefault(opts =>
-                        {
-                            opts.InitStage = ServiceLifecycleStage.ApplicationServices;
-                        });*/
-                        .AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
-                }
+                builder
+                    .AddFileTransactionalStateStorageAsDefault(opts =>
+                    {
+                        opts.InitStage = ServiceLifecycleStage.ApplicationServices;
+                    });
+                    //.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
 
                 builder
                     //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))
@@ -162,8 +145,7 @@ namespace OrleansSiloHost
             }
             else builder.AddMemoryGrainStorageAsDefault();
 
-            if (Constants.enableAzureClustering) builder.UseAzureStorageClustering(azureOptions);
-            else builder.UseDynamoDBClustering(dynamoDBOptions);
+            builder.UseDynamoDBClustering(dynamoDBOptions);
 
             var host = builder.Build();
             await host.StartAsync();

@@ -196,7 +196,7 @@ namespace SmallBank.Grains
             }
             return ret;
         }*/
-        /*
+        
         // no deadlock
         public async Task<TransactionResult> MultiTransfer(object funcInput, DateTime time)
         {
@@ -221,6 +221,8 @@ namespace SmallBank.Grains
                     else return false;
                 });
 
+                //for (int i = 1; i < 32; i++) await state.PerformUpdate(myState => _ = 1);
+
                 if (!success)
                 {
                     ret.exception = true;
@@ -231,7 +233,6 @@ namespace SmallBank.Grains
                     ret.callGrainTime = DateTime.Now;
                     Debug.Assert(myGroupID >= 0);
                     var destinations = inputTuple.Item3;
-                    //Debug.Assert(destinations.Count >= 3);     // each transaction writes first 4 actors, read the rest of actors, txnsize >= 4
                     var count = 0;
                     var write = true;
                     foreach (var tuple in destinations)
@@ -260,22 +261,26 @@ namespace SmallBank.Grains
             }
             ret.prepareTime = DateTime.Now;
             return ret;
-        }*/
-        
+        }
+        /*
         public async Task<TransactionResult> MultiTransfer(object funcInput, DateTime time)     // no-op / read only
         {
             var ret = new TransactionResult();
             ret.startExeTime = time;
             try
             {
-                //await state.PerformRead(myState => _ = 1);
+                for (int i = 0; i < 32; i++) await state.PerformRead(myState => _ = 1);
                 var inputTuple = (MultiTransferInput)funcInput;   // <Source AccountID>, Amount, List<Dest AccountID>
                 var destinations = inputTuple.Item3;
-                
+                var count = 0;
+                var read = true;
+                ret.callGrainTime = DateTime.Now;
                 foreach (var tuple in destinations)
                 {
+                    count++;
+                    if (count == 4) read = false;
                     var gID = MapCustomerIdToGroup(tuple.Item2);
-                    var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, false);  
+                    var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, read);
                     var destination = GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(gID);
                     var task = destination.StartTransaction("DepositChecking", input);
                     await task;
@@ -287,7 +292,7 @@ namespace SmallBank.Grains
             }
             ret.prepareTime = DateTime.Now;
             return ret;
-        }
+        }*/
         /*
         public async Task<TransactionResult> MultiTransfer(object funcInput, DateTime time)     // no-op / read only
         {
@@ -300,6 +305,7 @@ namespace SmallBank.Grains
                 var destinations = inputTuple.Item3;
                 var count = 0;
                 var read = true;
+                ret.callGrainTime = DateTime.Now;
                 foreach (var tuple in destinations)
                 {
                     count++;
@@ -327,7 +333,6 @@ namespace SmallBank.Grains
 
             if (read) await state.PerformRead(myState => _ = 1);
             return new TransactionResult();*/
-
             
             var ret = new TransactionResult();
             try

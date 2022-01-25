@@ -20,7 +20,7 @@
         public const int numCPUPerSilo = 4;
         public const bool multiSilo = numSilo > 1;
         public const CCType ccType = CCType.S2PL;
-        public const ImplementationType implementationType = ImplementationType.ORLEANSTXN;
+        public const ImplementationType implementationType = ImplementationType.SNAPPER;
         public const LoggingType loggingType = LoggingType.NOLOGGING;
         public const StorageType storageType = StorageType.FILESYSTEM;
         public const SerializerType serializerType = SerializerType.MSGPACK;
@@ -60,7 +60,7 @@
         public const string worker_Remote_SinkAddress = ">tcp://1.1.1.1.212:5558";    // controller public IP
         public const string worker_Remote_ControllerAddress = ">tcp://1.1.1.1:5575";  // controller public IP
 
-        public const bool localCluster = true;
+        public const bool localCluster = false;
         public const string LocalSilo = "dev";
         public const string ClusterSilo = "ec2";
         public const string ServiceID = "Snapper";
