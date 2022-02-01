@@ -14,10 +14,6 @@ namespace Utilities
         public bool Exp_Serializable = false;
         public bool Exp_NotSureSerializable = false;
 
-        public DateTime startExeTime = DateTime.Now;
-        public DateTime callGrainTime = DateTime.Now;
-        public DateTime prepareTime = DateTime.Now;
-
         public TransactionResult(object res = null)
         {
             resultObject = res;
@@ -43,8 +39,6 @@ namespace Utilities
         public bool isBeforeAfterConsecutive;
         public Tuple<int, string> grainWithHighestBeforeBid;
         public Dictionary<int, Tuple<string, bool, bool>> grainsInNestedFunctions;   // <grainID, namespace, isReadonly, isNoOp>
-
-        public DateTime callGrainTime = DateTime.Now;
 
         public FunctionResult(object resultObject = null)
         {

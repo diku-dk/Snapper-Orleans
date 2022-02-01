@@ -69,13 +69,8 @@ namespace OrleansSiloHost
                     options.ClusterId = Constants.LocalSilo;
                     options.ServiceId = Constants.ServiceID;
                 })
-                .Configure<GrainCollectionOptions>(options =>
-                {
-                    // Set the value of CollectionAge to 10 minutes for all grain
-                    options.CollectionAge = TimeSpan.FromMinutes(1000);
-                })
+                .Configure<GrainCollectionOptions>(options => { options.CollectionAge = TimeSpan.FromMinutes(1000);})
                 .ConfigureServices(ConfigureServices);
-                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
             if (enableOrleansTxn)
             {
@@ -113,11 +108,7 @@ namespace OrleansSiloHost
                     options.ClusterId = Constants.ClusterSilo;
                     options.ServiceId = Constants.ServiceID;
                 })
-                .Configure<GrainCollectionOptions>(options =>
-                {
-                    // Set the value of CollectionAge to 1000 minutes for all grain
-                    options.CollectionAge = TimeSpan.FromMinutes(1000);
-                })
+                .Configure<GrainCollectionOptions>(options => { options.CollectionAge = TimeSpan.FromMinutes(1000);})
                 .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
                 .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
                 .ConfigureServices(ConfigureServices);

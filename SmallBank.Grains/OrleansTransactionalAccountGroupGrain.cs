@@ -198,10 +198,9 @@ namespace SmallBank.Grains
         }*/
         
         // no deadlock
-        public async Task<TransactionResult> MultiTransfer(object funcInput, DateTime time)
+        public async Task<TransactionResult> MultiTransfer(object funcInput)
         {
             var ret = new TransactionResult();
-            ret.startExeTime = time;
             try
             {
                 var myGroupID = -1;
@@ -228,7 +227,6 @@ namespace SmallBank.Grains
                 }
                 else
                 {
-                    ret.callGrainTime = DateTime.Now;
                     Debug.Assert(myGroupID >= 0);
                     var destinations = inputTuple.Item3;
                     var count = 0;
@@ -257,7 +255,6 @@ namespace SmallBank.Grains
             {
                 ret.exception = true;
             }
-            ret.prepareTime = DateTime.Now;
             return ret;
         }
         /*
@@ -403,8 +400,6 @@ namespace SmallBank.Grains
 
         Task<TransactionResult> IOrleansTransactionalAccountGroupGrain.StartTransaction(string startFunc, object funcInput)
         {
-            //Console.WriteLine($"StartTransaction {startFunc}");
-            var time = DateTime.Now;
             AllTxnTypes fnType;
             if (!Enum.TryParse(startFunc.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunc}");
             switch (fnType)
@@ -418,7 +413,7 @@ namespace SmallBank.Grains
                 case AllTxnTypes.WriteCheck:
                     return WriteCheck(funcInput);
                 case AllTxnTypes.MultiTransfer:
-                    return MultiTransfer(funcInput, time);
+                    return MultiTransfer(funcInput);
                 case AllTxnTypes.Init:
                     return Init(funcInput);
                 default:

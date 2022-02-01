@@ -21,7 +21,7 @@
         public const bool multiSilo = numSilo > 1;
         public const CCType ccType = CCType.S2PL;
         public const ImplementationType implementationType = ImplementationType.SNAPPER;
-        public const LoggingType loggingType = LoggingType.PERSISTSINGLETON;
+        public const LoggingType loggingType = LoggingType.NOLOGGING;
         public const StorageType storageType = StorageType.FILESYSTEM;
         public const SerializerType serializerType = SerializerType.MSGPACK;
         public const int numCoordPerSilo = numCPUPerSilo / numCPUBasic * 8;
@@ -40,16 +40,13 @@
         public const int NUM_GRAIN_PER_W = 1 + 1 + 2 * NUM_D_PER_W + NUM_StockGrain_PER_W + NUM_D_PER_W * NUM_OrderGrain_PER_D;
 
         public const bool enableAzureClustering = false;
-        public const string connectionString = "DefaultEndpointsProtocol=https;AccountName=silo-membership-table;AccountKey=cyNmVPVYxlTeepACZWayOBtK4yuN5N733nBcaolrVtDjQd8Y04e263oZt8nKWLHNLAVPsMvyU6gO7dHUawmy3A==;TableEndpoint=https://silo-membership-table.table.cosmos.azure.com:443/;";   // primary connection string
+        public const string connectionString = "";                               // primary connection string
 
         public const string TPCC_namespace = "TPCC.Grain.";
         public const string SmallBank_namespace = "SmallBank.Grain.";
 
-        //public const string logPath = @"D:\log\";
-        //public const string logPath = @"C:\Users\Administrator\Desktop\log\";
-        //public const string dataPath = @"C:\Users\Administrator\Desktop\data\";
-        public const string logPath = @"C:\Users\jhs316\Desktop\log\";
-        public const string dataPath = @"C:\Users\jhs316\Desktop\data\";
+        public const string logPath = @"C:\Users\Administrator\Desktop\log\";
+        public const string dataPath = @"C:\Users\Administrator\Desktop\data\";
 
         public const string controller_Local_SinkAddress = "@tcp://localhost:5558";
         public const string controller_Local_WorkerAddress = "@tcp://localhost:5575";
@@ -66,14 +63,14 @@
         public const string ClusterSilo = "ec2";
         public const string ServiceID = "Snapper";
         public const string LogTable = "SnapperLog";
-        public const string ServiceRegion = "us-east-2";
-        public const string AccessKey = "AKIAQHVFG6FCCHBDLIAX";
+        public const string ServiceRegion = "";
+        public const string AccessKey = "";
         public const string GrainStateTable = "SnapperGrainStateTable";
-        public const string SiloMembershipTable = "SnapperMembershipTable";
-        public const string SecretKey = "slhma5d8ge1lzzURRxJVMzYKAC3muvgxcqWtseEY";
+        public const string SiloMembershipTable = "";
+        public const string SecretKey = "";
 
         // for workload generation
-        public const int BASE_NUM_MULTITRANSFER = 50000;
+        public const int BASE_NUM_MULTITRANSFER = 150000;
         public const int BASE_NUM_NEWORDER = 20000;
     }
 }

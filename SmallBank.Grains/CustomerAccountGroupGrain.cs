@@ -149,7 +149,6 @@ namespace SmallBank.Grains
                     var destinations = inputTuple.Item3;
                     var count = 0;
                     var write = true;
-                    res.callGrainTime = DateTime.Now;
                     foreach (var tuple in destinations)
                     {
                         count++;

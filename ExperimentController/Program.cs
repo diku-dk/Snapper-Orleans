@@ -74,11 +74,6 @@ namespace ExperimentController
             var deadlockRateAccumulator = new List<float>();
             var ioThroughputAccumulator = new List<float>();
 
-            var aggStartTxnTime = new List<double>();
-            var aggUpdate1Time = new List<double>();
-            var aggUpdate2Time = new List<double>();
-            var aggEndTxnTime = new List<double>();
-
             //Skip the epochs upto warm up epochs
             for (int epochNumber = numWarmupEpoch; epochNumber < workload.numEpochs; epochNumber++)
             {
@@ -94,11 +89,6 @@ namespace ExperimentController
                 aggLatencies.AddRange(results[epochNumber, 0].latencies);
                 aggDetLatencies.AddRange(results[epochNumber, 0].det_latencies);
 
-                aggStartTxnTime.AddRange(results[epochNumber, 0].startTxnTime);
-                aggUpdate1Time.AddRange(results[epochNumber, 0].update1Time);
-                aggUpdate2Time.AddRange(results[epochNumber, 0].update2Time);
-                aggEndTxnTime.AddRange(results[epochNumber, 0].endTxnTime);
-
                 for (int workerNode = 1; workerNode < Constants.numWorker; workerNode++)
                 {
                     aggNumDetCommitted += results[epochNumber, workerNode].numDetCommitted;
@@ -112,11 +102,6 @@ namespace ExperimentController
                     aggEndTime = (results[epochNumber, workerNode].endTime < aggEndTime) ? results[epochNumber, workerNode].endTime : aggEndTime;
                     aggLatencies.AddRange(results[epochNumber, workerNode].latencies);
                     aggDetLatencies.AddRange(results[epochNumber, workerNode].det_latencies);
-
-                    aggStartTxnTime.AddRange(results[epochNumber, workerNode].startTxnTime);
-                    aggUpdate1Time.AddRange(results[epochNumber, workerNode].update1Time);
-                    aggUpdate2Time.AddRange(results[epochNumber, workerNode].update2Time);
-                    aggEndTxnTime.AddRange(results[epochNumber, workerNode].endTxnTime);
                 }
                 var time = aggEndTime - aggStartTime;
                 float detCommittedTxnThroughput = (float)aggNumDetCommitted * 1000 / time;  // the throughput only include committed transactions
@@ -185,8 +170,6 @@ namespace ExperimentController
                         var lat = ArrayStatistics.PercentileInplace(aggLatencies.ToArray(), percentile);
                         file.Write($"{Math.Round(lat, 2).ToString().Replace(',', '.')} ");
                     }
-
-                    file.Write($"{Math.Round(aggStartTxnTime.Mean(), 4).ToString().Replace(',', '.')} {Math.Round(aggUpdate1Time.Mean(), 4).ToString().Replace(',', '.')} {Math.Round(aggUpdate2Time.Mean(), 4).ToString().Replace(',', '.')} {Math.Round(aggEndTxnTime.Mean(), 4).ToString().Replace(',', '.')}");
                 }
                 file.WriteLine();
             }

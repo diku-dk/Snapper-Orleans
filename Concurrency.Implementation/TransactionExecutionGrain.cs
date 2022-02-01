@@ -115,11 +115,8 @@ namespace Concurrency.Implementation
                 if (highestCommittedBid < context.highestCommittedBid) highestCommittedBid = context.highestCommittedBid;
                 context.coordID = myID;
                 var c1 = new FunctionCall(startFunc, funcInput, GetType());
-                res.startExeTime = DateTime.Now;
                 t1 = Execute(c1, context);
                 await t1;
-                res.callGrainTime = t1.Result.callGrainTime;
-                res.prepareTime = DateTime.Now;
                 canCommit = !t1.Result.exception;
                 Debug.Assert(t1.Result.grainsInNestedFunctions.ContainsKey(myID));
                 var maxBeforeBid = -1;
@@ -280,7 +277,6 @@ namespace Concurrency.Implementation
                         var txnRes = await InvokeFunction(call, context);
                         res.exception |= txnRes.exception;
                         res.resultObject = txnRes.resultObject;
-                        res.callGrainTime = txnRes.callGrainTime;
                         updateExecutionResult(tid, res);
                     }
                     else
