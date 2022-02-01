@@ -61,7 +61,6 @@ namespace NewProcess
                     first = false;
                     groupId = item;
                     item1 = new Tuple<string, int>(item.ToString(), item);
-                    continue;
                 }
                 else item3.Add(new Tuple<string, int>(item.ToString(), item));
                 grainAccessInfo.Add(item, new Tuple<string, int>(grain_namespace, 1));

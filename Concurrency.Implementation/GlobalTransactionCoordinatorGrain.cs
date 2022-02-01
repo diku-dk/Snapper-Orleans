@@ -92,7 +92,7 @@ namespace Concurrency.Implementation
         {
             if (numtidsReserved-- > 0)
             {
-                Debug.Assert(tidToAllocate != 0);
+                //Debug.Assert(tidToAllocate != 0);
                 var ctx = new TransactionContext(tidToAllocate++);
                 ctx.highestCommittedBid = highestCommittedBid;
                 return ctx;

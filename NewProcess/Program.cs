@@ -148,19 +148,10 @@ namespace NewProcess
                 {
                     while (tasks.Count < pipeSize && queue.TryDequeue(out txn))
                     {
-                        //Thread.Sleep(5000);
                         var now = DateTime.Now;
-                        //if (numEmit == 99) startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                         var asyncReqStartTime = globalWatch.Elapsed;
                         var newTask = benchmark.newTransaction(client, txn);
                         numEmit++;
-                        /*
-                        if (numEmit >= 100)
-                        {
-                            reqs.Add(newTask, asyncReqStartTime);
-                            tasks.Add(newTask);
-                        }*/
-
                         reqs.Add(newTask, asyncReqStartTime);
                         tasks.Add(newTask);
 
@@ -275,7 +266,6 @@ namespace NewProcess
                 }
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
-                //Console.WriteLine($"thread_requests[{eIndex}][{threadIndex}] has {thread_requests[eIndex][threadIndex].Count} txn remaining");
                 thread_requests[eIndex].Remove(threadIndex);
                 if (isDet) Console.WriteLine($"det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
                 else

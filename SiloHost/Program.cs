@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using Orleans.Runtime.Placement;
 using Concurrency.Implementation;
 using Microsoft.Extensions.Logging;
-using Orleans.Clustering.AzureStorage;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace OrleansSiloHost
@@ -80,17 +79,13 @@ namespace OrleansSiloHost
 
             if (enableOrleansTxn)
             {
-                builder
-                    .AddFileTransactionalStateStorageAsDefault(opts =>
-                    {
-                        opts.InitStage = ServiceLifecycleStage.ApplicationServices;
-                    });
-                    //.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                if (Constants.loggingType == LoggingType.NOLOGGING) builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                else builder.AddFileTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices;});
                 
                 builder
                     //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Microsoft", LogLevel.Information))
                     //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))
-                    .Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(8000))
+                    //.Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(8000))
                     //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20))
                     .UseTransactions();
             }
@@ -130,12 +125,8 @@ namespace OrleansSiloHost
 
             if (enableOrleansTxn)
             {
-                builder
-                    .AddFileTransactionalStateStorageAsDefault(opts =>
-                    {
-                        opts.InitStage = ServiceLifecycleStage.ApplicationServices;
-                    });
-                    //.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                if (Constants.loggingType == LoggingType.NOLOGGING) builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                else builder.AddFileTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
 
                 builder
                     //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))

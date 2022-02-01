@@ -134,8 +134,6 @@ namespace SmallBank.Grains
             {
                 var myState = await GetState(context, AccessMode.ReadWrite);
 
-                //for (int i = 1; i < 32; i++) await GetState(context, AccessMode.ReadWrite);
-
                 var inputTuple = (MultiTransferInput)funcInput;   // <Source AccountID>, Amount, List<Dest AccountID>
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
@@ -179,12 +177,11 @@ namespace SmallBank.Grains
             return res;
         }
         /*
-        public async Task<TransactionResult> MultiTransfer(TransactionContext context, object funcInput)    // read only / no-op
+        public async Task<TransactionResult> MultiTransfer(TransactionContext context, object funcInput)    // no-op
         {
             var res = new TransactionResult();
             try
             {
-                for (int i = 0; i < 0; i++) await GetState(context, AccessMode.Read);
                 var inputTuple = (MultiTransferInput)funcInput;
                 var destinations = inputTuple.Item3;
                 var count = 0;
@@ -210,28 +207,16 @@ namespace SmallBank.Grains
 
         public async Task<TransactionResult> DepositChecking(TransactionContext context, object funcInput)
         {
-            /*
-            var inputTuple = (DepositCheckingInput)funcInput;
-            var read = inputTuple.Item3;
-
-            if (read) _ = await GetState(context, AccessMode.Read);
-            return new TransactionResult();*/
-            
             var res = new TransactionResult();
             try
             {
-                
                 var inputTuple = (DepositCheckingInput)funcInput;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
 
                 var write = inputTuple.Item3;
-                if (write == false)
-                {
-                    //_ = await GetState(context, AccessMode.Read);
-                    return res;
-                } 
-
+                if (write == false) return res;
+                
                 var myState = await GetState(context, AccessMode.ReadWrite);
                 if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
                 if (!myState.checkingAccount.ContainsKey(id))

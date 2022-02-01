@@ -221,8 +221,6 @@ namespace SmallBank.Grains
                     else return false;
                 });
 
-                //for (int i = 1; i < 32; i++) await state.PerformUpdate(myState => _ = 1);
-
                 if (!success)
                 {
                     ret.exception = true;
@@ -269,7 +267,6 @@ namespace SmallBank.Grains
             ret.startExeTime = time;
             try
             {
-                for (int i = 0; i < 32; i++) await state.PerformRead(myState => _ = 1);
                 var inputTuple = (MultiTransferInput)funcInput;   // <Source AccountID>, Amount, List<Dest AccountID>
                 var destinations = inputTuple.Item3;
                 var count = 0;
@@ -280,7 +277,7 @@ namespace SmallBank.Grains
                     count++;
                     if (count == 4) read = false;
                     var gID = MapCustomerIdToGroup(tuple.Item2);
-                    var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, read);
+                    var input = new DepositCheckingInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, false);
                     var destination = GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(gID);
                     var task = destination.StartTransaction("DepositChecking", input);
                     await task;
