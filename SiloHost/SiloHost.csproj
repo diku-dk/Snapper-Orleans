@@ -5,7 +5,7 @@
 	
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net5.0</TargetFramework>
     <RuntimeIdentifiers>win</RuntimeIdentifiers>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -18,9 +18,9 @@
   </PropertyGroup>
 	
   <ItemGroup>
-    <PackageReference Include="AWSSDK.Core" Version="3.7.6.2" />
-    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.2.14" />
-    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.24.0" />
+    <PackageReference Include="AWSSDK.Core" Version="3.7.8.6" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.3.7" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.25.0" />
     <PackageReference Include="Microsoft.Azure.Cosmos.Table" Version="1.0.8" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="6.0.0" />
     <PackageReference Include="Microsoft.Orleans.Clustering.AzureStorage" Version="3.6.0" />

@@ -36,7 +36,14 @@ namespace Concurrency.Implementation
 
         public async Task Initialize()
         {
-            if (Constants.loggingType == LoggingType.PERSISTSINGLETON) persistSingletonGroup.Init();
+            if (Constants.multiSilo == false)
+            {
+                if (Constants.loggingType == LoggingType.PERSISTSINGLETON) persistSingletonGroup.Init();
+            } 
+            else
+            { 
+
+            }
 
             // initialize coordinators (single silo deployment)
             var tasks = new List<Task>();

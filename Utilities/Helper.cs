@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Net;
-using System.Net.Sockets;
 
 namespace Utilities
 {
@@ -49,13 +47,6 @@ namespace Utilities
             var part1 = rnd.Next(0, A + 1);
             var part2 = rnd.Next(x, y + 1);
             return (((part1 | part2) + C) % (y - x + 1)) + x;
-        }
-
-        public static string GetLocalIPAddress()
-        {
-            var host = Dns.GetHostEntry(Dns.GetHostName());
-            foreach (var ip in host.AddressList) if (ip.AddressFamily == AddressFamily.InterNetwork) return ip.ToString();
-            throw new Exception("No network adapters with an IPv4 address in the system!");
         }
     }
 }

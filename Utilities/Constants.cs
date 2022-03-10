@@ -15,7 +15,7 @@
         public const int numWorker = 1;
 
         // Silo config
-        public const int numSilo = 1;
+        public const int numSilo = 2;
         public const int numCPUBasic = 4;
         public const int numCPUPerSilo = 4;
         public const bool multiSilo = numSilo > 1;

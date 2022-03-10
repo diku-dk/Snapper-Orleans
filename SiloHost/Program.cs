@@ -5,6 +5,7 @@ using System.Net;
 using Persist.Grains;
 using Orleans.Hosting;
 using Orleans.Runtime;
+using System.Net.Sockets;
 using Persist.Interfaces;
 using Orleans.Configuration;
 using System.Threading.Tasks;
@@ -17,19 +18,20 @@ namespace OrleansSiloHost
 {
     public class Program
     {
-        static private int siloPort;
-        static private int gatewayPort;
+        static private int siloPort;    // silo-to-silo endpoint
+        static private int gatewayPort; // client-to-silo endpoint
         static readonly bool enableOrleansTxn = Constants.implementationType == ImplementationType.ORLEANSTXN ? true : false;
 
         public static int Main(string[] args)
         {
             if (Constants.multiSilo)
             {
-                //siloPort = int.Parse(args[0]);
-                //gatewayPort = int.Parse(args[1]);
+                siloPort = int.Parse(args[0]);
+                gatewayPort = int.Parse(args[1]);
+                /*
                 var siloID = 0;
                 siloPort = 11111 + siloID;
-                gatewayPort = 30000 + siloID;
+                gatewayPort = 30000 + siloID;*/
             }
             else
             {
@@ -43,14 +45,57 @@ namespace OrleansSiloHost
         {
             try
             {
-                ISiloHost host;
-                if (Constants.localCluster) host = await StartSilo();
-                else host = await StartClusterSilo();
+                var builder = new SiloHostBuilder();
+                if (Constants.localCluster == false)
+                {
+                    Action<DynamoDBClusteringOptions> dynamoDBOptions = options =>
+                    {
+                        options.AccessKey = Constants.AccessKey;
+                        options.SecretKey = Constants.SecretKey;
+                        options.TableName = Constants.SiloMembershipTable;
+                        options.Service = Constants.ServiceRegion;
+                        options.WriteCapacityUnits = 10;
+                        options.ReadCapacityUnits = 10;
+                    };
+
+                    builder.UseDynamoDBClustering(dynamoDBOptions);
+                }
+                else builder.UseLocalhostClustering();
+
+                builder
+                    .Configure<ClusterOptions>(options =>
+                    {
+                        options.ClusterId = Constants.ClusterSilo;
+                        options.ServiceId = Constants.ServiceID;
+                    })
+                    .Configure<EndpointOptions>(options =>
+                    {
+                        options.SiloPort = siloPort;
+                        options.GatewayPort = gatewayPort;
+                        //options.AdvertisedIPAddress = IPAddress.Parse(GetLocalIPAddress());  // IP Address to advertise in the cluster
+                    })
+                    .ConfigureServices(ConfigureServices)
+                    .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+
+                if (enableOrleansTxn)
+                {
+                    if (Constants.loggingType == LoggingType.NOLOGGING) builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                    else builder.AddFileTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+
+                    builder
+                        //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))
+                        //.Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(200))
+                        //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20))
+                        .UseTransactions();
+                }
+                else builder.AddMemoryGrainStorageAsDefault();
+
+                var host = builder.Build();
+                await host.StartAsync();
+
                 Console.WriteLine("Press Enter to terminate...");
                 Console.ReadLine();
-
                 await host.StopAsync();
-
                 return 0;
             }
             catch (Exception ex)
@@ -60,82 +105,10 @@ namespace OrleansSiloHost
             }
         }
 
-        private static async Task<ISiloHost> StartSilo()
-        {
-            var builder = new SiloHostBuilder()
-                .UseLocalhostClustering()
-                .Configure<ClusterOptions>(options =>
-                {
-                    options.ClusterId = Constants.LocalSilo;
-                    options.ServiceId = Constants.ServiceID;
-                })
-                .Configure<GrainCollectionOptions>(options => { options.CollectionAge = TimeSpan.FromMinutes(1000);})
-                .ConfigureServices(ConfigureServices);
-
-            if (enableOrleansTxn)
-            {
-                if (Constants.loggingType == LoggingType.NOLOGGING) builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
-                else builder.AddFileTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices;});
-                
-                builder
-                    //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Microsoft", LogLevel.Information))
-                    //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))
-                    //.Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(8000))
-                    //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20))
-                    .UseTransactions();
-            }
-            else builder.AddMemoryGrainStorageAsDefault();
-
-            var host = builder.Build();
-            await host.StartAsync();
-            return host;
-        }
-
-        private static async Task<ISiloHost> StartClusterSilo()
-        {
-            Action<DynamoDBClusteringOptions> dynamoDBOptions = options => {
-                options.AccessKey = Constants.AccessKey;
-                options.SecretKey = Constants.SecretKey;
-                options.TableName = Constants.SiloMembershipTable;
-                options.Service = Constants.ServiceRegion;
-                options.WriteCapacityUnits = 10;
-                options.ReadCapacityUnits = 10;
-            };
-
-            var builder = new SiloHostBuilder()
-                .Configure<ClusterOptions>(options =>
-                {
-                    options.ClusterId = Constants.ClusterSilo;
-                    options.ServiceId = Constants.ServiceID;
-                })
-                .Configure<GrainCollectionOptions>(options => { options.CollectionAge = TimeSpan.FromMinutes(1000);})
-                .ConfigureEndpoints(siloPort: siloPort, gatewayPort: gatewayPort)
-                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress()))
-                .ConfigureServices(ConfigureServices);
-                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
-
-            if (enableOrleansTxn)
-            {
-                if (Constants.loggingType == LoggingType.NOLOGGING) builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
-                else builder.AddFileTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
-
-                builder
-                    //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))
-                    //.Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(200))
-                    //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20))
-                    .UseTransactions();
-            }
-            else builder.AddMemoryGrainStorageAsDefault();
-
-            builder.UseDynamoDBClustering(dynamoDBOptions);
-
-            var host = builder.Build();
-            await host.StartAsync();
-            return host;
-        }
-
         private static void ConfigureServices(IServiceCollection services)
         {
+            // all the singletons have one instance per silo host??
+
             // dependency injection
             services.AddSingleton<IPersistSingletonGroup, PersistSingletonGroup>();
 
@@ -143,6 +116,13 @@ namespace OrleansSiloHost
             services.AddSingletonKeyedService<Type, IPlacementDirector, CoordPlacement>(typeof(CoordPlacementStrategy));
             services.AddSingletonNamedService<PlacementStrategy, GrainPlacementStrategy>(nameof(GrainPlacementStrategy));
             services.AddSingletonKeyedService<Type, IPlacementDirector, GrainPlacement>(typeof(GrainPlacementStrategy));
+        }
+
+        private static string GetLocalIPAddress()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (var ip in host.AddressList) if (ip.AddressFamily == AddressFamily.InterNetwork) return ip.ToString();
+            throw new Exception("No network adapters with an IPv4 address in the system!");
         }
     }
 }
