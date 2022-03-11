@@ -34,8 +34,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Concurrency.Implementation\Concurrency.Implementation.csproj" />
     <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
-    <ProjectReference Include="..\Persist.Grains\Persist.Grains.csproj" />
-    <ProjectReference Include="..\Persist.Interfaces\Persist.Interfaces.csproj" />
     <ProjectReference Include="..\SmallBank.Grains\SmallBank.Grains.csproj" />
     <ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />

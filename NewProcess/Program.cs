@@ -13,7 +13,7 @@ using MathNet.Numerics.Statistics;
 using System.Collections.Concurrent;
 using MathNet.Numerics.Distributions;
 
-namespace NewProcess
+namespace ExperimentProcess
 {
     class Program
     {

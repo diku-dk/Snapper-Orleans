@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using MathNet.Numerics.Distributions;
 
-namespace NewProcess
+namespace ExperimentProcess
 {
     public class SmallBankBenchmark : IBenchmark
     {
@@ -29,11 +29,11 @@ namespace NewProcess
             switch (Constants.implementationType)
             {
                 case ImplementationType.SNAPPER:
-                    var grain = client.GetGrain<ICustomerAccountGroupGrain>(grainId);
+                    var grain = client.GetGrain<ISnapperTransactionalAccountGroupGrain>(grainId);
                     if (isDet) return grain.StartTransaction(startFunc, funcInput, grainAccessInfo);
                     else return grain.StartTransaction(startFunc, funcInput);
                 case ImplementationType.ORLEANSEVENTUAL:
-                    var eventuallyConsistentGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(grainId);
+                    var eventuallyConsistentGrain = client.GetGrain<INTAccountGroupGrain>(grainId);
                     return eventuallyConsistentGrain.StartTransaction(startFunc, funcInput);
                 case ImplementationType.ORLEANSTXN:
                     var txnGrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(grainId);

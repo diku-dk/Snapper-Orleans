@@ -2,7 +2,7 @@
 Snapper: A Transaction Library for Actor Systems
 
 ### Code Structure
-`Concurrency.Implementation` contains the implementation of key components of Snapper, including `Coordinator` and `Transactional actor` discussed in the paper. The code files are named as `GlobalTransactionCoordinatorGrain.cs` and `TransactionExecutionGrain.cs` respectively. And `Persist.Grains/PersistSingleton.cs` implements the `Logger`.
+`Concurrency.Implementation` contains the implementation of key components of Snapper, including `Coordinator` and `Transactional actor` discussed in the paper. The code files are named as `LocalCoordinatorGrain.cs` and `TransactionExecutionGrain.cs` respectively. And `Persist.Grains/PersistSingleton.cs` implements the `Logger`.
 
 `SmallBank` and `TPCC` are two benchmarks we used. `SmallBank.Grains` and `TPCC.Grains` contain the transaction logic of user-defined actors, aka grains in Orleans.
 

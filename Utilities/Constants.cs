@@ -5,9 +5,11 @@
     public enum BenchmarkType { SMALLBANK, TPCC };
     public enum Distribution { ZIPFIAN, UNIFORM, HOTRECORD };
     public enum ImplementationType { SNAPPER, ORLEANSEVENTUAL, ORLEANSTXN };
-    public enum LoggingType { NOLOGGING, ONGRAIN, PERSISTGRAIN, PERSISTSINGLETON };
+    public enum LoggingType { NOLOGGING, ONGRAIN, LOGGER };
     public enum StorageType { INMEMORY, FILESYSTEM, DYNAMODB };
     public enum SerializerType { BINARY, MSGPACK, JSON };
+
+    public enum TxnType { Init, Balance, MultiTransfer, Deposit };
 
     public class Constants
     {
@@ -24,10 +26,12 @@
         public const LoggingType loggingType = LoggingType.NOLOGGING;
         public const StorageType storageType = StorageType.FILESYSTEM;
         public const SerializerType serializerType = SerializerType.MSGPACK;
-        public const int numCoordPerSilo = numCPUPerSilo / numCPUBasic * 8;
+        public const int numGlobalCoord = numSilo * 2;
+        public const int numLocalCoordPerSilo = numCPUPerSilo / numCPUBasic * 8;
         public const int loggingBatchSize = 1;
         public const bool loggingBatching = false;
-        public const int numPersistItemPerSilo = numCPUPerSilo / numCPUBasic * 8;
+        public const int numGlobalLogger = 1;
+        public const int numLoggerPerSilo = numCPUPerSilo / numCPUBasic * 8;
         // for SmallBank
         public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
         // for TPCC

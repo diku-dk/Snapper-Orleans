@@ -3,19 +3,19 @@ using System;
 using Orleans;
 using System.IO;
 using Utilities;
-using NewProcess;
+using ExperimentProcess;
 using NetMQ.Sockets;
 using TPCC.Interfaces;
 using System.Threading;
 using System.Diagnostics;
-using Persist.Interfaces;
 using System.Configuration;
 using SmallBank.Interfaces;
-using Concurrency.Interface;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using MathNet.Numerics.Statistics;
 using System.Collections.Specialized;
+using Concurrency.Interface.Logging;
+using Concurrency.Interface.Configuration;
 
 namespace ExperimentController
 {
@@ -32,7 +32,7 @@ namespace ExperimentController
         static CountdownEvent ackedWorkers;
         static WorkloadConfiguration workload;
         static volatile bool loadingDone = false;
-        static IConfigurationManagerGrain configGrain;
+        static IGlobalConfigGrain globalConfigGrain;
         static volatile bool asyncInitializationDone = false;
 
         private static void GenerateWorkLoadFromSettingsFile()
@@ -258,21 +258,13 @@ namespace ExperimentController
             switch (Constants.implementationType)
             {
                 case ImplementationType.SNAPPER:
-                    if (Constants.loggingType == LoggingType.PERSISTSINGLETON) await configGrain.SetIOCount();
-                    if (Constants.loggingType == LoggingType.PERSISTGRAIN)
-                    {
-                        var tasks = new List<Task>();
-                        for (int i = 0; i < Constants.numPersistItemPerSilo; i++)
-                        {
-                            var grain = client.GetGrain<IPersistGrain>(i);
-                            tasks.Add(grain.SetIOCount());
-                        }
-                        await Task.WhenAll(tasks);
-                    }
+                    if (Constants.loggingType == LoggingType.LOGGER) 
+                        await globalConfigGrain.SetIOCount();
                     break;
                 case ImplementationType.ORLEANSTXN:
                     var txngrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(0);
-                    if (Constants.loggingType == LoggingType.PERSISTSINGLETON) await txngrain.SetIOCount();
+                    if (Constants.loggingType == LoggingType.LOGGER) 
+                        await txngrain.SetIOCount();
                     break;
             }
             setCountFinish = true;
@@ -284,22 +276,12 @@ namespace ExperimentController
             switch (Constants.implementationType)
             {
                 case ImplementationType.SNAPPER:
-                    if (Constants.loggingType == LoggingType.PERSISTSINGLETON) IOcount[epoch] = await configGrain.GetIOCount();
-                    if (Constants.loggingType == LoggingType.PERSISTGRAIN)
-                    {
-                        var tasks = new List<Task<long>>();
-                        for (int i = 0; i < Constants.numPersistItemPerSilo; i++)
-                        {
-                            var grain = client.GetGrain<IPersistGrain>(i);
-                            tasks.Add(grain.GetIOCount());
-                        }
-                        await Task.WhenAll(tasks);
-                        foreach (var t in tasks) IOcount[epoch] += t.Result;
-                    }
+                    if (Constants.loggingType == LoggingType.LOGGER) 
+                        IOcount[epoch] = await globalConfigGrain.GetIOCount();
                     break;
                 case ImplementationType.ORLEANSEVENTUAL:
                     var txngrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(0);
-                    Debug.Assert(Constants.loggingType == LoggingType.PERSISTSINGLETON);
+                    Debug.Assert(Constants.loggingType == LoggingType.LOGGER);
                     await txngrain.GetIOCount();
                     break;
             }
@@ -322,7 +304,7 @@ namespace ExperimentController
                         var input = new Tuple<int, int, int>(W_ID, D_ID, i);
                         if (Constants.implementationType == ImplementationType.ORLEANSEVENTUAL)
                         {
-                            var grain = client.GetGrain<IEventualOrderGrain>(index);
+                            var grain = client.GetGrain<INTOrderGrain>(index);
                             tasks.Add(grain.StartTransaction("Init", input));
                         }
                         else
@@ -386,6 +368,12 @@ namespace ExperimentController
 
         private static async void InitiateClientAndSpawnConfigurationCoordinator()
         {
+            if (Constants.multiSilo)
+            {
+                // spawn global coordinators
+
+            }
+
             //Spawn the configuration grain
             if (client == null)
             {
@@ -396,9 +384,9 @@ namespace ExperimentController
 
             if (Constants.implementationType == ImplementationType.SNAPPER)
             {
-                configGrain = client.GetGrain<IConfigurationManagerGrain>(0);
-                await configGrain.Initialize();
-                Console.WriteLine("Spawned the configuration grain.");
+                globalConfigGrain = client.GetGrain<IGlobalConfigGrain>(0);
+                await globalConfigGrain.ConfigGlobalEnv();
+                Console.WriteLine($"Spawned the global configuration grain.");
             }
             asyncInitializationDone = true;
         }
@@ -417,7 +405,7 @@ namespace ExperimentController
                 switch (Constants.implementationType)
                 {
                     case ImplementationType.ORLEANSEVENTUAL:
-                        var etxnGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(i);
+                        var etxnGrain = client.GetGrain<INTAccountGroupGrain>(i);
                         tasks.Add(etxnGrain.StartTransaction("Init", input));
                         break;
                     case ImplementationType.ORLEANSTXN:
@@ -425,7 +413,7 @@ namespace ExperimentController
                         tasks.Add(orltxnGrain.StartTransaction("Init", input));
                         break;
                     case ImplementationType.SNAPPER:
-                        var sntxnGrain = client.GetGrain<ICustomerAccountGroupGrain>(i);
+                        var sntxnGrain = client.GetGrain<ISnapperTransactionalAccountGroupGrain>(i);
                         tasks.Add(sntxnGrain.StartTransaction("Init", input));
                         break;
                     default:
@@ -458,7 +446,7 @@ namespace ExperimentController
                 var grainID = Helper.GetItemGrain(W_ID);
                 if (eventual)
                 {
-                    var grain = client.GetGrain<IEventualItemGrain>(grainID);
+                    var grain = client.GetGrain<INTItemGrain>(grainID);
                     await grain.StartTransaction("Init", null);
                 }
                 else
@@ -475,7 +463,7 @@ namespace ExperimentController
                 var grainID = Helper.GetWarehouseGrain(W_ID);
                 if (eventual)
                 {
-                    var grain = client.GetGrain<IEventualWarehouseGrain>(grainID);
+                    var grain = client.GetGrain<INTWarehouseGrain>(grainID);
                     await grain.StartTransaction("Init", W_ID);
                 }
                 else
@@ -499,9 +487,9 @@ namespace ExperimentController
                     var input = new Tuple<int, int>(W_ID, D_ID);
                     if (eventual)
                     {
-                        var districtGrain = client.GetGrain<IEventualDistrictGrain>(districtGrainID);
+                        var districtGrain = client.GetGrain<INTDistrictGrain>(districtGrainID);
                         tasks.Add(districtGrain.StartTransaction("Init", input));
-                        var customerGrain = client.GetGrain<IEventualCustomerGrain>(customerGrainID);
+                        var customerGrain = client.GetGrain<INTCustomerGrain>(customerGrainID);
                         tasks.Add(customerGrain.StartTransaction("Init", input));
                     }
                     else
@@ -532,7 +520,7 @@ namespace ExperimentController
                     var input = new Tuple<int, int>(W_ID, i);
                     if (eventual)
                     {
-                        var grain = client.GetGrain<IEventualStockGrain>(stockGrainID);
+                        var grain = client.GetGrain<INTStockGrain>(stockGrainID);
                         tasks.Add(grain.StartTransaction("Init", input));
                     }
                     else
@@ -563,7 +551,7 @@ namespace ExperimentController
                         var input = new Tuple<int, int, int>(W_ID, D_ID, i);
                         if (eventual)
                         {
-                            var grain = client.GetGrain<IEventualOrderGrain>(orderGrainID);
+                            var grain = client.GetGrain<INTOrderGrain>(orderGrainID);
                             tasks.Add(grain.StartTransaction("Init", input));
                         }
                         else

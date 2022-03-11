@@ -14,7 +14,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
-    <ProjectReference Include="..\Persist.Interfaces\Persist.Interfaces.csproj" />
   </ItemGroup>
 
 </Project>

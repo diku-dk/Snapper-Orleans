@@ -2,17 +2,17 @@
 using Orleans;
 using Utilities;
 using System.Net;
-using Persist.Grains;
 using Orleans.Hosting;
 using Orleans.Runtime;
 using System.Net.Sockets;
-using Persist.Interfaces;
 using Orleans.Configuration;
 using System.Threading.Tasks;
 using Orleans.Runtime.Placement;
-using Concurrency.Implementation;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
+using Concurrency.Implementation.GrainPlacement;
+using Concurrency.Interface.Logging;
+using Concurrency.Implementation.Logging;
 
 namespace OrleansSiloHost
 {
@@ -26,12 +26,10 @@ namespace OrleansSiloHost
         {
             if (Constants.multiSilo)
             {
-                siloPort = int.Parse(args[0]);
-                gatewayPort = int.Parse(args[1]);
-                /*
-                var siloID = 0;
+                // var siloID = 0;
+                var siloID = int.Parse(args[0]);
                 siloPort = 11111 + siloID;
-                gatewayPort = 30000 + siloID;*/
+                gatewayPort = 30000 + siloID;
             }
             else
             {
@@ -110,12 +108,23 @@ namespace OrleansSiloHost
             // all the singletons have one instance per silo host??
 
             // dependency injection
-            services.AddSingleton<IPersistSingletonGroup, PersistSingletonGroup>();
+            services.AddSingleton<ILoggerGroup, LoggerGroup>();
 
-            services.AddSingletonNamedService<PlacementStrategy, CoordPlacementStrategy>(nameof(CoordPlacementStrategy));
-            services.AddSingletonKeyedService<Type, IPlacementDirector, CoordPlacement>(typeof(CoordPlacementStrategy));
-            services.AddSingletonNamedService<PlacementStrategy, GrainPlacementStrategy>(nameof(GrainPlacementStrategy));
-            services.AddSingletonKeyedService<Type, IPlacementDirector, GrainPlacement>(typeof(GrainPlacementStrategy));
+            services.AddSingletonNamedService<PlacementStrategy, GlobalConfigGrainPlacementStrategy>(nameof(GlobalConfigGrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, GlobalConfigGrainPlacement>(typeof(GlobalConfigGrainPlacementStrategy));
+
+            services.AddSingletonNamedService<PlacementStrategy, LocalConfigGrainPlacementStrategy>(nameof(LocalConfigGrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, LocalConfigGrainPlacement>(typeof(LocalConfigGrainPlacementStrategy));
+
+            services.AddSingletonNamedService<PlacementStrategy, GlobalCoordGrainPlacementStrategy>(nameof(GlobalCoordGrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, GlobalCoordGrainPlacement>(typeof(GlobalCoordGrainPlacementStrategy));
+
+            services.AddSingletonNamedService<PlacementStrategy, LocalCoordGrainPlacementStrategy>(nameof(LocalCoordGrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, LocalCoordGrainPlacement>(typeof(LocalCoordGrainPlacementStrategy));
+
+            services.AddSingletonNamedService<PlacementStrategy, TransactionExecutionGrainPlacementStrategy>(nameof(TransactionExecutionGrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, TransactionExecutionGrainPlacement>(typeof(TransactionExecutionGrainPlacementStrategy));
+
         }
 
         private static string GetLocalIPAddress()

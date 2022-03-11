@@ -1,11 +1,10 @@
 ﻿using System;
 using Utilities;
-using Persist.Interfaces;
 using System.Diagnostics;
-using Concurrency.Interface;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
+using Concurrency.Interface.TransactionExecution;
 
 namespace Concurrency.Implementation.Logging
 {
@@ -16,12 +15,10 @@ namespace Concurrency.Implementation.Logging
         private ISerializer serializer;
         private IKeyValueStorageWrapper logStorage;
 
-        private bool usePersistGrain = false;
-        private IPersistGrain persistGrain;
-        private bool usePersistSingleton = false;
-        private IPersistWorker persistWorker;
+        private bool useLogger = false;
+        private ILogger logger;
 
-        public Simple2PCLoggingProtocol(string grainType, int grainID, object persistItem = null)
+        public Simple2PCLoggingProtocol(string grainType, int grainID, object logger = null)
         {
             this.grainID = grainID;
             sequenceNumber = 0;
@@ -46,15 +43,10 @@ namespace Concurrency.Implementation.Logging
                             throw new Exception($"Exception: Unknown StorageWrapper {Constants.storageType}");
                     }
                     break;
-                case LoggingType.PERSISTGRAIN:
-                    usePersistGrain = true;
-                    Debug.Assert(persistItem != null);
-                    persistGrain = (IPersistGrain)persistItem;
-                    break;
-                case LoggingType.PERSISTSINGLETON:
-                    usePersistSingleton = true;
-                    Debug.Assert(persistItem != null);
-                    persistWorker = (IPersistWorker)persistItem;
+                case LoggingType.LOGGER:
+                    useLogger = true;
+                    Debug.Assert(logger != null);
+                    this.logger = (ILogger)logger;
                     break;
                 default:
                     throw new Exception($"Exception: Unknown loggingType {Constants.loggingType}");
@@ -86,8 +78,7 @@ namespace Concurrency.Implementation.Logging
 
         private async Task WriteLog(byte[] key, byte[] value)
         {
-            if (usePersistGrain) await persistGrain.Write(value);
-            else if (usePersistSingleton) await persistWorker.Write(value);
+            if (useLogger) await logger.Write(value);
             else await logStorage.Write(key, value);
         }
 

@@ -5,7 +5,7 @@ using TPCC.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
-namespace NewProcess
+namespace ExperimentProcess
 {
     public class TPCCBenchmark : IBenchmark
     {
@@ -27,7 +27,7 @@ namespace NewProcess
                     if (isDet) return grain.StartTransaction(startFunc, funcInput, grainAccessInfo);
                     else return grain.StartTransaction(startFunc, funcInput);
                 case ImplementationType.ORLEANSEVENTUAL:
-                    var egrain = client.GetGrain<IEventualCustomerGrain>(grainId);
+                    var egrain = client.GetGrain<INTCustomerGrain>(grainId);
                     return egrain.StartTransaction(startFunc, funcInput);
                 default:
                     throw new Exception("Exception: TPCC does not support orleans txn");

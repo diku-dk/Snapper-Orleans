@@ -2,7 +2,7 @@
 using Utilities;
 using System.Threading.Tasks;
 
-namespace NewProcess
+namespace ExperimentProcess
 {
     public interface IBenchmark
     {

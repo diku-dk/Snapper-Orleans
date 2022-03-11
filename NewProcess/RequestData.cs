@@ -2,7 +2,7 @@
 using TPCC.Grains;
 using System.Collections.Generic;
 
-namespace NewProcess
+namespace ExperimentProcess
 {
     [Serializable]
     public class RequestData

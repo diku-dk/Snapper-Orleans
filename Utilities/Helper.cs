@@ -36,9 +36,9 @@ namespace Utilities
             return W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + 2 * Constants.NUM_D_PER_W + Constants.NUM_StockGrain_PER_W + D_ID * Constants.NUM_OrderGrain_PER_D + C_ID / (Constants.NUM_C_PER_D / Constants.NUM_OrderGrain_PER_D);
         }
 
-        public static int MapGrainIDToPersistItemID(int numPersistItem, int grainID)
+        public static int MapGrainIDToLoggerID(int grainID, int numLogger)
         {
-            return grainID % numPersistItem;
+            return grainID % numLogger;
         }
 
         public static int NURand(int A, int x, int y, int C)

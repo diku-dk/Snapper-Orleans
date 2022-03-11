@@ -4,20 +4,20 @@ using Utilities;
 using Newtonsoft.Json;
 using Orleans.Runtime;
 using System.Threading;
-using Persist.Interfaces;
 using Orleans.Transactions;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Microsoft.Extensions.Options;
 using Orleans.Transactions.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
+using Concurrency.Interface.Logging;
 
 namespace OrleansSiloHost
 {
     public class FileTransactionalStateStorageFactory : ITransactionalStateStorageFactory, ILifecycleParticipant<ISiloLifecycle>
     {
         private readonly string name;
-        private readonly IPersistSingletonGroup persistSingletonGroup;
+        private readonly ILoggerGroup loggerGroup;
         private readonly MyTransactionalStateOptions options;
 
         public static ITransactionalStateStorageFactory Create(IServiceProvider services, string name)
@@ -27,12 +27,12 @@ namespace OrleansSiloHost
             return ActivatorUtilities.CreateInstance<FileTransactionalStateStorageFactory>(services, name, optionsMonitor.Get(name));
         }
 
-        public FileTransactionalStateStorageFactory(IPersistSingletonGroup persistSingletonGroup, string name, MyTransactionalStateOptions options)
+        public FileTransactionalStateStorageFactory(ILoggerGroup loggerGroup, string name, MyTransactionalStateOptions options)
         {
             this.name = name;
             this.options = options;
-            this.persistSingletonGroup = persistSingletonGroup;
-            persistSingletonGroup.Init();
+            this.loggerGroup = loggerGroup;
+            loggerGroup.Init(Constants.numLoggerPerSilo);
         }
 
         public ITransactionalStateStorage<TState> Create<TState>(string stateName, IGrainActivationContext context) where TState : class, new()
@@ -41,8 +41,8 @@ namespace OrleansSiloHost
             var strs = str.Split('/', StringSplitOptions.RemoveEmptyEntries);
             var partitionKey = strs[strs.Length - 1];    // use grainID (long) as partitionKey
             var grainID = int.Parse(partitionKey);
-            var persistWorker = persistSingletonGroup.GetSingleton(Helper.MapGrainIDToPersistItemID(Constants.numPersistItemPerSilo, grainID));
-            return ActivatorUtilities.CreateInstance<FileTransactionalStateStorage<TState>>(context.ActivationServices, persistWorker, partitionKey);
+            var logger = loggerGroup.GetSingleton(Helper.MapGrainIDToLoggerID(grainID, Constants.numLoggerPerSilo));
+            return ActivatorUtilities.CreateInstance<FileTransactionalStateStorage<TState>>(context.ActivationServices, logger, partitionKey);
         }
 
         public void Participate(ISiloLifecycle lifecycle)
@@ -63,12 +63,12 @@ namespace OrleansSiloHost
         private List<KeyValuePair<long, StateEntity>> states;
 
         private ISerializer serializer;
-        private readonly IPersistWorker persistWorker;
+        private readonly ILogger logger;
 
-        public FileTransactionalStateStorage(IPersistWorker persistWorker, string partitionKey)
+        public FileTransactionalStateStorage(ILogger logger, string partitionKey)
         {
             this.partitionKey = partitionKey;
-            this.persistWorker = persistWorker;
+            this.logger = logger;
             serializer = new MsgPackSerializer();
         }
 
@@ -179,8 +179,8 @@ namespace OrleansSiloHost
             }
 
             // persist KeyEntity and StateEntity
-            await persistWorker.Write(serializer.serialize(key));
-            await persistWorker.Write(serializer.serialize(states));
+            await logger.Write(serializer.serialize(key));
+            await logger.Write(serializer.serialize(states));
             return key.ETag;
         }
 

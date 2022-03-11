@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.Core" Version="3.7.8.6" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.3.7" />
+    <PackageReference Include="MathNet.Numerics" Version="4.15.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Orleans.Client" Version="3.6.0" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.AzureStorage" Version="3.6.0" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.6.0" />
+    <PackageReference Include="Microsoft.Orleans.Core" Version="3.6.0" />
+    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.6.0" />
+    <PackageReference Include="Microsoft.Orleans.OrleansAWSUtils" Version="2.4.5" />
+    <PackageReference Include="Microsoft.Orleans.CodeGenerator.MSBuild" Version="3.6.0" />
+    <PackageReference Include="NetMQ" Version="4.0.1.8" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="6.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Concurrency.Implementation\Concurrency.Implementation.csproj" />
+    <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
+    <ProjectReference Include="..\SmallBank.Grains\SmallBank.Grains.csproj" />
+    <ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj" />
+    <ProjectReference Include="..\TPCC.Grains\TPCC.Grains.csproj" />
+    <ProjectReference Include="..\TPCC.Interfaces\TPCC.Interfaces.csproj" />
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
+  </ItemGroup>
+</Project>

@@ -6,9 +6,8 @@ using Orleans.Hosting;
 using System.Threading;
 using Orleans.Configuration;
 using System.Threading.Tasks;
-using Orleans.Clustering.AzureStorage;
 
-namespace NewProcess
+namespace ExperimentProcess
 {
     public class ClientConfiguration
     {
@@ -66,7 +65,6 @@ namespace NewProcess
         {
             if (client == null)
             {
-                //await StartSilo();
                 int attempt = 0;
                 while (true)
                 {
@@ -80,7 +78,6 @@ namespace NewProcess
                                         options.ClusterId = Constants.LocalSilo;
                                         options.ServiceId = Constants.ServiceID;
                                     })
-                                    //.ConfigureLogging(logging => logging.AddConsole())
                                     .Build();
 
                         await client.Connect();
