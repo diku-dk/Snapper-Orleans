@@ -1,6 +1,4 @@
-﻿using System;
-using Utilities;
-using Orleans.Concurrency;
+﻿using Utilities;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
@@ -8,46 +6,26 @@ namespace Concurrency.Interface.TransactionExecution
 {
     public interface ITransactionExecutionGrain : Orleans.IGrainWithIntegerKey
     {
-        /*
-         * Client calls this function to submit a determinictic transaction to the transaction coordinator.
-         */
-        [AlwaysInterleave]
-        Task<TransactionResult> StartTransaction(string startFunc, object funcInput, Dictionary<int, Tuple<string, int>> grainAccessInfo);
+        // transaction execution
+        Task<NonDetFuncResult> ExecuteNonDet(FunctionCall call, TransactionContext ctx);
 
-        /*  
-         * Client calls this function to submit a non-determinictic transaction to the transaction coordinator.
-         */
-        [AlwaysInterleave]
+        // 
+        Task<object> ExecuteDet(FunctionCall call, TransactionContext ctx);
+
+        // PACT
+        Task<TransactionResult> StartTransaction(string startFunc, object funcInput, List<int> grainAccessInfo, List<string> grainClassName);
+        Task ReceiveBatchSchedule(LocalSubBatch batch);
+        Task AckBatchCommit(int bid);
+
+        // ACT
         Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
-
-        /*
-         * Receive batch schedule from the coordinator.
-         */
-        [AlwaysInterleave]
-        Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule);
-
-        /*
-         * Called by other grains to execute a function.
-         */
-        [AlwaysInterleave]
-        Task<FunctionResult> Execute(FunctionCall call, TransactionContext ctx);
-
-        [AlwaysInterleave]
-        Task<bool> PrepareA(int tid, bool doLogging);
-
-        [AlwaysInterleave]
-        Task<Tuple<bool, int, int, bool>> Prepare(int tid, bool doLogging);    // <vote, maxBeforeBid, minAfterBid, isConsecutive>
-
-        [AlwaysInterleave]
-        Task Commit(int tid, int maxBeforeBid, bool doLogging);
-
-        [AlwaysInterleave]
+        Task<bool> Prepare(int tid, bool isReader);
+        Task Commit(int tid, int maxBeforeBid);
         Task Abort(int tid);
 
-        [AlwaysInterleave]
+        // hybrid execution
         Task<int> WaitForBatchCommit(int bid);
 
-        [AlwaysInterleave]
-        Task AckBatchCommit(int bid);
+        Task CheckGC();
     }
 }

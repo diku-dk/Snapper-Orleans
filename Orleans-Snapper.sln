@@ -27,7 +27,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmallBank.Interfaces", "Sma
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmallBank.Grains", "SmallBank.Grains\SmallBank.Grains.csproj", "{A5B30F91-BFF5-4191-9030-EB44AA85F540}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExperimentProcess", "NewProcess\ExperimentProcess.csproj", "{B5C648C5-B9D4-45C4-A0AE-58C4AF917D1E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExperimentProcess", "ExperimentProcess\ExperimentProcess.csproj", "{B5C648C5-B9D4-45C4-A0AE-58C4AF917D1E}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmallBank.DataGenerator", "SmallBank.DataGenerator\SmallBank.DataGenerator.csproj", "{645246FC-F03F-45EA-BEAE-2966E4B3C41E}"
 EndProject

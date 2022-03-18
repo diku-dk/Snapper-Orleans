@@ -59,7 +59,7 @@ namespace TPCC.Grains
             try
             {
                 var myState = await GetState(context, AccessMode.Read);
-                res.resultObject = myState.warehouse.W_TAX;
+                res.resultObj = myState.warehouse.W_TAX;
             }
             catch (Exception)
             {

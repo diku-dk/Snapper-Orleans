@@ -2,93 +2,68 @@
 using Utilities;
 using System.Threading.Tasks;
 using Concurrency.Interface.TransactionExecution;
-using Concurrency.Interface.TransactionExecution.Deterministic;
 using Concurrency.Interface.TransactionExecution.Nondeterministic;
-using Concurrency.Implementation.TransactionExecution.Deterministic;
 using Concurrency.Implementation.TransactionExecution.Nondeterministic;
 
 namespace Concurrency.Implementation.TransactionExecution
 {
     public class HybridState<TState> : ITransactionalState<TState> where TState : ICloneable, new()
     {
-        private IDetTransactionalState<TState> detStateManager;
+        private TState committedState;
         private INonDetTransactionalState<TState> nonDetStateManager;
-        private CommittedState<TState> myState;
-
+        
         // when execution grain is initialized, its hybrid state is initialized
-        public HybridState(CCType type = CCType.S2PL) : this(new TState(), type)
+        public HybridState() : this(new TState())
         {
             ;
         }
 
-        public HybridState(TState state, CCType type = CCType.S2PL)
+        public HybridState(TState state)
         {
-            this.myState = new CommittedState<TState>(state);
-            // detStateManager: it's read and write operation will return the state directly
-            // nonDetStateManager: return the state under the locking protocol
-            detStateManager = new DeterministicTransactionalState<TState>();
-            switch (type)
-            {
-                case CCType.S2PL:
-                    nonDetStateManager = new S2PLTransactionalState<TState>();
-                    break;
-                case CCType.TS:
-                    nonDetStateManager = new TimestampTransactionalState<TState>();
-                    break;
-            }
+            committedState = state;
+            if (Constants.ccType == CCType.S2PL) nonDetStateManager = new S2PLTransactionalState<TState>();
+            else if (Constants.ccType == CCType.TS) nonDetStateManager = new TimestampTransactionalState<TState>();
+            else throw new Exception("HybridState: Unknown CC type");
         }
 
-        Task ITransactionalState<TState>.Abort(int tid)
+        public TState detOp()
         {
-            try
-            {
-                nonDetStateManager.Abort(tid);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"\n Exception(Abort)::transaction {tid} exception {e.Message}");
-            }
-            return Task.CompletedTask;
+            return committedState;
         }
 
-        Task ITransactionalState<TState>.Commit(int tid)
+        public TState GetCommittedState(int bid)
         {
-            try
-            {
-                nonDetStateManager.Commit(tid, myState);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"\n Exception(Commit)::transaction {tid} exception {e.Message}");
-            }
-            return Task.CompletedTask;
+            return committedState;
         }
 
-        TState ITransactionalState<TState>.GetCommittedState(int bid)
+        public Task<TState> nonDetRead(int tid)
         {
-            return myState.GetState();
+            return nonDetStateManager.Read(tid, committedState);
         }
 
-        TState ITransactionalState<TState>.GetPreparedState(int tid)
+        public Task<TState> nonDetReadWrite(int tid)
+        {
+            return nonDetStateManager.ReadWrite(tid, committedState);
+        }
+
+        public Task<bool> Prepare(int tid, bool isReader)
+        {
+            return nonDetStateManager.Prepare(tid, isReader);
+        }
+
+        public void Commit(int tid)
+        {
+            nonDetStateManager.Commit(tid, committedState);
+        }
+
+        public void Abort(int tid)
+        {
+            nonDetStateManager.Abort(tid);
+        }
+
+        public TState GetPreparedState(int tid)
         {
             return nonDetStateManager.GetPreparedState(tid);
-        }
-
-        Task<bool> ITransactionalState<TState>.Prepare(int tid, bool isWriter)
-        {
-            return nonDetStateManager.Prepare(tid, isWriter);
-        }
-
-        Task<TState> ITransactionalState<TState>.Read(TransactionContext ctx)
-        {
-            if (ctx.isDet) return detStateManager.Read(ctx, myState.GetState());
-            else return nonDetStateManager.Read(ctx, myState);
-        }
-
-        Task<TState> ITransactionalState<TState>.ReadWrite(TransactionContext ctx)
-        {
-            if (ctx.isDet) return detStateManager.ReadWrite(ctx, myState.GetState());
-            else return nonDetStateManager.ReadWrite(ctx, myState);
         }
     }
 }

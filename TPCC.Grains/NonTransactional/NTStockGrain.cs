@@ -80,7 +80,7 @@ namespace TPCC.Grains
                     var S_DIST = the_stock.S_DIST[D_ID];
                     result.Add(I_ID, S_DIST);
                 }
-                ret.resultObject = result;
+                ret.resultObj = result;
             }
             catch (Exception)
             {

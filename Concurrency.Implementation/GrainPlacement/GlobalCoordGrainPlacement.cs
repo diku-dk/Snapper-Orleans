@@ -36,12 +36,4 @@ namespace Concurrency.Implementation.GrainPlacement
         {
         }
     }
-
-    public static class GlobalCoordGrainPlacementHelper
-    {
-        public static int MapCoordIDToNeighborID(int coordID)
-        {
-            return (coordID + 1) % Constants.numLocalCoordPerSilo;
-        }
-    }
 }

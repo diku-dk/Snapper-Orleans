@@ -17,8 +17,7 @@ namespace Concurrency.Implementation.GrainPlacement
             if (Constants.multiSilo)
             {
                 var grainID = (int)target.GrainIdentity.PrimaryKeyLong;
-                // grain [0, 10K) locate in the 0th silo
-                silo = grainID / Constants.numGrainPerSilo;
+                silo = TransactionExecutionGrainPlacementHelper.MapGrainIDToSilo(grainID);
             }
             return Task.FromResult(silos[silo]);
         }

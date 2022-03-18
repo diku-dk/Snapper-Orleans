@@ -6,12 +6,10 @@ namespace Utilities
     [Serializable]
     public class WorkloadConfiguration
     {
-        // benchmarkframework setting
+        // benchmark setting
         public int numEpochs;
+        public int numWarmupEpoch;
         public int epochDurationMSecs;
-        public int numThreadsPerWorkerNode;
-        public int numConnToClusterPerWorkerNode;
-        public int[] percentilesToCalculate;
 
         // workload config
         public BenchmarkType benchmark;
@@ -26,7 +24,7 @@ namespace Utilities
     }
 
     [Serializable]
-    public class WorkloadResults
+    public class WorkloadResult
     {
         public int numDeadlock;
         public int numNotSerializable;
@@ -40,7 +38,7 @@ namespace Utilities
         public List<double> latencies;
         public List<double> det_latencies;
 
-        public WorkloadResults(int numDetTxn, int numNonDetTxn, int numDetCommitted, int numNonDetCommitted, long startTime, long endTime, int numNotSerializable, int numNotSureSerializable, int numDeadlock)
+        public WorkloadResult(int numDetTxn, int numNonDetTxn, int numDetCommitted, int numNonDetCommitted, long startTime, long endTime, int numNotSerializable, int numNotSureSerializable, int numDeadlock)
         {
             this.numDetTxn = numDetTxn;
             this.numNonDetTxn = numNonDetTxn;

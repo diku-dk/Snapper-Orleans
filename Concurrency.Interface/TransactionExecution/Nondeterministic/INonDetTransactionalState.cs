@@ -1,27 +1,14 @@
-﻿using Utilities;
-using Orleans.Concurrency;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 
 namespace Concurrency.Interface.TransactionExecution.Nondeterministic
 {
     public interface INonDetTransactionalState<TState>
     {
-        [AlwaysInterleave]
-        Task<TState> Read(TransactionContext ctx, CommittedState<TState> committedState);
-
-        [AlwaysInterleave]
-        Task<TState> ReadWrite(TransactionContext ctx, CommittedState<TState> committedState);
-
-        [AlwaysInterleave]
+        Task<TState> Read(int tid, TState committedState);
+        Task<TState> ReadWrite(int tid, TState committedState);
         Task<bool> Prepare(int tid, bool isWriter);
-
-        [AlwaysInterleave]
-        void Commit(int tid, CommittedState<TState> committedState);
-
-        [AlwaysInterleave]
+        void Commit(int tid, TState committedState);
         void Abort(int tid);
-
-        [AlwaysInterleave]
         TState GetPreparedState(int tid);
     }
 }

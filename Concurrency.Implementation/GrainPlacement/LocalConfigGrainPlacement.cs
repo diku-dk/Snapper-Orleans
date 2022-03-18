@@ -17,7 +17,7 @@ namespace Concurrency.Implementation.GrainPlacement
             if (Constants.multiSilo)
             {
                 var grainID = (int)target.GrainIdentity.PrimaryKeyLong;
-                silo = LocalConfigGrainPlacementHelper.MapGrainIDToSilo(grainID);         
+                silo = LocalConfigGrainPlacementHelper.MapGrainIDToSilo(grainID);
             }
             return Task.FromResult(silos[silo]);
         }
@@ -33,14 +33,6 @@ namespace Concurrency.Implementation.GrainPlacement
     {
         public LocalConfigGrainPlacementStrategyAttribute() : base(new LocalConfigGrainPlacementStrategy())
         {
-        }
-    }
-
-    public static class LocalConfigGrainPlacementHelper
-    {
-        public static int MapGrainIDToSilo(int grainID)
-        {
-            return grainID;   // one local config grain per silo
         }
     }
 }

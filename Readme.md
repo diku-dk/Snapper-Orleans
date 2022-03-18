@@ -23,4 +23,4 @@ To build and run our sample client, run the following two projects one after the
 
 `dotnet run --project ExperimentController/ExperimentController.csproj`
 
-`dotnet run --project NewProcess/NewProcess.csproj`
+`dotnet run --project ExperimentProcess/ExperimentProcess.csproj`

@@ -12,9 +12,9 @@ namespace Concurrency.Implementation.Configuration
     [GlobalConfigGrainPlacementStrategy]
     public class GlobalConfigGrain : Grain, IGlobalConfigGrain
     {
-        private bool tokenEnabled;
-        private ILocalConfigGrain[] configGrains;
-        private readonly ILoggerGroup loggerGroup;  // this logger group is only accessible within this silo host
+        bool tokenEnabled;
+        ILocalConfigGrain[] configGrains;
+        readonly ILoggerGroup loggerGroup;  // this logger group is only accessible within this silo host
 
         public override Task OnActivateAsync()
         {
@@ -47,7 +47,7 @@ namespace Concurrency.Implementation.Configuration
 
             return count;
         }
-            
+
         public async Task ConfigGlobalEnv()
         {
             if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numGlobalLogger);
@@ -55,6 +55,13 @@ namespace Concurrency.Implementation.Configuration
             // configure local environment in each silo
             await ConfigLocalEnv();
 
+            if (Constants.multiSilo == false) return;
+            if (Constants.hierarchicalCoord) await ConfigHierarchicalArchitecture();
+            else await ConfigSimpleArchitecture();
+        }
+
+        async Task ConfigHierarchicalArchitecture()
+        {
             // initialize global coordinators
             var tasks = new List<Task>();
             for (int i = 0; i < Constants.numGlobalCoord; i++)
@@ -68,13 +75,34 @@ namespace Concurrency.Implementation.Configuration
             if (tokenEnabled == false)
             {
                 var coord0 = GrainFactory.GetGrain<IGlobalCoordGrain>(0);
-                BatchToken token = new BatchToken(-1, -1);
+                BasicToken token = new BasicToken();
                 await coord0.PassToken(token);
                 tokenEnabled = true;
             }
         }
 
-        private async Task ConfigLocalEnv()
+        async Task ConfigSimpleArchitecture()
+        {
+            // initialize local coordinators (locate in a separate silo)
+            var tasks = new List<Task>();
+            for (int i = 0; i < Constants.numGlobalCoord; i++)
+            {
+                var coord = GrainFactory.GetGrain<ILocalCoordGrain>(i);
+                tasks.Add(coord.SpawnLocalCoordGrain());
+            }
+            await Task.WhenAll(tasks);
+
+            //Inject token to local coordinator 0
+            if (tokenEnabled == false)
+            {
+                var coord0 = GrainFactory.GetGrain<ILocalCoordGrain>(0);
+                var token = new LocalToken();
+                await coord0.PassToken(token);
+                tokenEnabled = true;
+            }
+        }
+
+        async Task ConfigLocalEnv()
         {
             configGrains = new ILocalConfigGrain[Constants.numSilo];
             var tasks = new List<Task>();

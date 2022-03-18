@@ -12,19 +12,19 @@ namespace ExperimentProcess
         bool isDet;
         WorkloadConfiguration config;
 
-        public void generateBenchmark(WorkloadConfiguration workloadConfig, bool isDet)
+        public void GenerateBenchmark(WorkloadConfiguration workloadConfig, bool isDet)
         {
             this.isDet = isDet;
             config = workloadConfig;
         }
 
-        private Task<TransactionResult> Execute(IClusterClient client, int grainId, string startFunc, object funcInput, Dictionary<int, Tuple<string, int>> grainAccessInfo)
+        private Task<TransactionResult> Execute(IClusterClient client, int grainId, string startFunc, object funcInput, List<int> grainIDList, List<string> grainNameList)
         {
             switch (Constants.implementationType)
             {
                 case ImplementationType.SNAPPER:
                     var grain = client.GetGrain<ICustomerGrain>(grainId);
-                    if (isDet) return grain.StartTransaction(startFunc, funcInput, grainAccessInfo);
+                    if (isDet) return grain.StartTransaction(startFunc, funcInput, grainIDList, grainNameList);
                     else return grain.StartTransaction(startFunc, funcInput);
                 case ImplementationType.ORLEANSEVENTUAL:
                     var egrain = client.GetGrain<INTCustomerGrain>(grainId);
@@ -34,11 +34,16 @@ namespace ExperimentProcess
             }
         }
 
-        public Task<TransactionResult> newTransaction(IClusterClient client, RequestData data)
+        public Task<TransactionResult> NewTransaction(IClusterClient client, RequestData data)
         {
-            var grainAccessInfo = new Dictionary<int, Tuple<string, int>>();   // <grainID, namespace, access time>
-            foreach (var grain in data.grains_in_namespace) grainAccessInfo.Add(grain.Key, new Tuple<string, int>(grain.Value, 1));
-            var task = Execute(client, data.firstGrainID, "NewOrder", data.tpcc_input, grainAccessInfo);
+            var grainIDList = new List<int>();
+            var grainNameList = new List<string>();
+            foreach (var grain in data.grains_in_namespace)
+            {
+                grainIDList.Add(grain.Key);
+                grainNameList.Add(grain.Value);
+            }
+            var task = Execute(client, data.firstGrainID, "NewOrder", data.tpcc_input, grainIDList, grainNameList);
             return task;
         }
     }

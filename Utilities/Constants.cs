@@ -1,4 +1,7 @@
-﻿namespace Utilities
+﻿using System;
+using System.Collections.Generic;
+
+namespace Utilities
 {
     public enum CCType { S2PL, TS };
     public enum AccessMode { Read, ReadWrite };
@@ -8,13 +11,15 @@
     public enum LoggingType { NOLOGGING, ONGRAIN, LOGGER };
     public enum StorageType { INMEMORY, FILESYSTEM, DYNAMODB };
     public enum SerializerType { BINARY, MSGPACK, JSON };
-
     public enum TxnType { Init, Balance, MultiTransfer, Deposit };
 
     public class Constants
     {
         // Client config
         public const int numWorker = 1;
+
+        // architecture
+        public const bool hierarchicalCoord = false;
 
         // Silo config
         public const int numSilo = 2;

@@ -3,7 +3,6 @@ using Utilities;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Concurrency.Interface.TransactionExecution;
 using Concurrency.Interface.TransactionExecution.Nondeterministic;
 
 namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
@@ -24,13 +23,12 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             readDependencyMap = new Dictionary<int, int>();
         }
 
-        public Task<TState> ReadWrite(TransactionContext ctx, CommittedState<TState> committedState)
+        public Task<TState> ReadWrite(int tid, TState committedState)
         {
             TState state;
             TState copy;
             TransactionStateInfo info;
             Node<TransactionStateInfo> node;
-            var tid = ctx.tid;
             if (transactionMap.ContainsKey(tid))  // if tid has written the state before
             {
                 Debug.Assert(transactionMap[tid].data.status.Equals(Status.Executing));
@@ -40,7 +38,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             var lastNode = findLastNonAbortedTransaction();
             if (lastNode == null)    // either the transactionMap is empty or all nodes have been aborted
             {
-                state = committedState.GetState();
+                state = committedState;
                 copy = (TState)state.Clone();
                 info = new TransactionStateInfo(tid, -1, tid, Status.Executing, copy);
                 node = transactionList.Append(info);
@@ -71,13 +69,12 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             return Task.FromResult<TState>(copy);
         }
 
-        public Task<TState> Read(TransactionContext ctx, CommittedState<TState> committedState)
+        public Task<TState> Read(int tid, TState committedState)
         {
             TState state;
             TState copy;
             TransactionStateInfo info;
             Node<TransactionStateInfo> node;
-            var tid = ctx.tid;
             if (transactionMap.ContainsKey(tid))  // if tid has written the state before
             {
                 Debug.Assert(transactionMap[tid].data.status.Equals(Status.Executing));
@@ -86,7 +83,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             var lastNode = findLastNonAbortedTransaction();
             if (lastNode == null)   // either the transactionMap is empty or all nodes have been aborted
             {
-                state = committedState.GetState();
+                state = committedState;
                 copy = (TState)state.Clone();
                 info = new TransactionStateInfo(-1, -1, tid, Status.Executing, copy);
                 node = transactionList.Append(info);
@@ -123,18 +120,17 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             return lastNode;
         }
 
-        public async Task<bool> Prepare(int tid, bool isWriter)
+        public async Task<bool> Prepare(int tid, bool isReader)   // check if the dependent transaction has committed
         {
-            throw new NotImplementedException();
-        }
+            if (isReader) Debug.Assert(readDependencyMap.ContainsKey(tid));
+            else Debug.Assert(transactionMap.ContainsKey(tid));
 
-        public async Task<bool> Prepare(int tid)   // check if the dependent transaction has committed
-        {
-            Debug.Assert(readDependencyMap.ContainsKey(tid) || transactionMap.ContainsKey(tid));
             int depTid;
-            if (!transactionMap.ContainsKey(tid)) depTid = readDependencyMap[tid];   // tid is a read-only transaction
-            else depTid = transactionMap[tid].data.depTid;    // tid is a read-write transaction
+            if (isReader) depTid = readDependencyMap[tid];   // tid is a read-only transaction
+            else depTid = transactionMap[tid].data.depTid;   // tid is a read-write transaction
+
             if (depTid <= lastCommitTid) return true;
+
             Debug.Assert(transactionMap.ContainsKey(depTid));
             var info = transactionMap[depTid].data;
             await info.ExecutionPromise.Task;
@@ -144,7 +140,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             return false;
         }
 
-        public void Commit(int tid, CommittedState<TState> committedState)
+        public void Commit(int tid, TState committedState)
         {
             Debug.Assert(readDependencyMap.ContainsKey(tid) || transactionMap.ContainsKey(tid));
             lastCommitTid = Math.Max(lastCommitTid, tid);
@@ -163,7 +159,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
 
             // Clean the transaction list
             CleanUp(node);
-            committedState.SetState(node.data.state);
+            committedState = node.data.state;
         }
 
         public void Abort(int tid)

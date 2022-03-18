@@ -66,7 +66,7 @@ namespace TPCC.Grains
                     var itemGrain = GrainFactory.GetGrain<INTItemGrain>(itemGrainID);
                     var r = await itemGrain.StartTransaction("GetItemsPrice", itemIDs);
                     if (r.exception) throw new Exception("Exception thrown from ItemGrain. ");
-                    itemPrices = (Dictionary<int, float>)r.resultObject;
+                    itemPrices = (Dictionary<int, float>)r.resultObj;
                 }
 
                 // STEP 2: get tax info from WarehouseGrain and DistrictGrain
@@ -87,8 +87,8 @@ namespace TPCC.Grains
                     }
                     await Task.WhenAll(tasks);
                     if (tasks[0].Result.exception || tasks[1].Result.exception) throw new Exception("Exception thrown from WarehouseGrain or DistrictGrain. ");
-                    W_TAX = (float)tasks[0].Result.resultObject;
-                    var r = (Tuple<float, long>)tasks[1].Result.resultObject;
+                    W_TAX = (float)tasks[0].Result.resultObj;
+                    var r = (Tuple<float, long>)tasks[1].Result.resultObj;
                     D_TAX = r.Item1;
                     O_ID = r.Item2;
                 }
@@ -129,9 +129,9 @@ namespace TPCC.Grains
                     await Task.WhenAll(tasks);
                     foreach (var t in tasks)
                     {
-                        if (t.Result.resultObject != null)
+                        if (t.Result.resultObj != null)
                         {
-                            var r = (Dictionary<int, string>)t.Result.resultObject;
+                            var r = (Dictionary<int, string>)t.Result.resultObj;
                             foreach (var item in r) items_dist_info.Add(item.Key, item.Value);
                         }
                     }
@@ -165,7 +165,7 @@ namespace TPCC.Grains
 
                     var C_DISCOUNT = myState.customer_table[C_ID].C_DISCOUNT;
                     total_amount *= (1 - C_DISCOUNT) * (1 + W_TAX + D_TAX);
-                    res.resultObject = total_amount;
+                    res.resultObj = total_amount;
                 }
             }
             catch (Exception)

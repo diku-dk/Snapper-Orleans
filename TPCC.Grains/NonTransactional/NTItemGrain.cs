@@ -58,7 +58,7 @@ namespace TPCC.Grains
                     if (myState.items.ContainsKey(id)) item_prices.Add(id, myState.items[id].I_PRICE);
                     else throw new Exception("Exception: invalid I_ID");
                 }
-                res.resultObject = item_prices;
+                res.resultObj = item_prices;
             }
             catch (Exception)
             {

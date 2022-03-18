@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace SmallBank.Interfaces
 {
-    public interface ISnapperTransactionalAccountGroupGrain : ITransactionExecutionGrain
+    public interface ISnapperTransactionalAccountGrain : ITransactionExecutionGrain
     {
         Task<TransactionResult> Init(TransactionContext context, object funcInput);
         Task<TransactionResult> Balance(TransactionContext context, object funcInput);

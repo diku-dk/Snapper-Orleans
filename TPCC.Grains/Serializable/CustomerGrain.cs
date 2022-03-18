@@ -98,11 +98,11 @@ namespace TPCC.Grains
                     var r = await CallGrain(context, itemGrainID, "TPCC.Grains.ItemGrain", func_call);
                     if (r.exception)
                     {
-                        if (!context.isDet) throw new Exception("Exception thrown from ItemGrain. ");
+                        if (context.localBid == -1) throw new Exception("Exception thrown from ItemGrain. ");
                         abort = true;
                         itemPrices = new Dictionary<int, float>();
                     }
-                    else itemPrices = (Dictionary<int, float>)r.resultObject;
+                    else itemPrices = (Dictionary<int, float>)r.resultObj;
                 }
 
                 // STEP 2: get tax info from WarehouseGrain and DistrictGrain
@@ -126,11 +126,11 @@ namespace TPCC.Grains
                     await Task.WhenAll(tasks);
                     if (tasks[0].Result.exception || tasks[1].Result.exception)
                     {
-                        if (!context.isDet) throw new Exception("Exception thrown from WarehouseGrain or DistrictGrain. ");
+                        if (context.localBid == -1) throw new Exception("Exception thrown from WarehouseGrain or DistrictGrain. ");
                         abort = true;
                     }
-                    W_TAX = (float)tasks[0].Result.resultObject;
-                    var r = (Tuple<float, long>)tasks[1].Result.resultObject;
+                    W_TAX = (float)tasks[0].Result.resultObj;
+                    var r = (Tuple<float, long>)tasks[1].Result.resultObj;
                     D_TAX = r.Item1;
                     O_ID = r.Item2;
                 }
@@ -172,15 +172,15 @@ namespace TPCC.Grains
                     await Task.WhenAll(tasks);
                     foreach (var t in tasks)
                     {
-                        if (t.Result.resultObject != null)
+                        if (t.Result.resultObj != null)
                         {
-                            var r = (Dictionary<int, string>)t.Result.resultObject;
+                            var r = (Dictionary<int, string>)t.Result.resultObj;
                             foreach (var item in r) items_dist_info.Add(item.Key, item.Value);
                         }
                     }
                     if (res.exception)
                     {
-                        if (!context.isDet) throw new Exception("Exception thrown from StockGrain. ");
+                        if (context.localBid == -1) throw new Exception("Exception thrown from StockGrain. ");
                         abort = true;
                     }
                 }
@@ -191,7 +191,7 @@ namespace TPCC.Grains
                     var orderGrain = GrainFactory.GetGrain<IOrderGrain>(orderGrainID);
                     if (abort)     // must finish the calls for PACT
                     {
-                        Debug.Assert(context.isDet);
+                        Debug.Assert(context.localBid != -1);
                         var func_call = new FunctionCall("AddNewOrder", null, typeof(OrderGrain));
                         //Console.WriteLine($"OrderGrain {orderGrainID}");
                         _ = CallGrain(context, orderGrainID, "TPCC.Grains.OrderGrain", func_call);
@@ -218,11 +218,11 @@ namespace TPCC.Grains
                         var order_info = new OrderInfo(order, orderlines);
                         var func_call = new FunctionCall("AddNewOrder", order_info, typeof(OrderGrain));
                         var t = CallGrain(context, orderGrainID, "TPCC.Grains.OrderGrain", func_call);
-                        if (!context.isDet) await t;
+                        if (context.localBid == -1) await t;
 
                         var C_DISCOUNT = myState.customer_table[C_ID].C_DISCOUNT;
                         total_amount *= (1 - C_DISCOUNT) * (1 + W_TAX + D_TAX);
-                        res.resultObject = total_amount;
+                        res.resultObj = total_amount;
                     }
                 }
             }

@@ -44,9 +44,12 @@ namespace Concurrency.Implementation.Configuration
         {
             if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numLoggerPerSilo);
 
+            // in this case, all coordinators locate in a separate silo
+            if (Constants.hierarchicalCoord == false) return;
+
             // initialize local coordinators in this silo
             var tasks = new List<Task>();
-            var firstCoordID = LocalCoordGrainPlacementHelper.MapSiloIDToFirstCoordID(siloID);
+            var firstCoordID = LocalCoordGrainPlacementHelper.MapSiloIDToFirstLocalCoordID(siloID);
             for (int i = 0; i < Constants.numLocalCoordPerSilo; i++)
             {
                 var coordID = i + firstCoordID;
@@ -59,7 +62,7 @@ namespace Concurrency.Implementation.Configuration
             {
                 // inject token to the first local coordinator in this silo
                 var coord0 = GrainFactory.GetGrain<ILocalCoordGrain>(firstCoordID);
-                BatchToken token = new BatchToken(-1, -1);
+                LocalToken token = new LocalToken();
                 await coord0.PassToken(token);
                 tokenEnabled = true;
             }

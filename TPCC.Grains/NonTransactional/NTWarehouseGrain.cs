@@ -50,7 +50,7 @@ namespace TPCC.Grains
             try
             {
                 var myState = state;
-                res.resultObject = myState.warehouse.W_TAX;
+                res.resultObj = myState.warehouse.W_TAX;
             }
             catch (Exception)
             {

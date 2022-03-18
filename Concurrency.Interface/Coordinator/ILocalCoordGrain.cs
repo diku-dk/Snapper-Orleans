@@ -1,9 +1,8 @@
-﻿using System;
-using Orleans;
+﻿using Orleans;
 using Utilities;
-using Orleans.Concurrency;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System;
 
 namespace Concurrency.Interface.Coordinator
 {
@@ -11,19 +10,20 @@ namespace Concurrency.Interface.Coordinator
     {
         Task SpawnLocalCoordGrain();
 
-        [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction(Dictionary<int, Tuple<string, int>> grainAccessInfo);
+        Task<TransactionRegistInfo> NewTransaction(List<int> grainAccessInfo, List<string> grainClassName);
 
-        [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction();
+        Task<TransactionRegistInfo> NewTransaction();
 
-        [AlwaysInterleave]
-        Task PassToken(BatchToken token);
+        Task PassToken(LocalToken token);
 
-        [AlwaysInterleave]
         Task AckBatchCompletion(int bid);
 
-        [AlwaysInterleave]
         Task WaitBatchCommit(int bid);
+
+        // for global transactions (hierarchical architecture)
+        Task<TransactionRegistInfo> NewGlobalTransaction(int globalTid, List<int> grainAccessInfo);
+        Task ReceiveBatchSchedule(SubBatch batch);
+
+        Task CheckGC();
     }
 }

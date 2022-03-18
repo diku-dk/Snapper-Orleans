@@ -1,30 +1,19 @@
-﻿using Utilities;
-using Orleans.Concurrency;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 
 namespace Concurrency.Interface.TransactionExecution
 {
     public interface ITransactionalState<TState>
     {
-        [AlwaysInterleave]
-        Task<TState> Read(TransactionContext ctx);
+        // PACT
+        TState detOp();
 
-        [AlwaysInterleave]
-        Task<TState> ReadWrite(TransactionContext ctx);
-
-        [AlwaysInterleave]
-        Task<bool> Prepare(int tid, bool isWriter);
-
-        [AlwaysInterleave]
-        Task Commit(int tid);
-
-        [AlwaysInterleave]
-        Task Abort(int tid);
-
-        [AlwaysInterleave]
+        // ACT
+        Task<TState> nonDetRead(int tid);
+        Task<TState> nonDetReadWrite(int tid);
+        Task<bool> Prepare(int tid, bool isReader);
+        void Commit(int tid);
+        void Abort(int tid);
         TState GetPreparedState(int tid);
-
-        [AlwaysInterleave]
         TState GetCommittedState(int tid);
     }
 }

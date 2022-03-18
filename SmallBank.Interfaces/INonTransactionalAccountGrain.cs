@@ -1,12 +1,10 @@
 ﻿using Utilities;
-using Orleans.Concurrency;
 using System.Threading.Tasks;
 
 namespace SmallBank.Interfaces
 {
-    public interface INTAccountGroupGrain : Orleans.IGrainWithIntegerKey
+    public interface INonTransactionalAccountGrain : Orleans.IGrainWithIntegerKey
     {
-        [AlwaysInterleave]
         Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
     }
 }

@@ -1,10 +1,8 @@
 ﻿using System;
-using Utilities;
 using System.Linq;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Concurrency.Interface.TransactionExecution;
 using Concurrency.Interface.TransactionExecution.Nondeterministic;
 
 namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
@@ -26,9 +24,8 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             maxWaitWriter = -1;
         }
 
-        public async Task<TState> Read(TransactionContext ctx, CommittedState<TState> committedState)
+        public async Task<TState> Read(int tid, TState committedState)
         {
-            var tid = ctx.tid;
             if (waitinglist.Count == 0)  // if nobody is reading or writing the grain
             {
                 var mylock = new TaskCompletionSource<bool>();
@@ -36,14 +33,14 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
                 waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(true, mylock));
                 Debug.Assert(concurrentReaders.Count == 0);
                 concurrentReaders.Add(tid);
-                return committedState.GetState();
+                return committedState;
             }
             if (concurrentReaders.Count > 0)  // there are multiple readers reading the grain now
             {
                 if (waitinglist.ContainsKey(tid))   // tid wants to read again
                 {
                     Debug.Assert(waitinglist[tid].Item1 && waitinglist[tid].Item2.Task.IsCompleted);   // tid must be a reader
-                    return committedState.GetState();
+                    return committedState;
                 }
                 var mylock = new TaskCompletionSource<bool>();
                 if (tid > maxWaitWriter)    // check if this reader can be put in front of the waiting writers
@@ -51,12 +48,12 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
                     mylock.SetResult(true);
                     waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(true, mylock));
                     concurrentReaders.Add(tid);
-                    return committedState.GetState();
+                    return committedState;
                 }
                 // otherwise, the reader need to be added after the waiting writer
                 waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(true, mylock));
                 await mylock.Task;
-                return committedState.GetState();
+                return committedState;
             }
             // otherwise, right now there is only one writer working
             Debug.Assert(!waitinglist.First().Value.Item1 && waitinglist.First().Value.Item2.Task.IsCompleted);
@@ -70,20 +67,19 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
                 var mylock = new TaskCompletionSource<bool>();
                 waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(true, mylock));
                 await mylock.Task;
-                return committedState.GetState();
+                return committedState;
             }
             throw new DeadlockAvoidanceException($"txn {tid} is aborted to avoid deadlock. ");
         }
 
-        public async Task<TState> ReadWrite(TransactionContext ctx, CommittedState<TState> committedState)
+        public async Task<TState> ReadWrite(int tid, TState committedState)
         {
-            var tid = ctx.tid;
             if (waitinglist.Count == 0)    // if nobody is reading or writing the grain
             {
                 var mylock = new TaskCompletionSource<bool>();
                 mylock.SetResult(true);
                 waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(false, mylock));
-                activeState = (TState)committedState.GetState().Clone();
+                activeState = (TState)committedState.Clone();
                 return activeState;
             }
             if (waitinglist.ContainsKey(tid))
@@ -104,7 +100,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
                     waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(false, mylock));
                     maxWaitWriter = Math.Max(maxWaitWriter, tid);
                     await mylock.Task;
-                    activeState = (TState)committedState.GetState().Clone();
+                    activeState = (TState)committedState.Clone();
                     return activeState;
                 }
                 throw new DeadlockAvoidanceException($"txn {tid} is aborted to avoid deadlock. ");
@@ -115,22 +111,16 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
                 var mylock = new TaskCompletionSource<bool>();
                 waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(false, mylock));
                 await mylock.Task;
-                activeState = (TState)committedState.GetState().Clone();
+                activeState = (TState)committedState.Clone();
                 return activeState;
             }
             throw new DeadlockAvoidanceException($"txn {tid} is aborted because txn {waitinglist.First().Key} is writing now. ");
         }
 
-        public Task<bool> Prepare(int tid, bool isWriter)
+        public Task<bool> Prepare(int tid, bool isReader)
         {
-            Debug.Assert(waitinglist.ContainsKey(tid) && isWriter == !waitinglist[tid].Item1);
-            if (isWriter == false) CleanUpAndSignal(tid);   // commit read-only transaction directly
-            return Task.FromResult(true);
-        }
-
-        public Task<bool> Prepare(int tid)
-        {
-            Debug.Assert(waitinglist.ContainsKey(tid));
+            Debug.Assert(waitinglist.ContainsKey(tid) && isReader == waitinglist[tid].Item1);
+            if (isReader) CleanUpAndSignal(tid);   // commit read-only transaction directly
             return Task.FromResult(true);
         }
 
@@ -167,10 +157,10 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             }
         }
 
-        public void Commit(int tid, CommittedState<TState> committedState)
+        public void Commit(int tid, TState committedState)
         {
             var isReader = waitinglist[tid].Item1;
-            if (!isReader) committedState.SetState(activeState);  // tid is a RW transaction, need to update the state
+            if (!isReader) committedState = activeState;  // tid is a RW transaction, need to update the state
             CleanUpAndSignal(tid);
         }
 

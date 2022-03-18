@@ -34,7 +34,7 @@ for ($j = 0; $j -le 0; $j++)
             #$nonDetPipe = $pipe
             Start-Process "dotnet" -ArgumentList "run --project ExperimentController --no-build -- $zipF $detPercent $cpu"
             Start-Sleep 8
-            Start-Process "dotnet" -ArgumentList "run --project NewProcess --no-build -- $cpu $detPipe $nonDetPipe"
+            Start-Process "dotnet" -ArgumentList "run --project ExperimentProcess --no-build -- $cpu $detPipe $nonDetPipe"
             #Start-Process "dotnet" -ArgumentList "run --project ExperimentProcess --no-build -- $cpu $pipe"
             #Start-Sleep 62
         }

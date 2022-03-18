@@ -52,7 +52,7 @@ namespace TPCC.Grains
             {
                 var myState = state;
                 var O_ID = myState.district.D_NEXT_O_ID++;
-                res.resultObject = new Tuple<float, long>(myState.district.D_TAX, O_ID);
+                res.resultObj = new Tuple<float, long>(myState.district.D_TAX, O_ID);
             }
             catch (Exception)
             {
