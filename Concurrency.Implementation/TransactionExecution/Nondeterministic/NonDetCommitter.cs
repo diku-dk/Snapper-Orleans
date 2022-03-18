@@ -112,12 +112,12 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
                     var grain = myGrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.grainClassName);
                     abortTask.Add(grain.Abort(tid));
                 }
-                else abortTask.Add(Abort(tid));
+                else Abort(tid);
             }
             await Task.WhenAll(abortTask);
         }
 
-        public async Task Abort(int tid)
+        public void Abort(int tid)
         {
             state.Abort(tid);
         }

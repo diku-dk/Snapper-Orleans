@@ -54,6 +54,14 @@ namespace Concurrency.Implementation.TransactionExecution
             this.state = state;
             this.log = log;
 
+            localCoordMap = new Dictionary<int, ILocalCoordGrain>();
+            globalCoordMap = new Dictionary<int, IGlobalCoordGrain>();
+            localBtchInfoPromise = new Dictionary<int, TaskCompletionSource<bool>>();
+            detFuncResults = new Dictionary<int, BasicFuncResult>();
+            globalBidToLocalBid = new Dictionary<int, int>();
+            globalTidToLocalTidPerBatch = new Dictionary<int, Dictionary<int, int>>();
+            globallocalBtchInfoPromise = new Dictionary<int, TaskCompletionSource<bool>>();
+
             // set up local and global coordinator info
             if (Constants.multiSilo)
             {

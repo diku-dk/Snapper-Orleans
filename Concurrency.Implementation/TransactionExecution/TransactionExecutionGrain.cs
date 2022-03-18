@@ -124,7 +124,8 @@ namespace Concurrency.Implementation.TransactionExecution
                 myLocalCoord,
                 myGlobalCoord,
                 myScheduler,
-                coordinatorMap);
+                coordinatorMap,
+                state);
 
             nonDetCommitter = new NonDetCommitter<TState>(
                 myID,
@@ -157,54 +158,63 @@ namespace Concurrency.Implementation.TransactionExecution
         /// <summary> Call this interface to submit an ACT to Snapper </summary>
         public async Task<TransactionResult> StartTransaction(string startFunc, object funcInput)
         {
-            var cxtInfo = await nonDetTxnExecutor.GetNonDetContext();
-            highestCommittedBid = Math.Max(highestCommittedBid, cxtInfo.Item1);
-            var cxt = cxtInfo.Item2;
-
-            // execute ACT
-            var call = new FunctionCall(startFunc, funcInput, GetType());
-            var funcResult = await ExecuteNonDet(call, cxt);
-            Debug.Assert(funcResult.grainOpInfo.ContainsKey(myID));
-
-            // check serializability and do 2PC
-            var canCommit = !funcResult.exception;
-            var maxBeforeBid = -1;
-            var res = new TransactionResult(funcResult.resultObj);
-            if (canCommit)
+            try
             {
-                maxBeforeBid = funcResult.maxBeforeBid;
-                var result = nonDetCommitter.CheckSerializability(highestCommittedBid, funcResult.maxBeforeBid, funcResult.minAfterBid, funcResult.isBeforeAfterConsecutive);
-                canCommit = result.Item1;
-                if (canCommit) canCommit = await nonDetCommitter.CoordPrepare(cxt.globalTid, funcResult.grainOpInfo);
+                var cxtInfo = await nonDetTxnExecutor.GetNonDetContext();
+                highestCommittedBid = Math.Max(highestCommittedBid, cxtInfo.Item1);
+                var cxt = cxtInfo.Item2;
+
+                // execute ACT
+                var call = new FunctionCall(startFunc, funcInput, GetType());
+                var funcResult = await ExecuteNonDet(call, cxt);
+                Debug.Assert(funcResult.grainOpInfo.ContainsKey(myID));
+
+                // check serializability and do 2PC
+                var canCommit = !funcResult.exception;
+                var maxBeforeBid = -1;
+                var res = new TransactionResult(funcResult.resultObj);
+                if (canCommit)
+                {
+                    maxBeforeBid = funcResult.maxBeforeBid;
+                    var result = nonDetCommitter.CheckSerializability(highestCommittedBid, funcResult.maxBeforeBid, funcResult.minAfterBid, funcResult.isBeforeAfterConsecutive);
+                    canCommit = result.Item1;
+                    if (canCommit) canCommit = await nonDetCommitter.CoordPrepare(cxt.globalTid, funcResult.grainOpInfo);
+                    else
+                    {
+                        if (result.Item2) res.Exp_Serializable = true;
+                        else res.Exp_NotSureSerializable = true;
+                    }
+                }
+                else res.Exp_Deadlock |= funcResult.Exp_Deadlock;  // when deadlock = false, exception may from RW conflict
+
+                if (canCommit) await nonDetCommitter.CoordCommit(cxt.globalTid, maxBeforeBid, funcResult.grainOpInfo);
                 else
                 {
-                    if (result.Item2) res.Exp_Serializable = true;
-                    else res.Exp_NotSureSerializable = true;
+                    res.exception = true;
+                    await nonDetCommitter.CoordAbort(cxt.globalTid, funcResult.grainOpInfo);
                 }
-            }
-            else res.Exp_Deadlock |= funcResult.Exp_Deadlock;  // when deadlock = false, exception may from RW conflict
 
-            if (canCommit) await nonDetCommitter.CoordCommit(cxt.globalTid, maxBeforeBid, funcResult.grainOpInfo);
-            else
-            {
-                res.exception = true;
-                await nonDetCommitter.CoordAbort(cxt.globalTid, funcResult.grainOpInfo);
-            }
-
-            // wait for previous batch to commit
-            if (canCommit && highestCommittedBid < funcResult.maxBeforeBid)
-            {
-                var grainID = funcResult.grainWithHighestBeforeBid;
-                if (grainID.Item1 == myID) await WaitForBatchCommit(funcResult.maxBeforeBid);
-                else
+                // wait for previous batch to commit
+                if (canCommit && highestCommittedBid < funcResult.maxBeforeBid)
                 {
-                    var grain = GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID.Item1, grainID.Item2);
-                    var new_bid = await grain.WaitForBatchCommit(funcResult.maxBeforeBid);
-                    if (highestCommittedBid < new_bid) highestCommittedBid = new_bid;
+                    var grainID = funcResult.grainWithHighestBeforeBid;
+                    if (grainID.Item1 == myID) await WaitForBatchCommit(funcResult.maxBeforeBid);
+                    else
+                    {
+                        var grain = GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID.Item1, grainID.Item2);
+                        var new_bid = await grain.WaitForBatchCommit(funcResult.maxBeforeBid);
+                        if (highestCommittedBid < new_bid) highestCommittedBid = new_bid;
+                    }
                 }
-            }
 
-            return res;
+                return res;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"{e.Message} {e.StackTrace}");
+                throw e;
+            }
+            return new TransactionResult();
         }
 
         /// <summary> Call this interface to emit a SubBatch from a local coordinator to a grain </summary>
@@ -281,12 +291,13 @@ namespace Concurrency.Implementation.TransactionExecution
             myScheduler.ackComplete(tid);
         }
 
-        public async Task Abort(int tid)
+        public Task Abort(int tid)
         {
-            await nonDetCommitter.Abort(tid);
+            nonDetCommitter.Abort(tid);
 
             coordinatorMap.Remove(tid);
             myScheduler.ackComplete(tid);
+            return Task.CompletedTask;
         }
     }
 }

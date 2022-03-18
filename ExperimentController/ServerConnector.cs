@@ -143,31 +143,30 @@ namespace ExperimentController
             int numGrain = Constants.numGrainPerSilo;
             Console.WriteLine($"Load SmallBank grains, numGrains = {numGrain}");
             var tasks = new List<Task<TransactionResult>>();
-            var sequence = false;   // load the grains in sequence instead of all concurrent
+            var sequence = true;   // load the grains in sequence instead of all concurrent
             if (Constants.loggingType != LoggingType.NOLOGGING) sequence = true;
             var start = DateTime.Now;
             for (int i = 0; i < numGrain; i++)
             {
-                var input = new Tuple<int, int>(1, i);
                 switch (Constants.implementationType)
                 {
                     case ImplementationType.ORLEANSEVENTUAL:
                         var etxnGrain = client.GetGrain<INonTransactionalAccountGrain>(i);
-                        tasks.Add(etxnGrain.StartTransaction("Init", input));
+                        tasks.Add(etxnGrain.StartTransaction("Init", i));
                         break;
                     case ImplementationType.ORLEANSTXN:
                         var orltxnGrain = client.GetGrain<IOrleansTransactionalAccountGrain>(i);
-                        tasks.Add(orltxnGrain.StartTransaction("Init", input));
+                        tasks.Add(orltxnGrain.StartTransaction("Init", i));
                         break;
                     case ImplementationType.SNAPPER:
                         var sntxnGrain = client.GetGrain<ISnapperTransactionalAccountGrain>(i);
-                        tasks.Add(sntxnGrain.StartTransaction("Init", input));
+                        tasks.Add(sntxnGrain.StartTransaction("Init", i));
                         break;
                     default:
                         throw new Exception("Unknown grain implementation type");
                 }
 
-                if (sequence && tasks.Count == 200)
+                if (sequence)
                 {
                     Console.WriteLine($"Load {Environment.ProcessorCount} grains, i = {i}");
                     await Task.WhenAll(tasks);

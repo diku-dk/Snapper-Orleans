@@ -45,7 +45,7 @@ namespace Concurrency.Implementation.Configuration
             if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numLoggerPerSilo);
 
             // in this case, all coordinators locate in a separate silo
-            if (Constants.hierarchicalCoord == false) return;
+            if (Constants.multiSilo && Constants.hierarchicalCoord == false) return;
 
             // initialize local coordinators in this silo
             var tasks = new List<Task>();

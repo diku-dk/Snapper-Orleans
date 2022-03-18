@@ -54,14 +54,14 @@ namespace OrleansSiloHost
         {
         }
 
-        public async Task<TransactionalStorageLoadResponse<TState>> Load()
+        public Task<TransactionalStorageLoadResponse<TState>> Load()
         {
             try
             {
                 if (key == null) key = new KeyEntity("default");
                 if (states == null) states = new List<KeyValuePair<long, StateEntity>>();
 
-                if (string.IsNullOrEmpty(key.ETag)) return new TransactionalStorageLoadResponse<TState>();
+                if (string.IsNullOrEmpty(key.ETag)) return Task.FromResult(new TransactionalStorageLoadResponse<TState>());
                 else
                 {
                     TState committedState;
@@ -103,7 +103,7 @@ namespace OrleansSiloHost
                     for (int i = 0; i < states.Count; i++) states[i].Value.StateJson = null;
 
                     var metadata = JsonConvert.DeserializeObject<TransactionalStateMetaData>(key.Metadata);
-                    return new TransactionalStorageLoadResponse<TState>(key.ETag, committedState, key.CommittedSequenceId, metadata, PrepareRecordsToRecover);
+                    return Task.FromResult(new TransactionalStorageLoadResponse<TState>(key.ETag, committedState, key.CommittedSequenceId, metadata, PrepareRecordsToRecover));
                 }
             }
             catch (Exception)

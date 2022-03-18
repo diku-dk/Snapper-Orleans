@@ -29,6 +29,7 @@ namespace ExperimentController
             GenerateWorkLoadFromSettingsFile();
             Console.WriteLine($"silo CPU = {Constants.numCPUPerSilo}, detPercent = {workload.pactPercent}%");
 
+            IOCount = new long[workload.numEpochs];
             serverConnector = new ServerConnector(
                 workload.numEpochs,
                 workload.benchmark,
@@ -61,23 +62,6 @@ namespace ExperimentController
             //Console.ReadLine();
         }
 
-        static void SetUpExpProcessCommunication()
-        {
-            if (Constants.numWorker > 1)
-            {
-                sinkAddress = Constants.controller_Remote_SinkAddress;
-                workerAddress = Constants.controller_Remote_WorkerAddress;
-            }
-            else
-            {
-                sinkAddress = Constants.controller_Local_SinkAddress;
-                workerAddress = Constants.controller_Local_WorkerAddress;
-            }
-
-            serializer = new BinarySerializer();
-            ackedWorkers = new CountdownEvent(Constants.numWorker);
-        }
-
         static void GenerateWorkLoadFromSettingsFile()
         {
             workload = new WorkloadConfiguration();
@@ -100,6 +84,23 @@ namespace ExperimentController
             workload.zipfianConstant = float.Parse(benchmarkConfigSection["zipfianConstant"]);
             workload.pactPercent = int.Parse(benchmarkConfigSection["pactPercent"]);
             Console.WriteLine("Generated workload configuration");
+        }
+
+        static void SetUpExpProcessCommunication()
+        {
+            if (Constants.numWorker > 1)
+            {
+                sinkAddress = Constants.controller_Remote_SinkAddress;
+                workerAddress = Constants.controller_Remote_WorkerAddress;
+            }
+            else
+            {
+                sinkAddress = Constants.controller_Local_SinkAddress;
+                workerAddress = Constants.controller_Local_WorkerAddress;
+            }
+
+            serializer = new MsgPackSerializer();
+            ackedWorkers = new CountdownEvent(Constants.numWorker);
         }
 
         static void WaitForWorkerAcksAndReset()

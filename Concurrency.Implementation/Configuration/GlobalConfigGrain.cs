@@ -50,12 +50,12 @@ namespace Concurrency.Implementation.Configuration
 
         public async Task ConfigGlobalEnv()
         {
-            if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numGlobalLogger);
-
             // configure local environment in each silo
             await ConfigLocalEnv();
 
             if (Constants.multiSilo == false) return;
+
+            if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numGlobalLogger);
             if (Constants.hierarchicalCoord) await ConfigHierarchicalArchitecture();
             else await ConfigSimpleArchitecture();
         }

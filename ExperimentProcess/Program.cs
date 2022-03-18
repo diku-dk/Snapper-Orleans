@@ -53,7 +53,9 @@ namespace ExperimentProcess
                 controllerAddress = Constants.worker_Local_ControllerAddress;
             }
             sink = new PushSocket(sinkAddress);
-            serializer = new BinarySerializer();
+            serializer = new MsgPackSerializer();
+
+            resultAggregator = new ExperimentResultAggregator();
 
             Console.WriteLine("Worker is Started...");
             ProcessWork();

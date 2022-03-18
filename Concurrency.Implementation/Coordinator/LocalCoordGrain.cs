@@ -61,6 +61,8 @@ namespace Concurrency.Implementation.Coordinator
             globalBatchPromise = new Dictionary<int, CountdownEvent>();
             globalTransactionInfo = new Dictionary<int, List<int>>();
             globalDetRequestPromise = new Dictionary<int, TaskCompletionSource<Tuple<int, int>>>();
+            localBidToGlobalBid = new Dictionary<int, int>();
+            globalTidToLocalTidPerBatch = new Dictionary<int, Dictionary<int, int>>();
             nonDetTxnManager = new NonDetTxnManager(myID);
             detTxnManager = new DetTxnManager(
                 myID,
@@ -256,7 +258,7 @@ namespace Concurrency.Implementation.Coordinator
             nonDetTxnManager.Init();
 
             int numLogger;
-            if (Constants.hierarchicalCoord)
+            if (Constants.multiSilo == false || Constants.hierarchicalCoord)
             {
                 SetHierarchicalArchitecture();
                 numLogger = Constants.numLoggerPerSilo;

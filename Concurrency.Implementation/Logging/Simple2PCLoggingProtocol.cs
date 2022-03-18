@@ -54,9 +54,6 @@ namespace Concurrency.Implementation.Logging
 
             switch (Constants.serializerType)
             {
-                case SerializerType.BINARY:
-                    serializer = new BinarySerializer();
-                    break;
                 case SerializerType.MSGPACK:
                     serializer = new MsgPackSerializer();
                     break;

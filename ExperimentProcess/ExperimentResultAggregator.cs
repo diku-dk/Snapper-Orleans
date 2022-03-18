@@ -19,6 +19,10 @@ namespace ExperimentProcess
         WorkloadResult[,] results;
         int[] percentilesToCalculate;
 
+        public ExperimentResultAggregator()
+        {
+        }
+
         public ExperimentResultAggregator(int pactPercent, int numEpochs, int numWarmupEpoch, long[] IOCount)
         {
             Debug.Assert(numEpochs >= 1);

@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace Utilities
+﻿namespace Utilities
 {
     public enum CCType { S2PL, TS };
     public enum AccessMode { Read, ReadWrite };
@@ -10,7 +7,7 @@ namespace Utilities
     public enum ImplementationType { SNAPPER, ORLEANSEVENTUAL, ORLEANSTXN };
     public enum LoggingType { NOLOGGING, ONGRAIN, LOGGER };
     public enum StorageType { INMEMORY, FILESYSTEM, DYNAMODB };
-    public enum SerializerType { BINARY, MSGPACK, JSON };
+    public enum SerializerType { MSGPACK, JSON };
     public enum TxnType { Init, Balance, MultiTransfer, Deposit };
 
     public class Constants
@@ -22,7 +19,7 @@ namespace Utilities
         public const bool hierarchicalCoord = false;
 
         // Silo config
-        public const int numSilo = 2;
+        public const int numSilo = 1;
         public const int numCPUBasic = 4;
         public const int numCPUPerSilo = 4;
         public const bool multiSilo = numSilo > 1;
@@ -38,7 +35,7 @@ namespace Utilities
         public const int numGlobalLogger = 1;
         public const int numLoggerPerSilo = numCPUPerSilo / numCPUBasic * 8;
         // for SmallBank
-        public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
+        public const int numGrainPerSilo = 10 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
         // for TPCC
         public const int NUM_W_PER_SILO = 2 * numCPUPerSilo / numCPUBasic;
         public const int NUM_D_PER_W = 10;
@@ -62,7 +59,7 @@ namespace Utilities
         public const string worker_Local_SinkAddress = ">tcp://localhost:5558";
         public const string worker_Local_ControllerAddress = ">tcp://localhost:5575";
 
-        public const string controller_Remote_SinkAddress = "@tcp://1.1.1.1:5558";  // controller private IP
+        public const string controller_Remote_SinkAddress = "@tcp://1.1.1.1:5558";    // controller private IP
         public const string controller_Remote_WorkerAddress = "@tcp://*:5575";
         public const string worker_Remote_SinkAddress = ">tcp://1.1.1.1.212:5558";    // controller public IP
         public const string worker_Remote_ControllerAddress = ">tcp://1.1.1.1:5575";  // controller public IP

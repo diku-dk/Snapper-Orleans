@@ -35,7 +35,8 @@ namespace Concurrency.Implementation.TransactionExecution
             ILocalCoordGrain myLocalCoord,
             IGlobalCoordGrain myGlobalCoord,
             TransactionScheduler myScheduler, 
-            Dictionary<int, int> coordinatorMap)
+            Dictionary<int, int> coordinatorMap,
+            ITransactionalState<TState> state)
         {
             this.myID = myID;
             this.myClassName = myClassName;
@@ -43,8 +44,10 @@ namespace Concurrency.Implementation.TransactionExecution
             this.myGlobalCoord = myGlobalCoord;
             this.myScheduler = myScheduler;
             this.coordinatorMap = coordinatorMap;
+            this.state = state;
 
             myFullID = new Tuple<int, string>(myID, myClassName);
+            nonDetFuncResults = new Dictionary<int, NonDetFuncResult>();
             maxBeforeBidOnGrain = -1;
             deadlockTimeout = TimeSpan.FromMilliseconds(20);
         }
@@ -139,10 +142,18 @@ namespace Concurrency.Implementation.TransactionExecution
 
         async Task<TransactionResult> InvokeFunction(FunctionCall call, TransactionContext cxt)
         {
-            if (cxt.localBid == -1) coordinatorMap.Add(cxt.globalTid, cxt.nonDetCoordID);
-            var mi = call.grainClassName.GetMethod(call.funcName);
-            var t = (Task<TransactionResult>)mi.Invoke(this, new object[] { cxt, call.funcInput });
-            return await t;
+            try
+            {
+                if (cxt.localBid == -1) coordinatorMap.Add(cxt.globalTid, cxt.nonDetCoordID);
+                var mi = call.grainClassName.GetMethod(call.funcName);
+                var t = (Task<TransactionResult>)mi.Invoke(this, new object[] { cxt, call.funcInput });
+                return await t;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"{e.Message} {e.StackTrace}");
+                throw e;
+            }
         }
 
         public void Commit(int maxBeforeBid)

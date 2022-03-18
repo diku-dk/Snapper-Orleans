@@ -5,6 +5,7 @@ using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using MathNet.Numerics.Distributions;
+using System.Linq;
 
 namespace ExperimentProcess
 {
@@ -44,31 +45,16 @@ namespace ExperimentProcess
         public Task<TransactionResult> NewTransaction(IClusterClient client, RequestData data)
         {
             var accountGrains = data.grains;
-            accountGrains.Sort();
-            var grainIDList = new List<int>();
-            var grainNameList = new List<string>();
+            //accountGrains.Sort();
 
-            int firstGrainID = 0;
-            Tuple<string, int> item1 = null;
-            var item2 = transferAmountDistribution.Sample();
-            var item3 = new List<Tuple<string, int>>();
-            var first = true;
-            foreach (var grainID in accountGrains)
-            {
-                if (first)
-                {
-                    first = false;
-                    firstGrainID = grainID;
-                    item1 = new Tuple<string, int>(grainID.ToString(), grainID);
-                }
-                else item3.Add(new Tuple<string, int>(grainID.ToString(), grainID));
-                grainIDList.Add(grainID);
-                grainNameList.Add(grainNameSpace);
-            }
-            // item1: from account
-            // item2: the amount of money
-            // item3: to accounts
-            var args = new Tuple<Tuple<string, int>, float, List<Tuple<string, int>>>(item1, item2, item3);
+            var grainIDList = new List<int>(accountGrains);
+            var grainNameList = Enumerable.Repeat(grainNameSpace, grainIDList.Count).ToList();
+
+            var firstGrainID = accountGrains.First();
+            accountGrains.RemoveAt(0);
+
+            var money = transferAmountDistribution.Sample();
+            var args = new Tuple<float, List<int>>(money, accountGrains);
             var task = Execute(client, firstGrainID, "MultiTransfer", args, grainIDList, grainNameList);
             return task;
         }

@@ -83,11 +83,9 @@ namespace ExperimentProcess
                     int D_ID;
                     if (workload.distribution == Distribution.HOTRECORD)
                     {
-                        var is_hot = false;
                         var p = hot.Sample();
                         if (p < 75)    // 75% choose from hot set
                         {
-                            is_hot = true;
                             W_ID = hot_wh_dist.Sample();
                             D_ID = hot_district_dist.Sample();
                         }
