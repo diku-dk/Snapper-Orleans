@@ -4,12 +4,14 @@ namespace Concurrency.Interface.TransactionExecution
 {
     public interface ITransactionalState<TState>
     {
+        void CheckGC();
+
         // PACT
-        TState detOp();
+        TState DetOp();
 
         // ACT
-        Task<TState> nonDetRead(int tid);
-        Task<TState> nonDetReadWrite(int tid);
+        Task<TState> NonDetRead(int tid);
+        Task<TState> NonDetReadWrite(int tid);
         Task<bool> Prepare(int tid, bool isReader);
         void Commit(int tid);
         void Abort(int tid);

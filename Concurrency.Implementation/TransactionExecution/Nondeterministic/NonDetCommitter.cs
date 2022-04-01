@@ -34,7 +34,6 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
 
         public void CheckGC()
         {
-            if (coordinatorMap.Count != 0) Console.WriteLine($"NonDetCommitter: coordinatorMap.Count = {coordinatorMap.Count}");
         }
 
         // serializable or not, sure or not sure
@@ -54,12 +53,8 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             foreach (var item in grainOpInfo)
             {
                 if (item.Value.isNoOp) continue;
-                if (item.Key != myID)
-                {
-                    var grain = myGrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.grainClassName);
-                    prepareTask.Add(grain.Prepare(tid, item.Value.isReadonly));
-                }
-                else prepareTask.Add(Prepare(tid, item.Value.isReadonly));
+                var grain = myGrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.grainClassName);
+                prepareTask.Add(grain.Prepare(tid, item.Value.isReadonly));
             }
             await Task.WhenAll(prepareTask);
 
@@ -84,12 +79,8 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             foreach (var item in grainOpInfo)
             {
                 if (item.Value.isNoOp || item.Value.isReadonly) continue;   // if the grain has only been read or it's no-op, no need 2nd phase
-                if (item.Key != myID)
-                {
-                    var grain = myGrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.grainClassName);
-                    commitTask.Add(grain.Commit(tid, maxBeforeBid));
-                }
-                else commitTask.Add(Commit(tid, maxBeforeBid));
+                var grain = myGrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.grainClassName);
+                commitTask.Add(grain.Commit(tid, maxBeforeBid));
             }
             await Task.WhenAll(commitTask);
         }
@@ -107,12 +98,8 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             foreach (var item in grainOpInfo)
             {
                 if (item.Value.isNoOp || item.Value.isReadonly) continue;   // if the grain has only been read or it's no-op, no need 2nd phase
-                if (item.Key != myID)
-                {
-                    var grain = myGrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.grainClassName);
-                    abortTask.Add(grain.Abort(tid));
-                }
-                else Abort(tid);
+                var grain = myGrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.grainClassName);
+                abortTask.Add(grain.Abort(tid));
             }
             await Task.WhenAll(abortTask);
         }

@@ -27,25 +27,92 @@ namespace Concurrency.Implementation.Configuration
             this.loggerGroup = loggerGroup;
         }
 
+        public async Task<long> GetIOCount()
+        {
+            long count = 0;
+            if (Constants.multiSilo == false || Constants.hierarchicalCoord)
+            {
+                // forward the request to all local config grains, which will check GC for local coordinators in that silo
+
+                for (int i = 0; i < Constants.numSilo; i++)
+                {
+                    configGrains[i] = GrainFactory.GetGrain<ILocalConfigGrain>(i);
+                    count += await configGrains[i].GetIOCount();
+                }
+            }
+
+            if (Constants.multiSilo == false) return count;
+
+            count += loggerGroup.GetIOCount();
+
+            return count;
+        }
+
         public async Task SetIOCount()
         {
             var tasks = new List<Task>();
-            for (int i = 0; i < Constants.numSilo; i++) tasks.Add(configGrains[i].SetIOCount());
-            await Task.WhenAll(tasks);
+            if (Constants.multiSilo == false || Constants.hierarchicalCoord)
+            {
+                // forward the request to all local config grains, which will check GC for local coordinators in that silo
+
+                for (int i = 0; i < Constants.numSilo; i++)
+                {
+                    configGrains[i] = GrainFactory.GetGrain<ILocalConfigGrain>(i);
+                    tasks.Add(configGrains[i].SetIOCount());
+                }
+            }
+
+            if (Constants.multiSilo == false)
+            {
+                await Task.WhenAll(tasks);
+                return;
+            }
 
             loggerGroup.SetIOCount();
+
+            await Task.WhenAll(tasks);
         }
 
-        public async Task<long> GetIOCount()
+        public async Task CheckGC()
         {
-            var tasks = new List<Task<long>>();
-            for (int i = 0; i < Constants.numSilo; i++) tasks.Add(configGrains[i].GetIOCount());
+            var tasks = new List<Task>();
+            if (Constants.multiSilo == false || Constants.hierarchicalCoord)
+            {
+                // forward the request to all local config grains, which will check GC for local coordinators in that silo
+                
+                for (int i = 0; i < Constants.numSilo; i++)
+                {
+                    configGrains[i] = GrainFactory.GetGrain<ILocalConfigGrain>(i);
+                    tasks.Add(configGrains[i].CheckGC());
+                }
+            }
+
+            if (Constants.multiSilo == false) 
+            {
+                await Task.WhenAll(tasks);
+                return;
+            }
+
+            if (Constants.hierarchicalCoord)
+            {
+                // check GC for all global coordinators locate in a separate silo
+                for (int i = 0; i < Constants.numGlobalCoord; i++)
+                {
+                    var coord = GrainFactory.GetGrain<IGlobalCoordGrain>(i);
+                    tasks.Add(coord.CheckGC());
+                }
+            }
+            else
+            {
+                // check GC for all local coordinators locate in a separate silo
+                for (int i = 0; i < Constants.numGlobalCoord; i++)
+                {
+                    var coord = GrainFactory.GetGrain<ILocalCoordGrain>(i);
+                    tasks.Add(coord.CheckGC());
+                }
+            }
+
             await Task.WhenAll(tasks);
-
-            var count = loggerGroup.GetIOCount();
-            for (int i = 0; i < Constants.numSilo; i++) count += tasks[i].Result;
-
-            return count;
         }
 
         public async Task ConfigGlobalEnv()

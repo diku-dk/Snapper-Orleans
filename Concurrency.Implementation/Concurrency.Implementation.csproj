@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.3.13" />
+    <PackageReference Include="MessagePack" Version="2.3.85" />
     <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.6.0" />
     <PackageReference Include="Microsoft.Orleans.CodeGenerator.MSBuild" Version="3.6.0" />
     <PackageReference Include="Microsoft.Orleans.Core" Version="3.6.0" />

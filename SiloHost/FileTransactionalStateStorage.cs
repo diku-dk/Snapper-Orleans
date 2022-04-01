@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Orleans.Transactions.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Concurrency.Interface.Logging;
+using MessagePack;
 
 namespace OrleansSiloHost
 {
@@ -62,14 +63,12 @@ namespace OrleansSiloHost
         private readonly string partitionKey;
         private List<KeyValuePair<long, StateEntity>> states;
 
-        private ISerializer serializer;
         private readonly ILogger logger;
 
         public FileTransactionalStateStorage(ILogger logger, string partitionKey)
         {
             this.partitionKey = partitionKey;
             this.logger = logger;
-            serializer = new MsgPackSerializer();
         }
 
         public async Task<TransactionalStorageLoadResponse<TState>> Load()
@@ -179,8 +178,8 @@ namespace OrleansSiloHost
             }
 
             // persist KeyEntity and StateEntity
-            await logger.Write(serializer.serialize(key));
-            await logger.Write(serializer.serialize(states));
+            await logger.Write(MessagePackSerializer.Serialize(key));
+            await logger.Write(MessagePackSerializer.Serialize(states));
             return key.ETag;
         }
 

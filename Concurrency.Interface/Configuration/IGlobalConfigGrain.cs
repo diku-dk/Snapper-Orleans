@@ -8,5 +8,7 @@ namespace Concurrency.Interface.Configuration
         Task ConfigGlobalEnv();
         Task SetIOCount();
         Task<long> GetIOCount();
+
+        Task CheckGC();
     }
 }

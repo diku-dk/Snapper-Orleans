@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
 using Concurrency.Interface.TransactionExecution;
+using MessagePack;
 
 namespace Concurrency.Implementation.Logging
 {
@@ -12,7 +13,6 @@ namespace Concurrency.Implementation.Logging
     {
         private int grainID;
         private int sequenceNumber;
-        private ISerializer serializer;
         private IKeyValueStorageWrapper logStorage;
 
         private bool useLogger = false;
@@ -51,15 +51,6 @@ namespace Concurrency.Implementation.Logging
                 default:
                     throw new Exception($"Exception: Unknown loggingType {Constants.loggingType}");
             }
-
-            switch (Constants.serializerType)
-            {
-                case SerializerType.MSGPACK:
-                    serializer = new MsgPackSerializer();
-                    break;
-                default:
-                    throw new Exception($"Exception: Unknown serailizer {Constants.serializerType}");
-            }
         }
 
         private int getSequenceNumber()
@@ -83,7 +74,7 @@ namespace Concurrency.Implementation.Logging
         {
             var logRecord = new LogParticipant(getSequenceNumber(), coordinatorKey, tid, grains);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
-            var value = serializer.serialize(logRecord);
+            var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
 
@@ -91,7 +82,7 @@ namespace Concurrency.Implementation.Logging
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.ABORT, coordinatorKey, tid);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
-            var value = serializer.serialize(logRecord);
+            var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
 
@@ -99,7 +90,7 @@ namespace Concurrency.Implementation.Logging
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.COMMIT, coordinatorKey, tid);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
-            var value = serializer.serialize(logRecord);
+            var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
 
@@ -107,7 +98,7 @@ namespace Concurrency.Implementation.Logging
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.PREPARE, coordinatorKey, tid, state.GetPreparedState(tid));
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
-            var value = serializer.serialize(logRecord);
+            var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
 
@@ -115,7 +106,7 @@ namespace Concurrency.Implementation.Logging
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMPLETE, coordinatorKey, bid, state.GetCommittedState(bid));
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
-            var value = serializer.serialize(logRecord);
+            var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
 
@@ -123,7 +114,7 @@ namespace Concurrency.Implementation.Logging
         {
             var logRecord = new LogParticipant(getSequenceNumber(), grainID, bid, grains);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
-            var value = serializer.serialize(logRecord);
+            var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
 
@@ -131,7 +122,7 @@ namespace Concurrency.Implementation.Logging
         {
             var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMMIT, grainID, bid);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
-            var value = serializer.serialize(logRecord);
+            var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
     }

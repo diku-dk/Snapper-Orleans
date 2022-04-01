@@ -23,6 +23,12 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             readDependencyMap = new Dictionary<int, int>();
         }
 
+        public void CheckGC()
+        {
+            if (transactionMap.Count != 0) Console.WriteLine($"TimestampTransactionalState: transactionMap.Count = {transactionMap.Count}");
+            if (readDependencyMap.Count != 0) Console.WriteLine($"TimestampTransactionalState: readDependencyMap.Count = {readDependencyMap.Count}");
+        }
+
         public Task<TState> ReadWrite(int tid, TState committedState)
         {
             TState state;

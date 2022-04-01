@@ -7,7 +7,6 @@
     public enum ImplementationType { SNAPPER, ORLEANSEVENTUAL, ORLEANSTXN };
     public enum LoggingType { NOLOGGING, ONGRAIN, LOGGER };
     public enum StorageType { INMEMORY, FILESYSTEM, DYNAMODB };
-    public enum SerializerType { MSGPACK, JSON };
     public enum TxnType { Init, Balance, MultiTransfer, Deposit };
 
     public class Constants
@@ -15,7 +14,18 @@
         // Client config
         public const int numWorker = 1;
 
-        // architecture
+        // architecture 1: single silo
+        //                 local coordinators (num = numLocalCoordPerSilo)
+        //                 1 global config grain
+        // architecture 2: multi silo, non-hierarchical
+        //                 all local coordinators locate in a separate silo (num = numGlobalCoord)
+        //                 1 global config grain
+        //                 1 local config grain per silo
+        // architecture 3: multi silo, hierarchical
+        //                 in each silo, local coordinators (num = numLocalCoordPerSilo)
+        //                 all global coordinators locate in a separate silo (num = numGlobalCoord)
+        //                 1 global config grain
+        //                 1 local config grain per silo
         public const bool hierarchicalCoord = false;
 
         // Silo config
@@ -27,7 +37,6 @@
         public const ImplementationType implementationType = ImplementationType.SNAPPER;
         public const LoggingType loggingType = LoggingType.NOLOGGING;
         public const StorageType storageType = StorageType.FILESYSTEM;
-        public const SerializerType serializerType = SerializerType.MSGPACK;
         public const int numGlobalCoord = numSilo * 2;
         public const int numLocalCoordPerSilo = numCPUPerSilo / numCPUBasic * 8;
         public const int loggingBatchSize = 1;
@@ -35,7 +44,7 @@
         public const int numGlobalLogger = 1;
         public const int numLoggerPerSilo = numCPUPerSilo / numCPUBasic * 8;
         // for SmallBank
-        public const int numGrainPerSilo = 10 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
+        public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
         // for TPCC
         public const int NUM_W_PER_SILO = 2 * numCPUPerSilo / numCPUBasic;
         public const int NUM_D_PER_W = 10;
@@ -51,8 +60,8 @@
         public const string TPCC_namespace = "TPCC.Grain.";
         public const string SmallBank_namespace = "SmallBank.Grain.";
 
-        public const string logPath = @"C:\Users\Administrator\Desktop\log\";
-        public const string dataPath = @"C:\Users\Administrator\Desktop\data\";
+        public const string logPath = @"C:\Users\jhs316\Desktop\log\";
+        public const string dataPath = @"C:\Users\jhs316\Desktop\data\";
 
         public const string controller_Local_SinkAddress = "@tcp://localhost:5558";
         public const string controller_Local_WorkerAddress = "@tcp://localhost:5575";

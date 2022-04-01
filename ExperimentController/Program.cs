@@ -1,4 +1,5 @@
-﻿using NetMQ;
+﻿
+using NetMQ;
 using System;
 using Utilities;
 using NetMQ.Sockets;
@@ -7,6 +8,7 @@ using System.Diagnostics;
 using System.Configuration;
 using System.Collections.Specialized;
 using ExperimentProcess;
+using MessagePack;
 
 namespace ExperimentController
 {
@@ -15,7 +17,7 @@ namespace ExperimentController
         // for communication between ExpController and ExpProcess
         static string sinkAddress;
         static string workerAddress;
-        static ISerializer serializer;
+        //static ISerializer serializer;
         static CountdownEvent ackedWorkers;
 
         static WorkloadConfiguration workload;
@@ -99,7 +101,7 @@ namespace ExperimentController
                 workerAddress = Constants.controller_Local_WorkerAddress;
             }
 
-            serializer = new MsgPackSerializer();
+            //serializer = new MsgPackSerializer();
             ackedWorkers = new CountdownEvent(Constants.numWorker);
         }
 
@@ -124,8 +126,8 @@ namespace ExperimentController
                 //Send the workload configuration
                 Console.WriteLine($"Sent workload configuration to {Constants.numWorker} worker nodes");
                 var msg = new NetworkMessage(Utilities.MsgType.WORKLOAD_INIT);
-                msg.contents = serializer.serialize(workload);
-                workers.SendMoreFrame("WORKLOAD_INIT").SendFrame(serializer.serialize(msg));
+                msg.contents = MessagePackSerializer.Serialize(workload);
+                workers.SendMoreFrame("WORKLOAD_INIT").SendFrame(MessagePackSerializer.Serialize(msg));
                 Console.WriteLine($"Coordinator waits for WORKLOAD_INIT_ACK");
                 //Wait for acks for the workload configuration
                 WaitForWorkerAcksAndReset();
@@ -138,12 +140,13 @@ namespace ExperimentController
                     //Send the command to run an epoch
                     Console.WriteLine($"Running Epoch {i} on {Constants.numWorker} worker nodes");
                     msg = new NetworkMessage(Utilities.MsgType.RUN_EPOCH);
-                    workers.SendMoreFrame("RUN_EPOCH").SendFrame(serializer.serialize(msg));
+                    workers.SendMoreFrame("RUN_EPOCH").SendFrame(MessagePackSerializer.Serialize(msg));
                     WaitForWorkerAcksAndReset();
                     Console.WriteLine($"Finished running epoch {i} on {Constants.numWorker} worker nodes");
 
                     serverConnector.GetIOCount(i);
                     serverConnector.ResetOrderGrain();
+                    serverConnector.CheckGC();
                 }
             }
         }
@@ -160,7 +163,7 @@ namespace ExperimentController
             {
                 for (int i = 0; i < Constants.numWorker; i++)
                 {
-                    var msg = serializer.deserialize<NetworkMessage>(sink.ReceiveFrameBytes());
+                    var msg = MessagePackSerializer.Deserialize<NetworkMessage>(sink.ReceiveFrameBytes());
                     Trace.Assert(msg.msgType == Utilities.MsgType.WORKER_CONNECT);
                     Console.WriteLine($"Receive WORKER_CONNECT from worker {i}");
                     ackedWorkers.Signal();
@@ -168,7 +171,7 @@ namespace ExperimentController
 
                 for (int i = 0; i < Constants.numWorker; i++)
                 {
-                    var msg = serializer.deserialize<NetworkMessage>(sink.ReceiveFrameBytes());
+                    var msg = MessagePackSerializer.Deserialize<NetworkMessage>(sink.ReceiveFrameBytes());
                     Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT_ACK);
                     Console.WriteLine($"Receive WORKLOAD_INIT_ACT from worker {i}");
                     ackedWorkers.Signal();
@@ -179,9 +182,9 @@ namespace ExperimentController
                 {
                     for (int j = 0; j < Constants.numWorker; j++)
                     {
-                        var msg = serializer.deserialize<NetworkMessage>(sink.ReceiveFrameBytes());
+                        var msg = MessagePackSerializer.Deserialize<NetworkMessage>(sink.ReceiveFrameBytes());
                         Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH_ACK);
-                        var result = serializer.deserialize<WorkloadResult>(msg.contents);
+                        var result = MessagePackSerializer.Deserialize<WorkloadResult>(msg.contents);
                         resultAggregator.SetResult(i, j, result);
                         ackedWorkers.Signal();
                     }

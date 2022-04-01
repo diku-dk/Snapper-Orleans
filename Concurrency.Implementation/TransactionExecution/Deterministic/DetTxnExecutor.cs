@@ -36,6 +36,15 @@ namespace Concurrency.Implementation.TransactionExecution
         Dictionary<int, Dictionary<int, int>> globalTidToLocalTidPerBatch;      // key: global bid, <global tid, local tid>
         Dictionary<int, TaskCompletionSource<bool>> globallocalBtchInfoPromise; // key: global bid, use to check if the SubBatch has arrived or not
 
+        public void CheckGC()
+        {
+            if (localBtchInfoPromise.Count != 0) Console.WriteLine($"DetTxnExecutor: localBtchInfoPromise.Count = {localBtchInfoPromise.Count}");
+            if (detFuncResults.Count != 0) Console.WriteLine($"DetTxnExecutor: detFuncResults.Count = {detFuncResults.Count}");
+            if (globalBidToLocalBid.Count != 0) Console.WriteLine($"DetTxnExecutor: globalBidToLocalBid.Count = {globalBidToLocalBid.Count}");
+            if (globalTidToLocalTidPerBatch.Count != 0) Console.WriteLine($"DetTxnExecutor: globalTidToLocalTidPerBatch.Count = {globalTidToLocalTidPerBatch.Count}");
+            if (globallocalBtchInfoPromise.Count != 0) Console.WriteLine($"DetTxnExecutor: globallocalBtchInfoPromise.Count = {globallocalBtchInfoPromise.Count}");
+        }
+
         public DetTxnExecutor(
             int siloID, 
             int myLocalCoordID,
@@ -100,11 +109,6 @@ namespace Concurrency.Implementation.TransactionExecution
             }
         }
 
-        public void CheckGC()
-        {
-            
-        }
-
         // int: the highestCommittedBid get from local coordinator
         public async Task<Tuple<int, TransactionContext>> GetDetContext(List<int> grainList, List<string> grainClassName)
         {
@@ -167,7 +171,7 @@ namespace Concurrency.Implementation.TransactionExecution
             return new Tuple<int, TransactionContext>(info.highestCommittedBid, cxt2);
         }
 
-        public async Task<object> ExecuteDet(FunctionCall call, TransactionContext cxt)
+        public async Task WaitForTurn(TransactionContext cxt)
         {
             // check if it is a global PACT
             if (cxt.globalBid != -1)
@@ -191,26 +195,27 @@ namespace Concurrency.Implementation.TransactionExecution
 
             Debug.Assert(detFuncResults.ContainsKey(cxt.localTid) == false);
             detFuncResults.Add(cxt.localTid, new BasicFuncResult());
+            
+            await myScheduler.WaitForTurn(cxt.localBid, cxt.localTid);
+        }
 
-            await myScheduler.waitForTurn(cxt.localBid, cxt.localTid);
+        public async Task FinishExecuteDetTxn(int localTid, int localBid)
+        {
+            var funcResult = detFuncResults[localTid];
 
-            // execute the function call;
-            var txnResult = await InvokeFunction(call, cxt);
-            var funcResult = detFuncResults[cxt.localTid];
-
-            if (myScheduler.ackComplete(cxt.localBid, cxt.localTid))
+            if (myScheduler.AckComplete(localBid, localTid))
             {
                 // the current batch has completed on this grain
-                var coordID = myScheduler.GetCoordID(cxt.localBid);
+                localBtchInfoPromise.Remove(localBid);
+                var coordID = myScheduler.GetCoordID(localBid);
 
                 // only writer transaction needs to persist the updated grain state
                 if (log != null && funcResult.isReadOnlyOnGrain == false)
-                    await log.HandleOnCompleteInDeterministicProtocol(state, cxt.localBid, coordID);
+                    await log.HandleOnCompleteInDeterministicProtocol(state, localBid, coordID);
 
                 var coord = localCoordMap[coordID];
-                _ = coord.AckBatchCompletion(cxt.localBid);
+                _ = coord.AckBatchCompletion(localBid);
             }
-            return txnResult.resultObj;
         }
 
         /// <summary> Call this interface to emit a SubBatch from a local coordinator to a grain </summary>
@@ -245,7 +250,7 @@ namespace Concurrency.Implementation.TransactionExecution
                 detFuncResults[tid].isNoOpOnGrain = false;
                 detFuncResults[tid].isReadOnlyOnGrain = false;
             }
-            return state.detOp();
+            return state.DetOp();
         }
 
         public async Task<TransactionResult> CallGrain(TransactionContext cxt, FunctionCall call, ITransactionExecutionGrain grain)
@@ -254,11 +259,9 @@ namespace Concurrency.Implementation.TransactionExecution
             return new TransactionResult(resultObj);
         }
 
-        async Task<TransactionResult> InvokeFunction(FunctionCall call, TransactionContext cxt)
+        public void CleanUp(int tid)
         {
-            var mi = call.grainClassName.GetMethod(call.funcName);
-            var t = (Task<TransactionResult>)mi.Invoke(this, new object[] { cxt, call.funcInput });
-            return await t;
+            detFuncResults.Remove(tid);
         }
     }
 }

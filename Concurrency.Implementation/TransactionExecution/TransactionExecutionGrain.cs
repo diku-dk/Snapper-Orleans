@@ -53,9 +53,13 @@ namespace Concurrency.Implementation.TransactionExecution
 
         public Task CheckGC()
         {
+            state.CheckGC();
             myScheduler.CheckGC();
             detTxnExecutor.CheckGC();
             nonDetTxnExecutor.CheckGC();
+            nonDetCommitter.CheckGC();
+            if (batchCommit.Count != 0) Console.WriteLine($"TransactionExecutionGrain: batchCommit.Count = {batchCommit.Count}");
+            if (coordinatorMap.Count != 0) Console.WriteLine($"TransactionExecutionGrain: coordinatorMap.Count = {coordinatorMap.Count}");
             return Task.CompletedTask;
         }
 
@@ -124,7 +128,6 @@ namespace Concurrency.Implementation.TransactionExecution
                 myLocalCoord,
                 myGlobalCoord,
                 myScheduler,
-                coordinatorMap,
                 state);
 
             nonDetCommitter = new NonDetCommitter<TState>(
@@ -146,7 +149,7 @@ namespace Concurrency.Implementation.TransactionExecution
 
             // execute PACT
             var call = new FunctionCall(startFunc, funcInput, GetType());
-            var resultObj = await detTxnExecutor.ExecuteDet(call, cxt);
+            var resultObj = await ExecuteDet(call, cxt);
 
             // wait for this batch to commit
             await WaitForBatchCommit(cxt.localBid);
@@ -224,12 +227,11 @@ namespace Concurrency.Implementation.TransactionExecution
 
             // do garbage collection for committed local batches
             batchCommit.Add(batch.bid, new TaskCompletionSource<bool>());
-            myScheduler.ackBatchCommit(highestCommittedBid);
+            myScheduler.AckBatchCommit(highestCommittedBid);
 
             // register the local SubBatch info
             myScheduler.RegisterBatch(batch);
             detTxnExecutor.BatchArrive(batch);
-
             return Task.CompletedTask;
         }
 
@@ -247,6 +249,7 @@ namespace Concurrency.Implementation.TransactionExecution
             highestCommittedBid = Math.Max(highestCommittedBid, bid);
             batchCommit[bid].SetResult(true);
             batchCommit.Remove(bid);
+            myScheduler.AckBatchCommit(highestCommittedBid);
             return Task.CompletedTask;
         }
 
@@ -258,14 +261,51 @@ namespace Concurrency.Implementation.TransactionExecution
             else return await nonDetTxnExecutor.GetState(cxt.globalTid, mode);
         }
 
-        public Task<object> ExecuteDet(FunctionCall call, TransactionContext cxt)
+        public async Task<object> ExecuteDet(FunctionCall call, TransactionContext cxt)
         {
-            return detTxnExecutor.ExecuteDet(call, cxt);
+            await detTxnExecutor.WaitForTurn(cxt);
+            var txnRes = await InvokeFunction(call, cxt);   // execute the function call;
+            await detTxnExecutor.FinishExecuteDetTxn(cxt.localTid, cxt.localBid);
+            detTxnExecutor.CleanUp(cxt.localTid);
+            return txnRes.resultObj;
         }
 
-        public Task<NonDetFuncResult> ExecuteNonDet(FunctionCall call, TransactionContext cxt)
+        public async Task<NonDetFuncResult> ExecuteNonDet(FunctionCall call, TransactionContext cxt)
         {
-            return nonDetTxnExecutor.ExecuteNonDet(call, cxt);
+            var canExecute = await nonDetTxnExecutor.WaitForTurn(cxt.globalTid);
+            if (canExecute == false)
+            {
+                var funcResult = new NonDetFuncResult();
+                funcResult.Exp_Deadlock = true;
+                funcResult.exception = true;
+                nonDetTxnExecutor.CleanUp(cxt.globalTid);
+                return funcResult;
+            }
+            else
+            {
+                Object resultObj = null;
+                try
+                {
+                    var txnRes = await InvokeFunction(call, cxt);
+                    resultObj = txnRes.resultObj;
+                }
+                catch (Exception)
+                {
+                    // exceptions thrown from GetState will be caught here
+                }
+                var funcResult = nonDetTxnExecutor.UpdateExecutionResult(cxt.globalTid);
+                if (resultObj != null) funcResult.SetResultObj(resultObj);
+                nonDetTxnExecutor.CleanUp(cxt.globalTid);
+                return funcResult;
+            }
+        }
+
+        async Task<TransactionResult> InvokeFunction(FunctionCall call, TransactionContext cxt)
+        {
+            if (cxt.localBid == -1) coordinatorMap.Add(cxt.globalTid, cxt.nonDetCoordID);
+            var mi = call.grainClassName.GetMethod(call.funcName);
+            var t = (Task<TransactionResult>)mi.Invoke(this, new object[] { cxt, call.funcInput });
+            return await t;
         }
 
         /// <summary> When execute a transaction, call this interface to make a cross-grain function invocation </summary>
@@ -288,7 +328,7 @@ namespace Concurrency.Implementation.TransactionExecution
             await nonDetCommitter.Commit(tid, maxBeforeBid);
 
             coordinatorMap.Remove(tid);
-            myScheduler.ackComplete(tid);
+            myScheduler.AckComplete(tid);
         }
 
         public Task Abort(int tid)
@@ -296,7 +336,7 @@ namespace Concurrency.Implementation.TransactionExecution
             nonDetCommitter.Abort(tid);
 
             coordinatorMap.Remove(tid);
-            myScheduler.ackComplete(tid);
+            myScheduler.AckComplete(tid);
             return Task.CompletedTask;
         }
     }

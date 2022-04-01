@@ -6,6 +6,7 @@ using Concurrency.Implementation.GrainPlacement;
 using Concurrency.Interface.Configuration;
 using Concurrency.Interface.Logging;
 using Concurrency.Interface.Coordinator;
+using System.Diagnostics;
 
 namespace Concurrency.Implementation.Configuration
 {
@@ -38,6 +39,20 @@ namespace Concurrency.Implementation.Configuration
         public Task<long> GetIOCount()
         {
             return Task.FromResult(loggerGroup.GetIOCount());
+        }
+
+        public async Task CheckGC()
+        {
+            Debug.Assert(Constants.multiSilo == false || Constants.hierarchicalCoord);
+            var tasks = new List<Task>();
+            var firstCoordID = LocalCoordGrainPlacementHelper.MapSiloIDToFirstLocalCoordID(siloID);
+            for (int i = 0; i < Constants.numLocalCoordPerSilo; i++)
+            {
+                var coordID = i + firstCoordID;
+                var coord = GrainFactory.GetGrain<ILocalCoordGrain>(coordID);
+                tasks.Add(coord.CheckGC());
+            }
+            await Task.WhenAll(tasks);
         }
 
         public async Task ConfigLocalEnv()

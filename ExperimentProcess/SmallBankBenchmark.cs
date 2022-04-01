@@ -18,7 +18,7 @@ namespace ExperimentProcess
         public void GenerateBenchmark(WorkloadConfiguration _, bool isDet)
         {
             this.isDet = isDet;
-            if (Constants.implementationType == ImplementationType.SNAPPER) grainNameSpace = "SmallBank.Grains.CustomerAccountGroupGrain";
+            if (Constants.implementationType == ImplementationType.SNAPPER) grainNameSpace = "SmallBank.Grains.SnapperTransactionalAccountGrain";
             else grainNameSpace = "";
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
         }
@@ -54,7 +54,7 @@ namespace ExperimentProcess
             accountGrains.RemoveAt(0);
 
             var money = transferAmountDistribution.Sample();
-            var args = new Tuple<float, List<int>>(money, accountGrains);
+            var args = new Tuple<int, List<int>>(money, accountGrains);
             var task = Execute(client, firstGrainID, "MultiTransfer", args, grainIDList, grainNameList);
             return task;
         }

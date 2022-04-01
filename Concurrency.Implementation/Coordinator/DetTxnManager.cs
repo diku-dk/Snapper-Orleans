@@ -40,9 +40,9 @@ namespace Concurrency.Implementation.Coordinator
             {
                 isGlobalCoord = true;
                 this.coordPerBatchPerSilo = coordPerBatchPerSilo;
-                coordListPerTxn = new List<List<int>>();
             }
             else isGlobalCoord = false;
+            coordListPerTxn = new List<List<int>>();
             detRequests = new List<List<int>>();
             detRequestPromise = new List<TaskCompletionSource<Tuple<int, int>>>();
         }

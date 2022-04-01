@@ -24,9 +24,9 @@ namespace Concurrency.Implementation.Coordinator
         ILoggingProtocol<string> log;
         IGlobalCoordGrain neighborCoord;
         List<IGlobalCoordGrain> coordList;
-        DetTxnManager detTxnManager;
 
         // PACT
+        DetTxnManager detTxnManager;
         Dictionary<int, int> bidToLastBid;                                 // <bid, lastBid>
         Dictionary<int, int> bidToLastCoordID;                             // <bid, coordID who emit this bid's lastBid>
         Dictionary<int, int> expectedAcksPerBatch;
@@ -37,6 +37,19 @@ namespace Concurrency.Implementation.Coordinator
 
         // ACT
         NonDetTxnManager nonDetTxnManager;
+
+        public Task CheckGC()
+        {
+            detTxnManager.CheckGC();
+            nonDetTxnManager.CheckGC();
+            if (bidToLastBid.Count != 0) Console.WriteLine($"GlobalCoord {myID}: bidToLastBid.Count = {bidToLastBid.Count}");
+            if (bidToLastCoordID.Count != 0) Console.WriteLine($"GlobalCoord {myID}: bidToLastCoordID.Count = {bidToLastCoordID.Count}");
+            if (expectedAcksPerBatch.Count != 0) Console.WriteLine($"GlobalCoord {myID}: expectedAcksPerBatch.Count = {expectedAcksPerBatch.Count}");
+            if (batchCommit.Count != 0) Console.WriteLine($"GlobalCoord {myID}: batchCommit.Count = {batchCommit.Count}");
+            if (batchSchedulePerSilo.Count != 0) Console.WriteLine($"GlobalCoord {myID}: batchSchedulePerSilo.Count = {batchSchedulePerSilo.Count}");
+            if (coordPerBatchPerSilo.Count != 0) Console.WriteLine($"GlobalCoord {myID}: coordPerBatchPerSilo.Count = {coordPerBatchPerSilo.Count}");
+            return Task.CompletedTask;
+        }
 
         public override Task OnActivateAsync()
         {
@@ -63,19 +76,6 @@ namespace Concurrency.Implementation.Coordinator
         public GlobalCoordGrain(ILoggerGroup loggerGroup)
         {
             this.loggerGroup = loggerGroup;
-        }
-
-        public Task CheckGC()
-        {
-            if (bidToLastBid.Count != 0) Console.WriteLine($"GlobalCoord {myID}: bidToLastBid.Count = {bidToLastBid.Count}");
-            if (bidToLastCoordID.Count != 0) Console.WriteLine($"GlobalCoord {myID}: bidToLastCoordID.Count = {bidToLastCoordID.Count}");
-            if (expectedAcksPerBatch.Count != 0) Console.WriteLine($"GlobalCoord {myID}: expectedAcksPerBatch.Count = {expectedAcksPerBatch.Count}");
-            if (batchCommit.Count != 0) Console.WriteLine($"GlobalCoord {myID}: batchCommit.Count = {batchCommit.Count}");
-            if (batchSchedulePerSilo.Count != 0) Console.WriteLine($"GlobalCoord {myID}: batchSchedulePerSilo.Count = {batchSchedulePerSilo.Count}");
-            if (coordPerBatchPerSilo.Count != 0) Console.WriteLine($"GlobalCoord {myID}: coordPerBatchPerSilo.Count = {coordPerBatchPerSilo.Count}");
-            nonDetTxnManager.CheckGC();
-            detTxnManager.CheckGC();
-            return Task.CompletedTask;
         }
 
         // for PACT

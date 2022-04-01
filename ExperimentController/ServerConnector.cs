@@ -14,17 +14,18 @@ namespace ExperimentController
 {
     public class ServerConnector
     {
-         IClusterClient client;
-         volatile bool loadingDone = false;
-         IGlobalConfigGrain globalConfigGrain;
-         volatile bool initializationFinish = false;
-         BenchmarkType benchmark;
+        IClusterClient client;
+        volatile bool loadingDone = false;
+        IGlobalConfigGrain globalConfigGrain;
+        volatile bool initializationFinish = false;
+        BenchmarkType benchmark;
 
-         long[] IOcount;
-         bool enableIOCount;
-         bool setCountFinish = false;
-         bool getCountFinish = false;
-         bool resetFinish = false;
+        long[] IOcount;
+        bool enableIOCount;
+        bool setCountFinish = false;
+        bool getCountFinish = false;
+        bool resetFinish = false;
+        bool checkGCFinish = false;
 
         public ServerConnector(int numEpochs, BenchmarkType benchmark, long[] IOCount)
         {
@@ -35,7 +36,7 @@ namespace ExperimentController
             this.IOcount = IOCount;
         }
 
-        public  void InitiateClientAndServer()
+        public void InitiateClientAndServer()
         {
             InitiateClientAndServerAsync();
             while (!initializationFinish) Thread.Sleep(100);
@@ -66,7 +67,34 @@ namespace ExperimentController
             initializationFinish = true;
         }
 
-        public  void SetIOCount()
+        public void CheckGC()
+        {
+            CheckGCAsync();
+            while (!checkGCFinish) Thread.Sleep(100);
+            checkGCFinish = false;
+        }
+
+        async void CheckGCAsync()
+        {
+            if (Constants.implementationType != ImplementationType.SNAPPER) return;
+            if (benchmark != BenchmarkType.SMALLBANK) return;
+
+            // check all global & local coordinators
+            var tasks = new List<Task>();
+            await globalConfigGrain.CheckGC();
+
+            // check all transactional grains
+            for (int i = 0; i < Constants.numGrainPerSilo * Constants.numSilo; i++)
+            {
+                var grain = client.GetGrain<ISnapperTransactionalAccountGrain>(i);
+                tasks.Add(grain.CheckGC());
+            }
+
+            await Task.WhenAll(tasks);
+            checkGCFinish = true;
+        }
+
+        public void SetIOCount()
         {
             if (enableIOCount == false) return;
             SetIOCountAsync();
@@ -74,7 +102,7 @@ namespace ExperimentController
             setCountFinish = false;
         }
 
-        public  void GetIOCount(int epoch)
+        public void GetIOCount(int epoch)
         {
             if (enableIOCount == false) return;
             GetIOCountAsync(epoch);
@@ -140,10 +168,10 @@ namespace ExperimentController
 
         async void LoadSmallBankGrains()
         {
-            int numGrain = Constants.numGrainPerSilo;
+            int numGrain = Constants.numGrainPerSilo * Constants.numSilo;
             Console.WriteLine($"Load SmallBank grains, numGrains = {numGrain}");
             var tasks = new List<Task<TransactionResult>>();
-            var sequence = true;   // load the grains in sequence instead of all concurrent
+            var sequence = false;   // load the grains in sequence instead of all concurrent
             if (Constants.loggingType != LoggingType.NOLOGGING) sequence = true;
             var start = DateTime.Now;
             for (int i = 0; i < numGrain; i++)

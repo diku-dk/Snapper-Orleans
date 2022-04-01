@@ -30,24 +30,24 @@ namespace Concurrency.Implementation.TransactionExecution
 
         public void CheckGC()
         {
-            if (detNodes.Count > 1) Console.WriteLine($"ScheduleInfo: detNodes.Count = {detNodes.Count}");
+            if (detNodes.Count > 2) Console.WriteLine($"ScheduleInfo: detNodes.Count = {detNodes.Count}");
+            if (nonDetTidToNodeID.Count != 0) Console.WriteLine($"ScheduleInfo: nonDetTidToNodeID.Count = {nonDetTidToNodeID.Count}");
+
             if (nonDetNodes.Count > 1) Console.WriteLine($"ScheduleInfo: nonDetNodes.Count = {nonDetNodes.Count}");
-            if (nonDetTidToNodeID.Count > 1) Console.WriteLine($"ScheduleInfo: nonDetTidToNodeID.Count = {nonDetTidToNodeID.Count}");
             if (nonDetNodeIDToTxnSet.Count > 1) Console.WriteLine($"ScheduleInfo: nonDetNodeIDToTxnSet.Count = {nonDetNodeIDToTxnSet.Count}");
         }
 
-        private ScheduleNode findTail()
+        private ScheduleNode FindTail()
         {
             var node = detNodes[-1];
             while (node.next != null) node = node.next;
             return node;
         }
 
-        public ScheduleNode insertNonDetTransaction(int tid)
+        public ScheduleNode InsertNonDetTransaction(int tid)
         {
-            // if tid has accessed this grain before
-            if (nonDetTidToNodeID.ContainsKey(tid)) return nonDetNodes[nonDetTidToNodeID[tid]].prev;
-            var tail = findTail();
+            Debug.Assert(nonDetTidToNodeID.ContainsKey(tid) == false);
+            var tail = FindTail();
             if (tail.isDet)
             {
                 var node = new ScheduleNode(tid, false);
@@ -71,7 +71,7 @@ namespace Concurrency.Implementation.TransactionExecution
             return tail.prev;
         }
 
-        public void insertDetBatch(LocalSubBatch schedule)
+        public void InsertDetBatch(LocalSubBatch schedule)
         {
             ScheduleNode node;
             if (!detNodes.ContainsKey(schedule.bid))
@@ -125,13 +125,13 @@ namespace Concurrency.Implementation.TransactionExecution
             }
         }
 
-        public ScheduleNode getDependingNode(int id, bool isDet)
+        public ScheduleNode GetDependingNode(int id, bool isDet)
         {
             if (isDet) return detNodes[id].prev;
             else return nonDetNodes[nonDetTidToNodeID[id]].prev;
         }
 
-        public Tuple<int, int, bool> getBeforeAfter(int tid)   // <max, min, isConsecutive>
+        public Tuple<int, int, bool> GetBeforeAfter(int tid)   // <max, min, isConsecutive>
         {
             var node = nonDetNodes[nonDetTidToNodeID[tid]];
             var prevNode = node.prev;
@@ -158,12 +158,12 @@ namespace Concurrency.Implementation.TransactionExecution
             return new Tuple<int, int, bool>(maxBeforeBid, minAfterBid, false);    // both may be -1
         }
 
-        public void completeDetBatch(int id)
+        public void CompleteDetBatch(int id)
         {
             detNodes[id].nextNodeCanExecute.SetResult(true);
         }
 
-        public void commitNonDetTxn(int tid)   // when commit/abort a non-det txn
+        public void CommitNonDetTxn(int tid)   // when commit/abort a non-det txn
         {
             if (!nonDetTidToNodeID.ContainsKey(tid)) return;
             var nodeId = nonDetTidToNodeID[tid];

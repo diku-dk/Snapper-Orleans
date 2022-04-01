@@ -1,5 +1,4 @@
-﻿using Concurrency.Implementation.TransactionExecution.Nondeterministic;
-using Concurrency.Interface.Coordinator;
+﻿using Concurrency.Interface.Coordinator;
 using Concurrency.Interface.TransactionExecution;
 using System;
 using System.Collections.Generic;
@@ -21,7 +20,6 @@ namespace Concurrency.Implementation.TransactionExecution
         TransactionScheduler myScheduler;
 
         // ACT execution
-        Dictionary<int, int> coordinatorMap;
         Dictionary<int, NonDetFuncResult> nonDetFuncResults;                   // key: global ACT tid
 
         // hybrid execution
@@ -29,13 +27,17 @@ namespace Concurrency.Implementation.TransactionExecution
         int maxBeforeBidOnGrain;                                             // maxBeforeBid of the current executing / latest executed ACT
         TimeSpan deadlockTimeout;                                            // detect deadlock between ACT and batches
 
+        public void CheckGC()
+        {
+            if (nonDetFuncResults.Count != 0) Console.WriteLine($"NonDetTxnExecutor: nonDetFuncResults.Count = {nonDetFuncResults.Count}");
+        }
+
         public NonDetTxnExecutor(
             int myID,
             string myClassName,
             ILocalCoordGrain myLocalCoord,
             IGlobalCoordGrain myGlobalCoord,
             TransactionScheduler myScheduler, 
-            Dictionary<int, int> coordinatorMap,
             ITransactionalState<TState> state)
         {
             this.myID = myID;
@@ -43,17 +45,12 @@ namespace Concurrency.Implementation.TransactionExecution
             this.myLocalCoord = myLocalCoord;
             this.myGlobalCoord = myGlobalCoord;
             this.myScheduler = myScheduler;
-            this.coordinatorMap = coordinatorMap;
             this.state = state;
 
             myFullID = new Tuple<int, string>(myID, myClassName);
             nonDetFuncResults = new Dictionary<int, NonDetFuncResult>();
             maxBeforeBidOnGrain = -1;
             deadlockTimeout = TimeSpan.FromMilliseconds(20);
-        }
-
-        public void CheckGC()
-        { 
         }
 
         public async Task<Tuple<int, TransactionContext>> GetNonDetContext()
@@ -71,95 +68,79 @@ namespace Concurrency.Implementation.TransactionExecution
             return new Tuple<int, TransactionContext>(highestCommittedBid, cxt);
         }
 
-        public async Task<NonDetFuncResult> ExecuteNonDet(FunctionCall call, TransactionContext cxt)
+        public async Task<bool> WaitForTurn(int globalTid)
         {
-            Debug.Assert(nonDetFuncResults.ContainsKey(cxt.globalTid) == false);
-            nonDetFuncResults.Add(cxt.globalTid, new NonDetFuncResult());
-            var funcResult = nonDetFuncResults[cxt.globalTid];
-
             // wait for turn to execute
-            var t = myScheduler.waitForTurn(cxt.globalTid);
+            var t = myScheduler.WaitForTurn(globalTid);
             await Task.WhenAny(t, Task.Delay(deadlockTimeout));
             if (t.IsCompleted)
             {
-                var txnRes = await InvokeFunction(call, cxt);
-                funcResult.exception |= txnRes.exception;
-                funcResult.SetResultObj(txnRes.resultObj);
-                updateExecutionResult(cxt.globalTid, funcResult);
+                Debug.Assert(nonDetFuncResults.ContainsKey(globalTid) == false);
+                nonDetFuncResults.Add(globalTid, new NonDetFuncResult());
             }
-            else   // time out!!!
-            {
-                funcResult.Exp_Deadlock = true;
-                funcResult.exception = true;
-                updateExecutionResult(funcResult);
-            }
-
-            return funcResult;
+            return t.IsCompleted;
         }
 
-        public Task<TState> GetState(int tid, AccessMode mode)
+        public async Task<TState> GetState(int tid, AccessMode mode)
         {
-            if (mode == AccessMode.Read)
+            try
             {
-                nonDetFuncResults[tid].isNoOpOnGrain = false;
-                nonDetFuncResults[tid].isReadOnlyOnGrain = true;
-                return state.nonDetRead(tid);
+                if (mode == AccessMode.Read)
+                {
+                    var myState = await state.NonDetRead(tid);
+                    nonDetFuncResults[tid].isNoOpOnGrain = false;
+                    nonDetFuncResults[tid].isReadOnlyOnGrain = true;
+                    return myState;
+                }
+                else
+                {
+                    var myState = await state.NonDetReadWrite(tid);
+                    nonDetFuncResults[tid].isNoOpOnGrain = false;
+                    nonDetFuncResults[tid].isReadOnlyOnGrain = false;
+                    return myState;
+                }
             }
-            else
+            catch (Exception)   // DeadlockAvoidanceException
             {
-                nonDetFuncResults[tid].isNoOpOnGrain = false;
-                nonDetFuncResults[tid].isReadOnlyOnGrain = false;
-                return state.nonDetReadWrite(tid);
+                nonDetFuncResults[tid].exception = true;
+                throw;
             }
         }
 
         public async Task<TransactionResult> CallGrain(TransactionContext cxt, FunctionCall call, ITransactionExecutionGrain grain)
         {
             var funcResult = await grain.ExecuteNonDet(call, cxt);
-            nonDetFuncResults[cxt.globalTid].mergeFuncResult(funcResult);
+            nonDetFuncResults[cxt.globalTid].MergeFuncResult(funcResult);
             return new TransactionResult(funcResult.resultObj);
         }
 
-        void updateExecutionResult(NonDetFuncResult res)
-        {
-            if (res.grainOpInfo.ContainsKey(myID) == false)
-                res.grainOpInfo.Add(myID, new OpOnGrain(myClassName, true, true));
-        }
-
         // Update the metadata of the execution results, including accessed grains, before/after set, etc.
-        void updateExecutionResult(int tid, NonDetFuncResult res)
+        public NonDetFuncResult UpdateExecutionResult(int tid)
         {
+            var res = nonDetFuncResults[tid];
+
             if (res.grainWithHighestBeforeBid.Item1 == -1) res.grainWithHighestBeforeBid = myFullID;
 
             if (res.grainOpInfo.ContainsKey(myID) == false)
                 res.grainOpInfo.Add(myID, new OpOnGrain(myClassName, res.isNoOpOnGrain, res.isReadOnlyOnGrain));
 
-            var result = myScheduler.scheduleInfo.getBeforeAfter(tid);   // <maxBeforeBid, minAfterBid, isConsecutive>
+            var result = myScheduler.scheduleInfo.GetBeforeAfter(tid);   // <maxBeforeBid, minAfterBid, isConsecutive>
             var maxBeforeBid = result.Item1;
             if (maxBeforeBidOnGrain > maxBeforeBid) maxBeforeBid = maxBeforeBidOnGrain;
-            res.setBeforeAfterInfo(maxBeforeBid, result.Item2, result.Item3, myFullID);
-        }
+            res.SetBeforeAfterInfo(maxBeforeBid, result.Item2, result.Item3, myFullID);
 
-        async Task<TransactionResult> InvokeFunction(FunctionCall call, TransactionContext cxt)
-        {
-            try
-            {
-                if (cxt.localBid == -1) coordinatorMap.Add(cxt.globalTid, cxt.nonDetCoordID);
-                var mi = call.grainClassName.GetMethod(call.funcName);
-                var t = (Task<TransactionResult>)mi.Invoke(this, new object[] { cxt, call.funcInput });
-                return await t;
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"{e.Message} {e.StackTrace}");
-                throw e;
-            }
+            return res;
         }
 
         public void Commit(int maxBeforeBid)
         {
             Debug.Assert(maxBeforeBidOnGrain <= maxBeforeBid);
             maxBeforeBidOnGrain = maxBeforeBid;
+        }
+
+        public void CleanUp(int tid)
+        {
+            nonDetFuncResults.Remove(tid);
         }
     }
 }

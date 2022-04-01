@@ -72,8 +72,8 @@ namespace OrleansSiloHost
                         options.GatewayPort = gatewayPort;
                         //options.AdvertisedIPAddress = IPAddress.Parse(GetLocalIPAddress());  // IP Address to advertise in the cluster
                     })
-                    .ConfigureServices(ConfigureServices)
-                    .ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+                    .ConfigureServices(ConfigureServices);
+                    //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
                 if (enableOrleansTxn)
                 {

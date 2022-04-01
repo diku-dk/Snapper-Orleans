@@ -81,7 +81,7 @@ namespace Utilities
         {
         }
 
-        public void mergeFuncResult(NonDetFuncResult res)
+        public void MergeFuncResult(NonDetFuncResult res)
         {
             exception |= res.exception;
             Exp_Deadlock |= res.Exp_Deadlock;
@@ -100,7 +100,7 @@ namespace Utilities
             MergeGrainOpInfo(res);
         }
 
-        public void setBeforeAfterInfo(int maxBeforeBid, int minAfterBid, bool isConsecutive, Tuple<int, string> grainFullID)
+        public void SetBeforeAfterInfo(int maxBeforeBid, int minAfterBid, bool isConsecutive, Tuple<int, string> grainFullID)
         {
             if (minAfterBid != -1 && minAfterBid < this.minAfterBid)
                 this.minAfterBid = minAfterBid;

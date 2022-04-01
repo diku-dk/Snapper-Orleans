@@ -19,6 +19,14 @@ namespace Utilities
             this.coordID = coordID;
             txnList = new List<int>();
         }
+
+        public SubBatch(SubBatch subBatch)
+        {
+            bid = subBatch.bid;
+            coordID = subBatch.coordID;
+            lastBid = subBatch.lastBid;
+            txnList = subBatch.txnList;
+        }
     }
 
     [Serializable]
@@ -29,7 +37,7 @@ namespace Utilities
 
         public int highestCommittedBid;
 
-        public LocalSubBatch(int globalBid, int localBid, int localCoordID) : base(localBid, localCoordID)
+        public LocalSubBatch(int globalBid, SubBatch subBatch) : base(subBatch)
         {
             this.globalBid = globalBid;
             globalTidToLocalTid = new Dictionary<int, int>();

@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using MessagePack;
 
 namespace ExperimentProcess
 {
@@ -17,7 +18,7 @@ namespace ExperimentProcess
         static PushSocket sink;
         static string sinkAddress;
         static string controllerAddress;
-        static ISerializer serializer;
+        //static ISerializer serializer;
         static CountdownEvent[] threadAcks;
         static WorkloadConfiguration workload;
         static bool initializationDone = false;
@@ -53,7 +54,7 @@ namespace ExperimentProcess
                 controllerAddress = Constants.worker_Local_ControllerAddress;
             }
             sink = new PushSocket(sinkAddress);
-            serializer = new MsgPackSerializer();
+            //serializer = new MsgPackSerializer();
 
             resultAggregator = new ExperimentResultAggregator();
 
@@ -71,19 +72,19 @@ namespace ExperimentProcess
                 controller.Subscribe("WORKLOAD_INIT");
                 //Acknowledge the controller thread
                 var msg = new NetworkMessage(Utilities.MsgType.WORKER_CONNECT);
-                sink.SendFrame(serializer.serialize(msg));
+                sink.SendFrame(MessagePackSerializer.Serialize(msg));
                 Console.WriteLine("Connected to controller");
 
                 controller.Options.ReceiveHighWatermark = 1000;
                 var messageTopicReceived = controller.ReceiveFrameString();
                 var messageReceived = controller.ReceiveFrameBytes();
                 //Wait to receive workload msg
-                msg = serializer.deserialize<NetworkMessage>(messageReceived);
+                msg = MessagePackSerializer.Deserialize<NetworkMessage>(messageReceived);
                 Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT);
                 Console.WriteLine("Receive workload configuration.");
                 controller.Unsubscribe("WORKLOAD_INIT");
                 controller.Subscribe("RUN_EPOCH");
-                workload = serializer.deserialize<WorkloadConfiguration>(msg.contents);
+                workload = MessagePackSerializer.Deserialize<WorkloadConfiguration>(msg.contents);
                 Console.WriteLine("Received workload message from controller");
                 Console.WriteLine($"detPipe per thread = {workload.pactPipeSize}, nonDetPipe per thread = {workload.actPipeSize}");
 
@@ -94,14 +95,14 @@ namespace ExperimentProcess
                 Console.WriteLine("Finished initialization, sending ACK to controller");
                 //Send an ACK
                 msg = new NetworkMessage(Utilities.MsgType.WORKLOAD_INIT_ACK);
-                sink.SendFrame(serializer.serialize(msg));
+                sink.SendFrame(MessagePackSerializer.Serialize(msg));
 
                 for (int i = 0; i < workload.numEpochs; i++)
                 {
                     messageTopicReceived = controller.ReceiveFrameString();
                     messageReceived = controller.ReceiveFrameBytes();
                     //Wait for EPOCH RUN signal
-                    msg = serializer.deserialize<NetworkMessage>(messageReceived);
+                    msg = MessagePackSerializer.Deserialize<NetworkMessage>(messageReceived);
                     Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH);
                     //Console.WriteLine($"Received signal from controller. Running epoch {i} across {numDetConsumer + numNonDetConsumer} worker threads");
                     //Signal the barrier
@@ -110,8 +111,8 @@ namespace ExperimentProcess
                     threadAcks[i].Wait();
                     var result = resultAggregator.AggregateResultForEpoch(results);
                     msg = new NetworkMessage(Utilities.MsgType.RUN_EPOCH_ACK);
-                    msg.contents = serializer.serialize(result);
-                    sink.SendFrame(serializer.serialize(msg));
+                    msg.contents = MessagePackSerializer.Serialize(result);
+                    sink.SendFrame(MessagePackSerializer.Serialize(msg));
                 }
 
                 Console.WriteLine("Finished running epochs, exiting");

@@ -15,13 +15,19 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
         private SortedSet<int> concurrentReaders; // minWorkReader used to decide if a writer can be added after concurrent working readers
         private int maxWaitWriter;   // decide if a reader can be added before waiting writers
 
-        // transaction who gets the semophrore will only release it when aborts or commits
+        // transaction who gets the semophore will only release it when aborts or commits
         public S2PLTransactionalState()
         {
             var descendingComparer = Comparer<int>.Create((x, y) => y.CompareTo(x));
             waitinglist = new SortedDictionary<int, Tuple<bool, TaskCompletionSource<bool>>>(descendingComparer);
             concurrentReaders = new SortedSet<int>();
             maxWaitWriter = -1;
+        }
+
+        public void CheckGC()
+        {
+            if (waitinglist.Count != 0) Console.WriteLine($"S2PLTransactionalState: waitinglist.Count = {waitinglist.Count}");
+            if (concurrentReaders.Count != 0) Console.WriteLine($"S2PLTransactionalState: concurrentReaders.Count = {concurrentReaders.Count}");
         }
 
         public async Task<TState> Read(int tid, TState committedState)

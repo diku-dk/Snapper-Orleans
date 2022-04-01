@@ -26,7 +26,12 @@ namespace Concurrency.Implementation.TransactionExecution
             else throw new Exception("HybridState: Unknown CC type");
         }
 
-        public TState detOp()
+        public void CheckGC()
+        {
+            nonDetStateManager.CheckGC();
+        }
+
+        public TState DetOp()
         {
             return committedState;
         }
@@ -36,14 +41,14 @@ namespace Concurrency.Implementation.TransactionExecution
             return committedState;
         }
 
-        public Task<TState> nonDetRead(int tid)
+        public async Task<TState> NonDetRead(int tid)
         {
-            return nonDetStateManager.Read(tid, committedState);
+            return await nonDetStateManager.Read(tid, committedState);
         }
 
-        public Task<TState> nonDetReadWrite(int tid)
+        public async Task<TState> NonDetReadWrite(int tid)
         {
-            return nonDetStateManager.ReadWrite(tid, committedState);
+            return await nonDetStateManager.ReadWrite(tid, committedState);
         }
 
         public Task<bool> Prepare(int tid, bool isReader)

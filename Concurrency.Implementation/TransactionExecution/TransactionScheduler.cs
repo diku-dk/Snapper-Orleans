@@ -32,7 +32,7 @@ namespace Concurrency.Implementation.TransactionExecution
 
         public void RegisterBatch(LocalSubBatch batch)
         {
-            scheduleInfo.insertDetBatch(batch);
+            scheduleInfo.InsertDetBatch(batch);
 
             batchInfo.Add(batch.bid, batch);
             for (int i = 0; i < batch.txnList.Count; i++)
@@ -46,24 +46,23 @@ namespace Concurrency.Implementation.TransactionExecution
             }
         }
 
-        public async Task waitForTurn(int bid, int tid)
+        public async Task WaitForTurn(int bid, int tid)
         {
-            var depNode = scheduleInfo.getDependingNode(bid, true);
+            var depNode = scheduleInfo.GetDependingNode(bid, true);
             await depNode.nextNodeCanExecute.Task;
 
             var depTid = tidToLastTid[tid];
             if (depTid == -1) return;
-
             await detExecutionPromise[depTid].Task;
         }
 
-        public async Task waitForTurn(int tid)
+        public async Task WaitForTurn(int tid)
         {
-            await scheduleInfo.insertNonDetTransaction(tid).nextNodeCanExecute.Task;
+            await scheduleInfo.InsertNonDetTransaction(tid).nextNodeCanExecute.Task;
         }
 
         // bool: if the whole batch has been completed
-        public bool ackComplete(int bid, int tid)
+        public bool AckComplete(int bid, int tid)
         {
             detExecutionPromise[tid].SetResult(true);
             detExecutionPromise.Remove(tid);
@@ -74,25 +73,27 @@ namespace Concurrency.Implementation.TransactionExecution
             batch.txnList.RemoveAt(0);
             if (batch.txnList.Count == 0)
             {
-                scheduleInfo.completeDetBatch(bid);
+                scheduleInfo.CompleteDetBatch(bid);
                 return true;
             } 
             else return false;  
         }
 
-        public void ackComplete(int tid)   // when commit/abort a non-det txn
+        public void AckComplete(int tid)   // when commit/abort a non-det txn
         {
-            scheduleInfo.commitNonDetTxn(tid);
+            scheduleInfo.CommitNonDetTxn(tid);
         }
 
         public int GetCoordID(int bid)
         {
-            return batchInfo[bid].coordID;
+            var coordID = batchInfo[bid].coordID;
+            batchInfo.Remove(bid);
+            return coordID;
         }
 
         // this function is only used to do grabage collection
         // bid: current highest committed batch among all coordinators
-        public void ackBatchCommit(int bid)
+        public void AckBatchCommit(int bid)
         {
             try
             {
@@ -104,12 +105,7 @@ namespace Concurrency.Implementation.TransactionExecution
                 {
                     if (node.isDet)
                     {
-                        if (node.id <= bid)
-                        {
-                            scheduleInfo.detNodes.Remove(node.id);
-                            batchInfo.Remove(node.id);
-                            batchInfo.Remove(node.id);
-                        }
+                        if (node.id <= bid) scheduleInfo.detNodes.Remove(node.id);
                         else break;   // meet a det node whose id > bid
                     }
                     else

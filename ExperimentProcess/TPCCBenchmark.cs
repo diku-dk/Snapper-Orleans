@@ -10,12 +10,10 @@ namespace ExperimentProcess
     public class TPCCBenchmark : IBenchmark
     {
         bool isDet;
-        WorkloadConfiguration config;
 
-        public void GenerateBenchmark(WorkloadConfiguration workloadConfig, bool isDet)
+        public void GenerateBenchmark(WorkloadConfiguration _, bool isDet)
         {
             this.isDet = isDet;
-            config = workloadConfig;
         }
 
         private Task<TransactionResult> Execute(IClusterClient client, int grainId, string startFunc, object funcInput, List<int> grainIDList, List<string> grainNameList)

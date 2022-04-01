@@ -8,11 +8,11 @@ using Concurrency.Interface.Logging;
 
 namespace SmallBank.Grains
 {
-    using MultiTransferInput = Tuple<float, List<int>>;  // money, List<to account>
+    using MultiTransferInput = Tuple<int, List<int>>;  // money, List<to account>
 
     public class SnapperTransactionalAccountGrain : TransactionExecutionGrain<BankAccount>, ISnapperTransactionalAccountGrain
     {
-        public SnapperTransactionalAccountGrain(ILoggerGroup loggerGroup) : base(loggerGroup, "SmallBank.Grains.BankAccountGrain")
+        public SnapperTransactionalAccountGrain(ILoggerGroup loggerGroup) : base(loggerGroup, "SmallBank.Grains.SnapperTransactionalAccountGrain")
         {
         }
 
@@ -40,7 +40,7 @@ namespace SmallBank.Grains
                 if (accountID != myState.accountID)
                 {
                     var funcCall = new FunctionCall("Deposit", money, typeof(SnapperTransactionalAccountGrain));
-                    var t = CallGrain(context, accountID, "SmallBank.Grains.BankAccountGrain", funcCall);
+                    var t = CallGrain(context, accountID, "SmallBank.Grains.SnapperTransactionalAccountGrain", funcCall);
                     task.Add(t);
                 } 
                 else task.Add(Deposit(context, money));
@@ -51,7 +51,7 @@ namespace SmallBank.Grains
        
         public async Task<TransactionResult> Deposit(TransactionContext context, object funcInput)
         {
-            var money = (float)funcInput;
+            var money = (int)funcInput;
             var myState = await GetState(context, AccessMode.ReadWrite);
             myState.balance += money;
             return new TransactionResult();

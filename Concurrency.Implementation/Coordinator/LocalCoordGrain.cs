@@ -26,9 +26,9 @@ namespace Concurrency.Implementation.Coordinator
         ILocalCoordGrain neighborCoord;
         List<ILocalCoordGrain> coordList;
         Dictionary<int, string> grainClassName;                                          // grainID, grainClassName
-        DetTxnManager detTxnManager;
 
         // PACT
+        DetTxnManager detTxnManager;
         Dictionary<int, int> bidToLastBid;                                               // <bid, lastBid>
         Dictionary<int, int> bidToLastCoordID;                                           // <bid, coordID who emit this bid's lastBid>
         Dictionary<int, int> expectedAcksPerBatch; 
@@ -45,6 +45,24 @@ namespace Concurrency.Implementation.Coordinator
 
         // ACT
         NonDetTxnManager nonDetTxnManager;
+
+        public Task CheckGC()
+        {
+            detTxnManager.CheckGC();
+            nonDetTxnManager.CheckGC();
+            if (bidToLastBid.Count != 0) Console.WriteLine($"LocalCoord {myID}: bidToLastBid.Count = {bidToLastBid.Count}");
+            if (bidToLastCoordID.Count != 0) Console.WriteLine($"LocalCoord {myID}: bidToLastCoordID.Count = {bidToLastCoordID.Count}");
+            if (expectedAcksPerBatch.Count != 0) Console.WriteLine($"LocalCoord {myID}: expectedAcksPerBatch.Count = {expectedAcksPerBatch.Count}");
+            if (batchCommit.Count != 0) Console.WriteLine($"LocalCoord {myID}: batchCommit.Count = {batchCommit.Count}");
+            if (batchSchedulePerGrain.Count != 0) Console.WriteLine($"LocalCoord {myID}: batchSchedulePerGrain.Count = {batchSchedulePerGrain.Count}");
+            if (globalBatchInfo.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalBatchInfo.Count = {globalBatchInfo.Count}");
+            if (globalBatchPromise.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalBatchPromise.Count = {globalBatchPromise.Count}");
+            if (globalTransactionInfo.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalTransactionInfo.Count = {globalTransactionInfo.Count}");
+            if (globalDetRequestPromise.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalDetRequestPromise.Count = {globalDetRequestPromise.Count}");
+            if (localBidToGlobalBid.Count != 0) Console.WriteLine($"LocalCoord {myID}: localBidToGlobalBid.Count = {localBidToGlobalBid.Count}");
+            if (globalTidToLocalTidPerBatch.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalTidToLocalTidPerBatch.Count = {globalTidToLocalTidPerBatch.Count}");
+            return Task.CompletedTask;
+        }
 
         public override Task OnActivateAsync()
         {
@@ -76,22 +94,6 @@ namespace Concurrency.Implementation.Coordinator
         public LocalCoordGrain(ILoggerGroup loggerGroup)
         {
             this.loggerGroup = loggerGroup;
-        }
-
-        public Task CheckGC()
-        {
-            if (bidToLastBid.Count != 0) Console.WriteLine($"GlobalCoord {myID}: bidToLastBid.Count = {bidToLastBid.Count}");
-            if (bidToLastCoordID.Count != 0) Console.WriteLine($"GlobalCoord {myID}: bidToLastCoordID.Count = {bidToLastCoordID.Count}");
-            if (expectedAcksPerBatch.Count != 0) Console.WriteLine($"GlobalCoord {myID}: expectedAcksPerBatch.Count = {expectedAcksPerBatch.Count}");
-            if (batchCommit.Count != 0) Console.WriteLine($"GlobalCoord {myID}: batchCommit.Count = {batchCommit.Count}");
-            if (batchSchedulePerGrain.Count != 0) Console.WriteLine($"GlobalCoord {myID}: batchSchedulePerGrain.Count = {batchSchedulePerGrain.Count}");
-            if (globalBatchInfo.Count != 0) Console.WriteLine($"GlobalCoord {myID}: globalBatchInfo.Count = {globalBatchInfo.Count}");
-            if (globalBatchPromise.Count != 0) Console.WriteLine($"GlobalCoord {myID}: globalBatchPromise.Count = {globalBatchPromise.Count}");
-            if (globalTransactionInfo.Count != 0) Console.WriteLine($"GlobalCoord {myID}: globalTransactionInfo.Count = {globalTransactionInfo.Count}");
-            if (globalDetRequestPromise.Count != 0) Console.WriteLine($"GlobalCoord {myID}: globalDetRequestPromise.Count = {globalDetRequestPromise.Count}");
-            nonDetTxnManager.CheckGC();
-            detTxnManager.CheckGC();
-            return Task.CompletedTask;
         }
 
         public Task ReceiveBatchSchedule(SubBatch batch)
@@ -132,7 +134,7 @@ namespace Concurrency.Implementation.Coordinator
             return new TransactionRegistInfo(tid, highestCommittedBid);
         }
 
-        public Task PassToken(LocalToken token)
+        public async Task PassToken(LocalToken token)
         {
             var curBatchID = detTxnManager.GenerateBatch(token.basicToken);
             var curBatchIDs = ProcessGlobalBatch(token);
@@ -140,10 +142,9 @@ namespace Concurrency.Implementation.Coordinator
             detTxnManager.GarbageCollectTokenInfo(highestCommittedBid , token.basicToken);
             highestCommittedBid = Math.Max(highestCommittedBid, token.highestCommittedBid);
             _ = neighborCoord.PassToken(token);
-            if (curBatchID != -1) _ = EmitBatch(curBatchID);
+            if (curBatchID != -1) await EmitBatch(curBatchID);
             if (curBatchIDs.Count != 0)
-                foreach (var bid in curBatchIDs) _ = EmitBatch(bid);
-            return Task.CompletedTask;
+                foreach (var bid in curBatchIDs) await EmitBatch(bid);
         }
 
         List<int> ProcessGlobalBatch(LocalToken token)
@@ -186,18 +187,22 @@ namespace Concurrency.Implementation.Coordinator
             var curScheduleMap = batchSchedulePerGrain[curBatchID];
 
             if (log != null) await log.HandleOnPrepareInDeterministicProtocol(curBatchID, new HashSet<int>(curScheduleMap.Keys));
-            
+
             foreach (var item in curScheduleMap)
             {
                 var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, grainClassName[item.Key]);
                 var batch = item.Value;
 
                 var globalBid = -1;
-                if (localBidToGlobalBid.ContainsKey(curBatchID)) globalBid = localBidToGlobalBid[curBatchID];
-                var localSubBatch = new LocalSubBatch(globalBid, curBatchID, myID);
-                localSubBatch.globalTidToLocalTid = globalTidToLocalTidPerBatch[curBatchID];
+                if (localBidToGlobalBid.ContainsKey(curBatchID))
+                    globalBid = localBidToGlobalBid[curBatchID];
 
-                 _ = dest.ReceiveBatchSchedule(localSubBatch);
+                var localSubBatch = new LocalSubBatch(globalBid, batch);
+
+                if (globalTidToLocalTidPerBatch.ContainsKey(curBatchID))
+                    localSubBatch.globalTidToLocalTid = globalTidToLocalTidPerBatch[curBatchID];
+
+                _ = dest.ReceiveBatchSchedule(localSubBatch);
             }
         }
 
