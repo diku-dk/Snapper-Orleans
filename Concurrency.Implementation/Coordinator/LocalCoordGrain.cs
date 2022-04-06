@@ -11,7 +11,6 @@ using Concurrency.Implementation.GrainPlacement;
 using Concurrency.Interface.TransactionExecution;
 using Orleans.Concurrency;
 using System.Threading;
-using System.Runtime.Serialization;
 
 namespace Concurrency.Implementation.Coordinator
 {
@@ -220,7 +219,7 @@ namespace Concurrency.Implementation.Coordinator
                     if (coord == myID) await WaitBatchCommit(lastBid);
                     else
                     {
-                        var lastCoord = GrainFactory.GetGrain<ILocalCoordGrain>(coord);
+                        var lastCoord = coordList[coord];
                         await lastCoord.WaitBatchCommit(lastBid);
                     }
                 }
