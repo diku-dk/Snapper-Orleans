@@ -10,11 +10,17 @@ namespace Utilities
         [Key(0)]
         public MsgType msgType;
         [Key(1)]
-        public byte[] contents;
+        public byte[] content;
 
         public NetworkMessage(MsgType msgType)
         {
             this.msgType = msgType;
+        }
+
+        public NetworkMessage(MsgType msgType, byte[] content)
+        {
+            this.msgType = msgType;
+            this.content = content;
         }
     }
 }

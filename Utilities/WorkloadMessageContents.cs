@@ -1,5 +1,5 @@
-﻿using MessagePack;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using MessagePack;
 
 namespace Utilities
 {

@@ -10,6 +10,7 @@ using Concurrency.Interface.Coordinator;
 using Concurrency.Implementation.GrainPlacement;
 using Concurrency.Interface.TransactionExecution;
 using Orleans.Concurrency;
+using System.Runtime.Serialization;
 
 namespace Concurrency.Implementation.Coordinator
 {
@@ -21,32 +22,32 @@ namespace Concurrency.Implementation.Coordinator
         int myID;
         int highestCommittedBid;
         ILoggerGroup loggerGroup;
-        ILoggingProtocol<string> log;
+        ILoggingProtocol log;
         IGlobalCoordGrain neighborCoord;
         List<IGlobalCoordGrain> coordList;
 
         // PACT
-        DetTxnManager detTxnManager;
+        DetTxnProcessor detTxnProcessor;
         Dictionary<int, int> bidToLastBid;                                 // <bid, lastBid>
         Dictionary<int, int> bidToLastCoordID;                             // <bid, coordID who emit this bid's lastBid>
         Dictionary<int, int> expectedAcksPerBatch;
         Dictionary<int, TaskCompletionSource<bool>> batchCommit;
-        Dictionary<int, Dictionary<int, SubBatch>> batchSchedulePerSilo;
+        Dictionary<int, Dictionary<int, SubBatch>> bidToSubBatches;
         // only for global batches
         Dictionary<int, Dictionary<int, int>> coordPerBatchPerSilo;        // <bid, siloID, localCoordID>
 
         // ACT
-        NonDetTxnManager nonDetTxnManager;
+        NonDetTxnProcessor nonDetTxnProcessor;
 
         public Task CheckGC()
         {
-            detTxnManager.CheckGC();
-            nonDetTxnManager.CheckGC();
+            detTxnProcessor.CheckGC();
+            nonDetTxnProcessor.CheckGC();
             if (bidToLastBid.Count != 0) Console.WriteLine($"GlobalCoord {myID}: bidToLastBid.Count = {bidToLastBid.Count}");
             if (bidToLastCoordID.Count != 0) Console.WriteLine($"GlobalCoord {myID}: bidToLastCoordID.Count = {bidToLastCoordID.Count}");
             if (expectedAcksPerBatch.Count != 0) Console.WriteLine($"GlobalCoord {myID}: expectedAcksPerBatch.Count = {expectedAcksPerBatch.Count}");
             if (batchCommit.Count != 0) Console.WriteLine($"GlobalCoord {myID}: batchCommit.Count = {batchCommit.Count}");
-            if (batchSchedulePerSilo.Count != 0) Console.WriteLine($"GlobalCoord {myID}: batchSchedulePerSilo.Count = {batchSchedulePerSilo.Count}");
+            if (bidToSubBatches.Count != 0) Console.WriteLine($"GlobalCoord {myID}: batchSchedulePerSilo.Count = {bidToSubBatches.Count}");
             if (coordPerBatchPerSilo.Count != 0) Console.WriteLine($"GlobalCoord {myID}: coordPerBatchPerSilo.Count = {coordPerBatchPerSilo.Count}");
             return Task.CompletedTask;
         }
@@ -60,15 +61,15 @@ namespace Concurrency.Implementation.Coordinator
             bidToLastCoordID = new Dictionary<int, int>();
             expectedAcksPerBatch = new Dictionary<int, int>();
             batchCommit = new Dictionary<int, TaskCompletionSource<bool>>();
-            batchSchedulePerSilo = new Dictionary<int, Dictionary<int, SubBatch>>();
+            bidToSubBatches = new Dictionary<int, Dictionary<int, SubBatch>>();
             coordPerBatchPerSilo = new Dictionary<int, Dictionary<int, int>>();
-            nonDetTxnManager = new NonDetTxnManager(myID);
-            detTxnManager = new DetTxnManager(
+            nonDetTxnProcessor = new NonDetTxnProcessor(myID);
+            detTxnProcessor = new DetTxnProcessor(
                 myID,
                 bidToLastBid,
                 bidToLastCoordID,
                 expectedAcksPerBatch,
-                batchSchedulePerSilo,
+                bidToSubBatches,
                 coordPerBatchPerSilo);
             return base.OnActivateAsync();
         }
@@ -81,22 +82,22 @@ namespace Concurrency.Implementation.Coordinator
         // for PACT
         public async Task<TransactionRegistInfo> NewTransaction(List<int> siloList, List<int> coordList)
         {
-            var id = await detTxnManager.NewDet(siloList, coordList);
+            var id = await detTxnProcessor.NewDet(siloList, coordList);
             return new TransactionRegistInfo(id.Item1, id.Item2, highestCommittedBid);
         }
 
         // for ACT
         public async Task<TransactionRegistInfo> NewTransaction()
         {
-            var tid = await nonDetTxnManager.NewNonDet();
+            var tid = await nonDetTxnProcessor.NewNonDet();
             return new TransactionRegistInfo(tid, highestCommittedBid);
         }
 
         public Task PassToken(BasicToken token)
         {
-            var curBatchID = detTxnManager.GenerateBatch(token);
-            nonDetTxnManager.EmitNonDetTransactions(token);
-            detTxnManager.GarbageCollectTokenInfo(highestCommittedBid, token);
+            var curBatchID = detTxnProcessor.GenerateBatch(token);
+            nonDetTxnProcessor.EmitNonDetTransactions(token);
+            detTxnProcessor.GarbageCollectTokenInfo(highestCommittedBid, token);
             highestCommittedBid = Math.Max(highestCommittedBid, token.highestCommittedBid);
             _ = neighborCoord.PassToken(token);
             if (curBatchID != -1) _ = EmitBatch(curBatchID);
@@ -105,7 +106,7 @@ namespace Concurrency.Implementation.Coordinator
 
         async Task EmitBatch(int curBatchID)
         {
-            var curScheduleMap = batchSchedulePerSilo[curBatchID];
+            var curScheduleMap = bidToSubBatches[curBatchID];
             if (log != null) await log.HandleOnPrepareInDeterministicProtocol(curBatchID, new HashSet<int>(curScheduleMap.Keys));
 
             var coords = coordPerBatchPerSilo[curBatchID];
@@ -172,7 +173,7 @@ namespace Concurrency.Implementation.Coordinator
         public Task SpawnGlobalCoordGrain()
         {
             highestCommittedBid = -1;
-            nonDetTxnManager.Init();
+            nonDetTxnProcessor.Init();
 
             var neighborID = GlobalCoordGrainPlacementHelper.MapCoordIDToNeighborID(myID);
             neighborCoord = GrainFactory.GetGrain<IGlobalCoordGrain>(neighborID);
@@ -189,10 +190,10 @@ namespace Concurrency.Implementation.Coordinator
             {
                 var loggerID = Helper.MapGrainIDToServiceID(myID, numLogger);
                 var logger = loggerGroup.GetSingleton(loggerID);
-                log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID, logger);
+                log = new LoggingProtocol(GetType().ToString(), myID, logger);
             }
             else if (Constants.loggingType == LoggingType.ONGRAIN)
-                log = new Simple2PCLoggingProtocol<string>(GetType().ToString(), myID);
+                log = new LoggingProtocol(GetType().ToString(), myID);
 
             Console.WriteLine($"Global coord {myID} initialize logging {Constants.loggingType}.");
 

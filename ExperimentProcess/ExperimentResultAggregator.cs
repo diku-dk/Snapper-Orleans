@@ -42,7 +42,7 @@ namespace ExperimentProcess
             results[i, j] = result;
         }
 
-        public WorkloadResult AggregateResultForEpoch(WorkloadResult[] result)
+        public static WorkloadResult AggregateResultForEpoch(WorkloadResult[] result)
         {
             Trace.Assert(result.Length >= 1);
             int aggNumDetCommitted = result[0].numDetCommitted;
@@ -82,8 +82,6 @@ namespace ExperimentProcess
         {
             Console.WriteLine("Aggregating results and printing");
 
-            var aggLatencies = new List<double>();
-            var aggDetLatencies = new List<double>();
             var detThroughPutAccumulator = new List<float>();
             var nonDetThroughPutAccumulator = new List<float>();
             var abortRateAccumulator = new List<double>();
@@ -93,9 +91,9 @@ namespace ExperimentProcess
             var ioThroughputAccumulator = new List<float>();
 
             //Skip the epochs upto warm up epochs
+            WorkloadResult aggResult = null;
             for (int epochNumber = numWarmupEpoch; epochNumber < numEpochs; epochNumber++)
             {
-                WorkloadResult aggResult;
                 if (Constants.numWorker == 1) aggResult = results[epochNumber, 0];
                 else
                 {
@@ -145,7 +143,7 @@ namespace ExperimentProcess
                 if (pactPercent < 100)
                 {
                     file.Write($"{nonDetThroughputMeanAndSd.Item1:0} {nonDetThroughputMeanAndSd.Item2:0} ");
-                    //file.Write($"{abortRateMeanAndSd.Item1}% ");
+                    file.Write($"{Math.Round(abortRateMeanAndSd.Item1, 2).ToString().Replace(',', '.')}% ");
                     if (pactPercent > 0)
                     {
                         var abortRWConflict = 100 - deadlockRateMeanAndSd.Item1 - notSerializableRateMeanAndSd.Item1 - notSureSerializableRateMeanAndSd.Item1;
@@ -160,7 +158,7 @@ namespace ExperimentProcess
                 {
                     foreach (var percentile in percentilesToCalculate)
                     {
-                        var lat = ArrayStatistics.PercentileInplace(aggDetLatencies.ToArray(), percentile);
+                        var lat = ArrayStatistics.PercentileInplace(aggResult.det_latencies.ToArray(), percentile);
                         file.Write($"{Math.Round(lat, 2).ToString().Replace(',', '.')} ");
                     }
                 }
@@ -168,7 +166,7 @@ namespace ExperimentProcess
                 {
                     foreach (var percentile in percentilesToCalculate)
                     {
-                        var lat = ArrayStatistics.PercentileInplace(aggLatencies.ToArray(), percentile);
+                        var lat = ArrayStatistics.PercentileInplace(aggResult.latencies.ToArray(), percentile);
                         file.Write($"{Math.Round(lat, 2).ToString().Replace(',', '.')} ");
                     }
                 }

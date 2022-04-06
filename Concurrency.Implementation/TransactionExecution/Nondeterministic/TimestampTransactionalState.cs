@@ -39,7 +39,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             {
                 Debug.Assert(transactionMap[tid].data.status.Equals(Status.Executing));
                 if (transactionMap[tid].data.rts > tid) throw new DeadlockAvoidanceException($"Transaction {tid} fail to write because a more recent transaction has read. ");
-                return Task.FromResult<TState>(transactionMap[tid].data.state);
+                return Task.FromResult(transactionMap[tid].data.state);
             }
             var lastNode = findLastNonAbortedTransaction();
             if (lastNode == null)    // either the transactionMap is empty or all nodes have been aborted
@@ -49,7 +49,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
                 info = new TransactionStateInfo(tid, -1, tid, Status.Executing, copy);
                 node = transactionList.Append(info);
                 transactionMap.Add(tid, node);
-                return Task.FromResult<TState>(copy);
+                return Task.FromResult(copy);
             }
             if (lastNode.data.status.Equals(Status.Committed))
             {
@@ -72,7 +72,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             info = new TransactionStateInfo(tid, lastNode.data.tid, tid, Status.Executing, copy);
             node = transactionList.Append(info);
             transactionMap.Add(tid, node);
-            return Task.FromResult<TState>(copy);
+            return Task.FromResult(copy);
         }
 
         public Task<TState> Read(int tid, TState committedState)
@@ -84,7 +84,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             if (transactionMap.ContainsKey(tid))  // if tid has written the state before
             {
                 Debug.Assert(transactionMap[tid].data.status.Equals(Status.Executing));
-                return Task.FromResult<TState>(transactionMap[tid].data.state);
+                return Task.FromResult(transactionMap[tid].data.state);
             }
             var lastNode = findLastNonAbortedTransaction();
             if (lastNode == null)   // either the transactionMap is empty or all nodes have been aborted
@@ -96,7 +96,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
                 node.data.ExecutionPromise.SetResult(true);
                 node.data.status = Status.Committed;
                 readDependencyMap.Add(tid, -1);
-                return Task.FromResult<TState>(copy);
+                return Task.FromResult(copy);
             }
             if (lastNode.data.status.Equals(Status.Committed))
             {
@@ -112,7 +112,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             }
             else readDependencyMap.Add(tid, lastNode.data.tid);
             lastNode.data.rts = Math.Max(lastNode.data.rts, tid);
-            return Task.FromResult<TState>(lastNode.data.state);
+            return Task.FromResult(lastNode.data.state);
         }
 
         private Node<TransactionStateInfo> findLastNonAbortedTransaction()

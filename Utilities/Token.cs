@@ -29,12 +29,10 @@ namespace Utilities
     {
         // for global info
         public int lastEmitGlobalBid;
-        public BasicToken basicToken;
 
         public LocalToken() : base()
         {
             lastEmitGlobalBid = -1;
-            basicToken = new BasicToken();
         }
     }
 }

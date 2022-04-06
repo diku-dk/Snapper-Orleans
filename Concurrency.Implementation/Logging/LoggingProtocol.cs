@@ -4,21 +4,19 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
-using Concurrency.Interface.TransactionExecution;
 using MessagePack;
 
 namespace Concurrency.Implementation.Logging
 {
-    class Simple2PCLoggingProtocol<TState> : ILoggingProtocol<TState>
+    public class LoggingProtocol : ILoggingProtocol
     {
-        private int grainID;
-        private int sequenceNumber;
-        private IKeyValueStorageWrapper logStorage;
+        int sequenceNumber;
+        readonly int grainID;
+        readonly ILogger logger;
+        readonly bool useLogger = false;
+        readonly IKeyValueStorageWrapper logStorage;
 
-        private bool useLogger = false;
-        private ILogger logger;
-
-        public Simple2PCLoggingProtocol(string grainType, int grainID, object logger = null)
+        public LoggingProtocol(string grainType, int grainID, object logger = null)
         {
             this.grainID = grainID;
             sequenceNumber = 0;
@@ -53,7 +51,7 @@ namespace Concurrency.Implementation.Logging
             }
         }
 
-        private int getSequenceNumber()
+        int getSequenceNumber()
         {
             int returnVal;
             lock (this)
@@ -64,7 +62,7 @@ namespace Concurrency.Implementation.Logging
             return returnVal;
         }
 
-        private async Task WriteLog(byte[] key, byte[] value)
+        async Task WriteLog(byte[] key, byte[] value)
         {
             if (useLogger) await logger.Write(value);
             else await logStorage.Write(key, value);
@@ -80,37 +78,37 @@ namespace Concurrency.Implementation.Logging
 
         public async Task HandleOnAbortIn2PC(int tid, int coordinatorKey)
         {
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.ABORT, coordinatorKey, tid);
+            var logRecord = new LogFormat(getSequenceNumber(), LogType.ABORT, coordinatorKey, tid);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
             var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnCommitIn2PC(int tid, int coordinatorKey)
+        public async Task HandleOnCommitIn2PC(int tid, int coordinatorKey)
         {
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.COMMIT, coordinatorKey, tid);
+            var logRecord = new LogFormat(getSequenceNumber(), LogType.COMMIT, coordinatorKey, tid);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
             var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnPrepareIn2PC(ITransactionalState<TState> state, int tid, int coordinatorKey)
+        public async Task HandleOnPrepareIn2PC(byte[] state, int tid, int coordinatorKey)
         {
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.PREPARE, coordinatorKey, tid, state.GetPreparedState(tid));
+            var logRecord = new LogFormat(getSequenceNumber(), LogType.PREPARE, coordinatorKey, tid, state);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
             var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnCompleteInDeterministicProtocol(ITransactionalState<TState> state, int bid, int coordinatorKey)
+        public async Task HandleOnCompleteInDeterministicProtocol(byte[] state, int bid, int coordinatorKey)
         {
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMPLETE, coordinatorKey, bid, state.GetCommittedState(bid));
+            var logRecord = new LogFormat(getSequenceNumber(), LogType.DET_COMPLETE, coordinatorKey, bid, state);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
             var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnPrepareInDeterministicProtocol(int bid, HashSet<int> grains)
+        public async Task HandleOnPrepareInDeterministicProtocol(int bid, HashSet<int> grains)
         {
             var logRecord = new LogParticipant(getSequenceNumber(), grainID, bid, grains);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
@@ -118,9 +116,9 @@ namespace Concurrency.Implementation.Logging
             await WriteLog(key, value);
         }
 
-        async Task ILoggingProtocol<TState>.HandleOnCommitInDeterministicProtocol(int bid)
+        public async Task HandleOnCommitInDeterministicProtocol(int bid)
         {
-            var logRecord = new LogFormat<TState>(getSequenceNumber(), LogType.DET_COMMIT, grainID, bid);
+            var logRecord = new LogFormat(getSequenceNumber(), LogType.DET_COMMIT, grainID, bid);
             var key = BitConverter.GetBytes(logRecord.sequenceNumber);
             var value = MessagePackSerializer.Serialize(logRecord);
             await WriteLog(key, value);

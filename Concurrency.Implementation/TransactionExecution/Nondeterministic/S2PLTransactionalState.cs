@@ -126,7 +126,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
         public Task<bool> Prepare(int tid, bool isReader)
         {
             Debug.Assert(waitinglist.ContainsKey(tid) && isReader == waitinglist[tid].Item1);
-            if (isReader) CleanUpAndSignal(tid);   // commit read-only transaction directly
+            if (isReader) CleanUpAndSignal(tid);   // release the read lock directly
             return Task.FromResult(true);
         }
 

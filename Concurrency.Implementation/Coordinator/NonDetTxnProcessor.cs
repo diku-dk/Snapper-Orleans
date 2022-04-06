@@ -5,7 +5,7 @@ using Utilities;
 
 namespace Concurrency.Implementation.Coordinator
 {
-    public class NonDetTxnManager
+    public class NonDetTxnProcessor
     {
         readonly int myID;
         int numReservedTid;
@@ -13,7 +13,7 @@ namespace Concurrency.Implementation.Coordinator
         float smoothingFactor;
         List<TaskCompletionSource<int>> nonDetRequests;                                  // int: tid assigned to the ACT
 
-        public NonDetTxnManager(int myID)
+        public NonDetTxnProcessor(int myID)
         {
             this.myID = myID;
             Init();

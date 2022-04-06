@@ -1,5 +1,4 @@
-﻿
-using NetMQ;
+﻿using NetMQ;
 using System;
 using Utilities;
 using NetMQ.Sockets;
@@ -125,8 +124,7 @@ namespace ExperimentController
                 Console.WriteLine($"{Constants.numWorker} worker nodes have connected to Controller");
                 //Send the workload configuration
                 Console.WriteLine($"Sent workload configuration to {Constants.numWorker} worker nodes");
-                var msg = new NetworkMessage(Utilities.MsgType.WORKLOAD_INIT);
-                msg.contents = MessagePackSerializer.Serialize(workload);
+                var msg = new NetworkMessage(Utilities.MsgType.WORKLOAD_INIT, MessagePackSerializer.Serialize(workload));
                 workers.SendMoreFrame("WORKLOAD_INIT").SendFrame(MessagePackSerializer.Serialize(msg));
                 Console.WriteLine($"Coordinator waits for WORKLOAD_INIT_ACK");
                 //Wait for acks for the workload configuration
@@ -184,7 +182,7 @@ namespace ExperimentController
                     {
                         var msg = MessagePackSerializer.Deserialize<NetworkMessage>(sink.ReceiveFrameBytes());
                         Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH_ACK);
-                        var result = MessagePackSerializer.Deserialize<WorkloadResult>(msg.contents);
+                        var result = MessagePackSerializer.Deserialize<WorkloadResult>(msg.content);
                         resultAggregator.SetResult(i, j, result);
                         ackedWorkers.Signal();
                     }

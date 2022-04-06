@@ -35,7 +35,7 @@
         public const bool multiSilo = numSilo > 1;
         public const CCType ccType = CCType.S2PL;
         public const ImplementationType implementationType = ImplementationType.SNAPPER;
-        public const LoggingType loggingType = LoggingType.NOLOGGING;
+        public const LoggingType loggingType = LoggingType.LOGGER;
         public const StorageType storageType = StorageType.FILESYSTEM;
         public const int numGlobalCoord = numSilo * 2;
         public const int numLocalCoordPerSilo = numCPUPerSilo / numCPUBasic * 8;
@@ -44,7 +44,7 @@
         public const int numGlobalLogger = 1;
         public const int numLoggerPerSilo = numCPUPerSilo / numCPUBasic * 8;
         // for SmallBank
-        public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
+        public const int numGrainPerSilo = 10 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
         // for TPCC
         public const int NUM_W_PER_SILO = 2 * numCPUPerSilo / numCPUBasic;
         public const int NUM_D_PER_W = 10;

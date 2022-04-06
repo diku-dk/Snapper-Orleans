@@ -4,11 +4,12 @@ using TPCC.Interfaces;
 using System.Threading.Tasks;
 using Concurrency.Implementation.TransactionExecution;
 using Concurrency.Interface.Logging;
+using System.Runtime.Serialization;
 
 namespace TPCC.Grains
 {
     [Serializable]
-    public class DistrictInfo : ICloneable
+    public class DistrictInfo : ICloneable, ISerializable
     {
         public int W_ID;
         public District district;  // key: I_ID
@@ -21,6 +22,12 @@ namespace TPCC.Grains
         {
             W_ID = district_info.W_ID;
             district = district_info.district;
+        }
+
+        public void GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            info.AddValue("W_ID", W_ID, typeof(int));
+            info.AddValue("district", district, typeof(District));
         }
 
         object ICloneable.Clone()

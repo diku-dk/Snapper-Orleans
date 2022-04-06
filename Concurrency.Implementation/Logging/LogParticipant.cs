@@ -1,5 +1,5 @@
-﻿using MessagePack;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using MessagePack;
 
 namespace Concurrency.Implementation.Logging
 {
@@ -15,7 +15,7 @@ namespace Concurrency.Implementation.Logging
         [Key(3)]
         public HashSet<int> grains;
 
-        public LogParticipant(int sequenceNumber, int coordID, int tid, HashSet<int> grains)
+        public LogParticipant(int tid, int coordID, int sequenceNumber, HashSet<int> grains)
         {
             this.sequenceNumber = sequenceNumber;
             this.coordID = coordID;

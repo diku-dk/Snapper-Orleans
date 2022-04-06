@@ -39,7 +39,6 @@ namespace ExperimentProcess
 
         static WorkloadGenerator workloadGenerator;
         static WorkloadResult[] results;
-        static ExperimentResultAggregator resultAggregator;
 
         static void Main()
         {
@@ -56,11 +55,156 @@ namespace ExperimentProcess
             sink = new PushSocket(sinkAddress);
             //serializer = new MsgPackSerializer();
 
-            resultAggregator = new ExperimentResultAggregator();
-
             Console.WriteLine("Worker is Started...");
             ProcessWork();
             //Console.ReadLine();
+        }
+
+        static async void ThreadWorkAsync(object obj)
+        {
+            var input = (Tuple<int, bool>)obj;
+            int threadIndex = input.Item1;
+            var isDet = input.Item2;
+            var pipeSize = isDet ? workload.pactPipeSize : workload.actPipeSize;
+            var globalWatch = new Stopwatch();
+            var benchmark = benchmarks[threadIndex];
+            var client = clients[threadIndex % (numDetConsumer + numNonDetConsumer)];
+            Console.WriteLine($"thread = {threadIndex}, isDet = {isDet}, pipe = {pipeSize}");
+            for (int eIndex = 0; eIndex < workload.numEpochs; eIndex++)
+            {
+                int numEmit = 0;
+                int numDetCommit = 0;
+                int numNonDetCommit = 0;
+                int numOrleansTxnEmit = 0;
+                int numNonDetTransaction = 0;
+                int numDeadlock = 0;
+                int numNotSerializable = 0;
+                int numNotSureSerializable = 0;
+                var latencies = new List<double>();
+                var det_latencies = new List<double>();
+                var tasks = new List<Task<TransactionResult>>();
+                var reqs = new Dictionary<Task<TransactionResult>, TimeSpan>();
+                var queue = thread_requests[eIndex][threadIndex];
+                RequestData txn;
+                await Task.Delay(TimeSpan.FromMilliseconds(500));   // give some time for producer to populate the buffer
+
+                //Wait for all threads to arrive at barrier point
+                barriers[eIndex].SignalAndWait();
+                globalWatch.Restart();
+                var startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                do
+                {
+                    while (tasks.Count < pipeSize && queue.TryDequeue(out txn))
+                    {
+                        var asyncReqStartTime = globalWatch.Elapsed;
+                        var newTask = benchmark.NewTransaction(client, txn);
+                        numEmit++;
+                        reqs.Add(newTask, asyncReqStartTime);
+                        tasks.Add(newTask);
+                    }
+                    if (tasks.Count != 0)
+                    {
+                        var task = await Task.WhenAny(tasks);
+                        var asyncReqEndTime = globalWatch.Elapsed;
+                        bool noException = true;
+                        try
+                        {
+                            //Needed to catch exception of individual task (not caught by Snapper's exception) which would not be thrown by WhenAny
+                            await task;
+                        }
+                        catch (Exception e)    // this exception is only related to OrleansTransaction
+                        {
+                            Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
+                            noException = false;
+                        }
+                        numOrleansTxnEmit++;
+                        if (noException)
+                        {
+                            if (isDet)   // for det
+                            {
+                                if (workload.benchmark == BenchmarkType.SMALLBANK) Debug.Assert(!task.Result.exception);
+                                numDetCommit++;
+                                det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+                            }
+                            else    // for non-det + eventual + orleans txn
+                            {
+                                numNonDetTransaction++;
+                                if (!task.Result.exception)
+                                {
+                                    numNonDetCommit++;
+                                    var totalTime = (asyncReqEndTime - reqs[task]).TotalMilliseconds;
+                                    latencies.Add(totalTime);
+                                }
+                                else if (task.Result.Exp_Serializable) numNotSerializable++;
+                                else if (task.Result.Exp_NotSureSerializable) numNotSureSerializable++;
+                                else if (task.Result.Exp_Deadlock) numDeadlock++;
+                            }
+                        }
+                        tasks.Remove(task);
+                        reqs.Remove(task);
+                    }
+                }
+                //while (numEmit < numTxn);
+                while (globalWatch.ElapsedMilliseconds < workload.epochDurationMSecs && (queue.Count != 0 || !isProducerFinish[eIndex]));
+                isEpochFinish[eIndex] = true;   // which means producer doesn't need to produce more requests
+
+                //Wait for the tasks exceeding epoch time and also count them into results
+                while (tasks.Count != 0)
+                {
+                    var task = await Task.WhenAny(tasks);
+                    var asyncReqEndTime = globalWatch.Elapsed;
+                    bool noException = true;
+                    try
+                    {
+                        await task;
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"Exception: {e.Message}. ");
+                        noException = false;
+                    }
+                    numOrleansTxnEmit++;
+                    if (noException)
+                    {
+                        if (isDet)   // for det
+                        {
+                            Debug.Assert(!task.Result.exception);
+                            numDetCommit++;
+                            det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+                        }
+                        else    // for non-det + eventual + orleans txn
+                        {
+                            numNonDetTransaction++;
+                            if (!task.Result.exception)
+                            {
+                                numNonDetCommit++;
+                                var totalTime = (asyncReqEndTime - reqs[task]).TotalMilliseconds;
+                                latencies.Add(totalTime);
+                            }
+                            else if (task.Result.Exp_Serializable) numNotSerializable++;
+                            else if (task.Result.Exp_NotSureSerializable) numNotSureSerializable++;
+                            else if (task.Result.Exp_Deadlock) numDeadlock++;
+                        }
+                    }
+                    tasks.Remove(task);
+                    reqs.Remove(task);
+                }
+                long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                globalWatch.Stop();
+                thread_requests[eIndex].Remove(threadIndex);
+                if (isDet) Console.WriteLine($"det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
+                else
+                {
+                    if (Constants.implementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}");
+                    else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
+                }
+                WorkloadResult res;
+                if (Constants.implementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResult(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
+                else res = new WorkloadResult(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
+                res.setLatency(latencies, det_latencies);
+                results[threadIndex] = res;
+                threadAcks[eIndex].Signal();  // Signal the completion of epoch
+            }
         }
 
         static void ProcessWork()
@@ -84,7 +228,7 @@ namespace ExperimentProcess
                 Console.WriteLine("Receive workload configuration.");
                 controller.Unsubscribe("WORKLOAD_INIT");
                 controller.Subscribe("RUN_EPOCH");
-                workload = MessagePackSerializer.Deserialize<WorkloadConfiguration>(msg.contents);
+                workload = MessagePackSerializer.Deserialize<WorkloadConfiguration>(msg.content);
                 Console.WriteLine("Received workload message from controller");
                 Console.WriteLine($"detPipe per thread = {workload.pactPipeSize}, nonDetPipe per thread = {workload.actPipeSize}");
 
@@ -109,9 +253,8 @@ namespace ExperimentProcess
                     barriers[i].SignalAndWait();
                     //Wait for all threads to finish the epoch
                     threadAcks[i].Wait();
-                    var result = resultAggregator.AggregateResultForEpoch(results);
-                    msg = new NetworkMessage(Utilities.MsgType.RUN_EPOCH_ACK);
-                    msg.contents = MessagePackSerializer.Serialize(result);
+                    var result = ExperimentResultAggregator.AggregateResultForEpoch(results);
+                    msg = new NetworkMessage(Utilities.MsgType.RUN_EPOCH_ACK, MessagePackSerializer.Serialize(result));
                     sink.SendFrame(MessagePackSerializer.Serialize(msg));
                 }
 
@@ -229,154 +372,6 @@ namespace ExperimentProcess
                 //Console.WriteLine($"end: shared_requests[{eIndex}].count = {start} --> {producer_queue.Count}, det = {det}, nondet = {nonDet}");
                 isProducerFinish[eIndex] = true;   // when Count == 0, set true
                 shared_requests.Remove(eIndex);
-            }
-        }
-
-        static async void ThreadWorkAsync(object obj)
-        {
-            var input = (Tuple<int, bool>)obj;
-            int threadIndex = input.Item1;
-            var isDet = input.Item2;
-            var pipeSize = isDet ? workload.pactPipeSize : workload.actPipeSize;
-            var globalWatch = new Stopwatch();
-            var benchmark = benchmarks[threadIndex];
-            var client = clients[threadIndex % (numDetConsumer + numNonDetConsumer)];
-            Console.WriteLine($"thread = {threadIndex}, isDet = {isDet}, pipe = {pipeSize}");
-            for (int eIndex = 0; eIndex < workload.numEpochs; eIndex++)
-            {
-                int numEmit = 0;
-                int numDetCommit = 0;
-                int numNonDetCommit = 0;
-                int numOrleansTxnEmit = 0;
-                int numNonDetTransaction = 0;
-                int numDeadlock = 0;
-                int numNotSerializable = 0;
-                int numNotSureSerializable = 0;
-                var latencies = new List<double>();
-                var det_latencies = new List<double>();
-                var tasks = new List<Task<TransactionResult>>();
-                var reqs = new Dictionary<Task<TransactionResult>, TimeSpan>();
-                var queue = thread_requests[eIndex][threadIndex];
-                RequestData txn;
-                await Task.Delay(TimeSpan.FromMilliseconds(500));   // give some time for producer to populate the buffer
-
-                //Wait for all threads to arrive at barrier point
-                barriers[eIndex].SignalAndWait();
-                globalWatch.Restart();
-                long startTime = 0;
-                startTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-                do
-                {
-                    while (tasks.Count < pipeSize && queue.TryDequeue(out txn))
-                    {
-                        var asyncReqStartTime = globalWatch.Elapsed;
-                        var newTask = benchmark.NewTransaction(client, txn);
-                        numEmit++;
-                        reqs.Add(newTask, asyncReqStartTime);
-                        tasks.Add(newTask);
-                    }
-                    if (tasks.Count != 0)
-                    {
-                        var task = await Task.WhenAny(tasks);
-                        var asyncReqEndTime = globalWatch.Elapsed;
-                        bool noException = true;
-                        try
-                        {
-                            //Needed to catch exception of individual task (not caught by Snapper's exception) which would not be thrown by WhenAny
-                            await task;
-                        }
-                        catch (Exception e)    // this exception is only related to OrleansTransaction
-                        {
-                            Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
-                            noException = false;
-                        }
-                        numOrleansTxnEmit++;
-                        if (noException)
-                        {
-                            if (isDet)   // for det
-                            {
-                                if (workload.benchmark == BenchmarkType.SMALLBANK) Debug.Assert(!task.Result.exception);
-                                numDetCommit++;
-                                det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
-                            }
-                            else    // for non-det + eventual + orleans txn
-                            {
-                                numNonDetTransaction++;
-                                if (!task.Result.exception)
-                                {
-                                    numNonDetCommit++;
-                                    var totalTime = (asyncReqEndTime - reqs[task]).TotalMilliseconds;
-                                    latencies.Add(totalTime);
-                                }
-                                else if (task.Result.Exp_Serializable) numNotSerializable++;
-                                else if (task.Result.Exp_NotSureSerializable) numNotSureSerializable++;
-                                else if (task.Result.Exp_Deadlock) numDeadlock++;
-                            }
-                        }
-                        tasks.Remove(task);
-                        reqs.Remove(task);
-                    }
-                }
-                //while (numEmit < numTxn);
-                while (globalWatch.ElapsedMilliseconds < workload.epochDurationMSecs && (queue.Count != 0 || !isProducerFinish[eIndex]));
-                isEpochFinish[eIndex] = true;   // which means producer doesn't need to produce more requests
-
-                //Wait for the tasks exceeding epoch time and also count them into results
-                while (tasks.Count != 0)
-                {
-                    var task = await Task.WhenAny(tasks);
-                    var asyncReqEndTime = globalWatch.Elapsed;
-                    bool noException = true;
-                    try
-                    {
-                        await task;
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine($"Exception: {e.Message}. ");
-                        noException = false;
-                    }
-                    numOrleansTxnEmit++;
-                    if (noException)
-                    {
-                        if (isDet)   // for det
-                        {
-                            Debug.Assert(!task.Result.exception);
-                            numDetCommit++;
-                            det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
-                        }
-                        else    // for non-det + eventual + orleans txn
-                        {
-                            numNonDetTransaction++;
-                            if (!task.Result.exception)
-                            {
-                                numNonDetCommit++;
-                                var totalTime = (asyncReqEndTime - reqs[task]).TotalMilliseconds;
-                                latencies.Add(totalTime);
-                            }
-                            else if (task.Result.Exp_Serializable) numNotSerializable++;
-                            else if (task.Result.Exp_NotSureSerializable) numNotSureSerializable++;
-                            else if (task.Result.Exp_Deadlock) numDeadlock++;
-                        }
-                    }
-                    tasks.Remove(task);
-                    reqs.Remove(task);
-                }
-                long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-                globalWatch.Stop();
-                thread_requests[eIndex].Remove(threadIndex);
-                if (isDet) Console.WriteLine($"det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
-                else
-                {
-                    if (Constants.implementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}");
-                    else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
-                }
-                WorkloadResult res;
-                if (Constants.implementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResult(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
-                else res = new WorkloadResult(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
-                res.setLatency(latencies, det_latencies);
-                results[threadIndex] = res;
-                threadAcks[eIndex].Signal();  // Signal the completion of epoch
             }
         }
 

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Concurrency.Implementation.TransactionExecution;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
+using System.Runtime.Serialization;
 
 namespace TPCC.Grains
 {
@@ -23,7 +24,7 @@ namespace TPCC.Grains
     }
 
     [Serializable]
-    public class OrderData : ICloneable
+    public class OrderData : ICloneable, ISerializable
     {
         public int W_ID;
         public int D_ID;
@@ -47,6 +48,16 @@ namespace TPCC.Grains
             neworder = new List<long>(orderdata.neworder);
             order_table = new Dictionary<long, Order>(orderdata.order_table);
             orderline_table = new Dictionary<Tuple<long, int>, OrderLine>(orderdata.orderline_table);
+        }
+
+        public void GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            info.AddValue("W_ID", W_ID, typeof(int));
+            info.AddValue("D_ID", D_ID, typeof(int));
+            info.AddValue("OrderGrainID", OrderGrainID, typeof(int));
+            info.AddValue("neworder", neworder, typeof(List<long>));
+            info.AddValue("order_table", order_table, typeof(Dictionary<long, Order>));
+            info.AddValue("orderline_table", orderline_table, typeof(Dictionary<Tuple<long, int>, OrderLine>));
         }
 
         object ICloneable.Clone()

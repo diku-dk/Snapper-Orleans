@@ -1,7 +1,7 @@
 ﻿using System;
-using MessagePack;
 using Newtonsoft.Json;
 using Orleans.Transactions.Abstractions;
+using MessagePack;
 
 namespace OrleansSiloHost
 {

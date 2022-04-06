@@ -6,11 +6,12 @@ using System.Threading.Tasks;
 using Concurrency.Implementation.TransactionExecution;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
+using System.Runtime.Serialization;
 
 namespace TPCC.Grains
 {
     [Serializable]
-    public class ItemTable : ICloneable
+    public class ItemTable : ICloneable, ISerializable
     {
         public Dictionary<int, Item> items;  // key: I_ID
 
@@ -22,6 +23,11 @@ namespace TPCC.Grains
         public ItemTable(ItemTable warehouse)
         {
             items = warehouse.items;
+        }
+
+        public void GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            info.AddValue("items", items, typeof(Dictionary<int, Item>));
         }
 
         object ICloneable.Clone()

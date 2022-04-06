@@ -8,7 +8,7 @@ using Utilities;
 
 namespace Concurrency.Implementation.TransactionExecution
 {
-    public class NonDetTxnExecutor<TState>
+    public class NonDetTxnExecutor<TState> where TState : ICloneable
     {
         readonly int myID;
         readonly string myClassName;
@@ -24,8 +24,8 @@ namespace Concurrency.Implementation.TransactionExecution
 
         // hybrid execution
         // TODO: in multi-silo deployment, we need to check both local batch and global batch!!!!!!!!!!!!
-        int maxBeforeBidOnGrain;                                             // maxBeforeBid of the current executing / latest executed ACT
-        TimeSpan deadlockTimeout;                                            // detect deadlock between ACT and batches
+        int maxBeforeBidOnGrain;                                               // maxBeforeBid of the current executing / latest executed ACT
+        readonly TimeSpan deadlockTimeout;                                     // detect deadlock between ACT and batches
 
         public void CheckGC()
         {
@@ -68,16 +68,17 @@ namespace Concurrency.Implementation.TransactionExecution
             return new Tuple<int, TransactionContext>(highestCommittedBid, cxt);
         }
 
-        public async Task<bool> WaitForTurn(int globalTid)
+        public async Task<bool> WaitForTurn(int tid)
         {
             // wait for turn to execute
-            var t = myScheduler.WaitForTurn(globalTid);
+            var t = myScheduler.WaitForTurn(tid);
             await Task.WhenAny(t, Task.Delay(deadlockTimeout));
             if (t.IsCompleted)
             {
-                Debug.Assert(nonDetFuncResults.ContainsKey(globalTid) == false);
-                nonDetFuncResults.Add(globalTid, new NonDetFuncResult());
+                Debug.Assert(nonDetFuncResults.ContainsKey(tid) == false);
+                nonDetFuncResults.Add(tid, new NonDetFuncResult());
             }
+            else myScheduler.scheduleInfo.CompleteNonDetTxn(tid);
             return t.IsCompleted;
         }
 
@@ -103,6 +104,7 @@ namespace Concurrency.Implementation.TransactionExecution
             catch (Exception)   // DeadlockAvoidanceException
             {
                 nonDetFuncResults[tid].exception = true;
+                Debug.Assert(nonDetFuncResults[tid].isNoOpOnGrain && nonDetFuncResults[tid].isReadOnlyOnGrain);
                 throw;
             }
         }

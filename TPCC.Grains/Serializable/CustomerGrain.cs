@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Concurrency.Implementation.TransactionExecution;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
+using System.Runtime.Serialization;
 
 namespace TPCC.Grains
 {
@@ -23,7 +24,7 @@ namespace TPCC.Grains
     }
 
     [Serializable]
-    public class CustomerData : ICloneable
+    public class CustomerData : ICloneable, ISerializable
     {
         public int W_ID;
         public int D_ID;
@@ -34,16 +35,30 @@ namespace TPCC.Grains
             customer_table = new Dictionary<int, Customer>();
         }
 
+        object ICloneable.Clone()
+        {
+            return new CustomerData(this);
+        }
+
+        public CustomerData(SerializationInfo info, StreamingContext context)
+        {
+            W_ID = (int) info.GetValue("W_ID", typeof(int));
+            D_ID = (int)info.GetValue("D_ID", typeof(int));
+            customer_table = (Dictionary<int, Customer>)info.GetValue("customer_table", typeof(Dictionary<int, Customer>));
+        }
+
+        public void GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            info.AddValue("W_ID", W_ID, typeof(int));
+            info.AddValue("D_ID", D_ID, typeof(int));
+            info.AddValue("customer_table", customer_table, typeof(Dictionary<int, Customer>));
+        }
+
         public CustomerData(CustomerData customer_data)
         {
             W_ID = customer_data.W_ID;
             D_ID = customer_data.D_ID;
             customer_table = new Dictionary<int, Customer>(customer_data.customer_table);
-        }
-
-        object ICloneable.Clone()
-        {
-            return new CustomerData(this);
         }
     }
 

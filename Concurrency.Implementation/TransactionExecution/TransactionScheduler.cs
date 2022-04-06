@@ -9,14 +9,16 @@ namespace Concurrency.Implementation.TransactionExecution
 {
     public class TransactionScheduler
     {
+        readonly int myID;
         public ScheduleInfo scheduleInfo;
         Dictionary<int, SubBatch> batchInfo;                               // key: local bid
         Dictionary<int, int> tidToLastTid;
         Dictionary<int, TaskCompletionSource<bool>> detExecutionPromise;   // key: local tid
        
-        public TransactionScheduler()
+        public TransactionScheduler(int myID)
         {
-            scheduleInfo = new ScheduleInfo();
+            this.myID = myID;
+            scheduleInfo = new ScheduleInfo(myID);
             batchInfo = new Dictionary<int, SubBatch>();
             tidToLastTid = new Dictionary<int, int>();
             detExecutionPromise = new Dictionary<int, TaskCompletionSource<bool>>();
@@ -30,9 +32,9 @@ namespace Concurrency.Implementation.TransactionExecution
             if (detExecutionPromise.Count != 0) Console.WriteLine($"TransactionScheduler: detExecutionPromise.Count = {detExecutionPromise.Count}");
         }
 
-        public void RegisterBatch(LocalSubBatch batch)
+        public void RegisterBatch(SubBatch batch, int highestCommittedBid)
         {
-            scheduleInfo.InsertDetBatch(batch);
+            scheduleInfo.InsertDetBatch(batch, highestCommittedBid);
 
             batchInfo.Add(batch.bid, batch);
             for (int i = 0; i < batch.txnList.Count; i++)
@@ -41,6 +43,9 @@ namespace Concurrency.Implementation.TransactionExecution
                 if (i == 0) tidToLastTid.Add(tid, -1);
                 else tidToLastTid.Add(tid, batch.txnList[i - 1]);
 
+                if (i == batch.txnList.Count - 1) break;
+
+                // the last txn in the list does not need this entry
                 if (detExecutionPromise.ContainsKey(tid) == false)
                     detExecutionPromise.Add(tid, new TaskCompletionSource<bool>());
             }
@@ -48,12 +53,19 @@ namespace Concurrency.Implementation.TransactionExecution
 
         public async Task WaitForTurn(int bid, int tid)
         {
-            var depNode = scheduleInfo.GetDependingNode(bid, true);
-            await depNode.nextNodeCanExecute.Task;
-
             var depTid = tidToLastTid[tid];
-            if (depTid == -1) return;
-            await detExecutionPromise[depTid].Task;
+            if (depTid == -1)  
+            {
+                // if the tid is the first txn in the batch, wait for previous node
+                var depNode = scheduleInfo.GetDependingNode(bid);
+                await depNode.nextNodeCanExecute.Task;
+            }
+            else
+            {
+                // wait for previous det txn
+                await detExecutionPromise[depTid].Task;
+                detExecutionPromise.Remove(depTid);
+            }
         }
 
         public async Task WaitForTurn(int tid)
@@ -61,33 +73,21 @@ namespace Concurrency.Implementation.TransactionExecution
             await scheduleInfo.InsertNonDetTransaction(tid).nextNodeCanExecute.Task;
         }
 
-        // bool: if the whole batch has been completed
-        public bool AckComplete(int bid, int tid)
+        // int: the local coordID if the batch has been completed
+        public int AckComplete(int bid, int tid)
         {
-            detExecutionPromise[tid].SetResult(true);
-            detExecutionPromise.Remove(tid);
+            var txnList = batchInfo[bid].txnList;
+            Debug.Assert(txnList.First() == tid);
+            txnList.RemoveAt(0);
             tidToLastTid.Remove(tid);
 
-            var batch = batchInfo[bid];
-            Debug.Assert(batch.txnList.First() == tid);
-            batch.txnList.RemoveAt(0);
-            if (batch.txnList.Count == 0)
+            var coordID = -1;
+            if (txnList.Count == 0)
             {
-                scheduleInfo.CompleteDetBatch(bid);
-                return true;
-            } 
-            else return false;  
-        }
-
-        public void AckComplete(int tid)   // when commit/abort a non-det txn
-        {
-            scheduleInfo.CommitNonDetTxn(tid);
-        }
-
-        public int GetCoordID(int bid)
-        {
-            var coordID = batchInfo[bid].coordID;
-            batchInfo.Remove(bid);
+                coordID = batchInfo[bid].coordID;
+                batchInfo.Remove(bid);
+            }
+            else detExecutionPromise[tid].SetResult(true);
             return coordID;
         }
 
@@ -95,55 +95,48 @@ namespace Concurrency.Implementation.TransactionExecution
         // bid: current highest committed batch among all coordinators
         public void AckBatchCommit(int bid)
         {
-            try
+            if (bid == -1) return;
+            var head = scheduleInfo.detNodes[-1];
+            var node = head.next;
+            if (node == null) return;
+            while (node != null)
             {
-                if (bid == -1) return;
-                var head = scheduleInfo.detNodes[-1];
-                var node = head.next;
-                if (node == null) return;
-                while (node != null)
+                if (node.isDet)
                 {
-                    if (node.isDet)
+                    if (node.id <= bid) scheduleInfo.detNodes.Remove(node.id);
+                    else break;   // meet a det node whose id > bid
+                }
+                else
+                {
+                    if (node.next != null)
                     {
-                        if (node.id <= bid) scheduleInfo.detNodes.Remove(node.id);
-                        else break;   // meet a det node whose id > bid
-                    }
-                    else
-                    {
-                        if (node.next != null)
+                        Debug.Assert(node.next.isDet);  // next node must be a det node
+                        if (node.next.id <= bid)
                         {
-                            Debug.Assert(node.next.isDet);  // next node must be a det node
-                            if (node.next.id <= bid)
-                            {
-                                scheduleInfo.nonDetNodes.Remove(node.id);
-                                scheduleInfo.nonDetNodeIDToTxnSet.Remove(node.id);
-                            }
-                            else break;
+                            scheduleInfo.nonDetNodes.Remove(node.id);
+                            scheduleInfo.nonDetNodeIDToTxnSet.Remove(node.id);
                         }
+                        else break;
                     }
-                    if (node.next == null) break;
-                    node = node.next;
                 }
-
-                // case 1: node.isDet = true && node.id <= bid && node.next = null
-                if (node.isDet && node.id <= bid)    // node should be removed
-                {
-                    Debug.Assert(node.next == null);
-                    head.next = null;
-                }
-                else  // node.isDet = false || node.id > bid
-                {
-                    // case 2: node.isDet = true && node.id > bid
-                    // case 3: node.isDet = false && node.next = null
-                    // case 4: node.isDet = false && node.next.id > bid
-                    Debug.Assert((node.isDet && node.id > bid) || (!node.isDet && (node.next == null || node.next.id > bid)));
-                    head.next = node;
-                    node.prev = head;
-                }
+                if (node.next == null) break;
+                node = node.next;
             }
-            catch (Exception e)
+
+            // case 1: node.isDet = true && node.id <= bid && node.next = null
+            if (node.isDet && node.id <= bid)    // node should be removed
             {
-                Console.WriteLine($"\n Exception(ackBatchCommit):: exception {e.Message}, {e.StackTrace}");
+                Debug.Assert(node.next == null);
+                head.next = null;
+            }
+            else  // node.isDet = false || node.id > bid
+            {
+                // case 2: node.isDet = true && node.id > bid
+                // case 3: node.isDet = false && node.next = null
+                // case 4: node.isDet = false && node.next.id > bid
+                Debug.Assert((node.isDet && node.id > bid) || (!node.isDet && (node.next == null || node.next.id > bid)));
+                head.next = node;
+                node.prev = head;
             }
         }
     }
