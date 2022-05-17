@@ -7,6 +7,7 @@ using Concurrency.Interface.Configuration;
 using Concurrency.Interface.Logging;
 using Concurrency.Interface.Coordinator;
 using System.Diagnostics;
+using System;
 
 namespace Concurrency.Implementation.Configuration
 {
@@ -19,8 +20,7 @@ namespace Concurrency.Implementation.Configuration
 
         public override Task OnActivateAsync()
         {
-            var myID = (int)this.GetPrimaryKeyLong();
-            siloID = LocalCoordGrainPlacementHelper.MapCoordIDToSiloID(myID);
+            siloID = (int)this.GetPrimaryKeyLong();
             tokenEnabled = false;
             return base.OnActivateAsync();
         }
@@ -57,6 +57,7 @@ namespace Concurrency.Implementation.Configuration
 
         public async Task ConfigLocalEnv()
         {
+            Console.WriteLine($"local config grain {siloID} is initiated, silo ID = {siloID}");
             if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numLoggerPerSilo);
 
             // in this case, all coordinators locate in a separate silo
@@ -70,6 +71,7 @@ namespace Concurrency.Implementation.Configuration
                 var coordID = i + firstCoordID;
                 var coord = GrainFactory.GetGrain<ILocalCoordGrain>(coordID);
                 tasks.Add(coord.SpawnLocalCoordGrain());
+                Console.WriteLine($"local config try start local coord {coordID}");
             }
             await Task.WhenAll(tasks);
 

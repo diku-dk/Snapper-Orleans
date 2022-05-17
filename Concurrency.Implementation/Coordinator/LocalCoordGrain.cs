@@ -293,7 +293,7 @@ namespace Concurrency.Implementation.Coordinator
         {
             var neighborID = LocalCoordGrainPlacementHelper.MapCoordIDToNeighborID(myID);
             neighborCoord = GrainFactory.GetGrain<ILocalCoordGrain>(neighborID);
-
+            Console.WriteLine($"set local coord {myID}'s neighbor as {neighborID}");
             var siloID = LocalCoordGrainPlacementHelper.MapCoordIDToSiloID(myID);
             var firstCoordID = LocalCoordGrainPlacementHelper.MapSiloIDToFirstLocalCoordID(siloID);
             for (int i = 0; i < Constants.numLocalCoordPerSilo; i++)

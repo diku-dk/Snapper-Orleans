@@ -26,7 +26,7 @@
         //                 all global coordinators locate in a separate silo (num = numGlobalCoord)
         //                 1 global config grain
         //                 1 local config grain per silo
-        public const bool hierarchicalCoord = false;
+        public const bool hierarchicalCoord = true;
 
         // Silo config
         public const int numSilo = 2;
