@@ -6,7 +6,7 @@ namespace Utilities
     {
         public static int MapCoordIDToNeighborID(int coordID)
         {
-            return (coordID + 1) % Constants.numLocalCoordPerSilo;
+            return (coordID + 1) % Constants.numGlobalCoord;
         }
     }
 

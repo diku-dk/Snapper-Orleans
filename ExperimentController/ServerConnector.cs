@@ -51,13 +51,8 @@ namespace ExperimentController
 
         async void InitiateClientAndServerAsync()
         {
-            if (client == null)
-            {
-                ClientConfiguration config = new ClientConfiguration();
-                if (Constants.localCluster) client = await config.StartClientWithRetries();
-                else client = await config.StartClientWithRetriesToCluster();
-            }
-
+            client = await ClientConfiguration.StartOrleansClient();
+            
             if (Constants.implementationType == ImplementationType.SNAPPER)
             {
                 globalConfigGrain = client.GetGrain<IGlobalConfigGrain>(0);

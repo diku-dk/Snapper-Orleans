@@ -34,7 +34,7 @@ namespace ExperimentProcess
             this.IOCount = IOCount;
             results = new WorkloadResult[numEpochs, Constants.numWorker];
             percentilesToCalculate = new int[] { 25, 50, 75, 90, 99 };
-            filePath = Constants.dataPath + "result.txt";
+            filePath = Constants.resultPath;
         }
 
         public void SetResult(int i, int j, WorkloadResult result)

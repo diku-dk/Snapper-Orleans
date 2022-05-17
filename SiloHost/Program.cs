@@ -18,33 +18,51 @@ namespace OrleansSiloHost
 {
     public class Program
     {
-        static private int siloPort;    // silo-to-silo endpoint
-        static private int gatewayPort; // client-to-silo endpoint
+        static private int siloPort = 11111;    // silo-to-silo endpoint
+        static private int gatewayPort = 30000; // client-to-silo endpoint
         static readonly bool enableOrleansTxn = Constants.implementationType == ImplementationType.ORLEANSTXN ? true : false;
 
         public static int Main(string[] args)
         {
             if (Constants.multiSilo)
             {
-                // var siloID = 0;
                 var siloID = int.Parse(args[0]);
-                siloPort = 11111 + siloID;
-                gatewayPort = 30000 + siloID;
-            }
-            else
-            {
-                siloPort = 11111;
-                gatewayPort = 30000;
+                siloPort += siloID;
+                gatewayPort += siloID;
             }
             return RunMainAsync().Result;
         }
 
-        private static async Task<int> RunMainAsync()
+        static async Task<int> RunMainAsync()
         {
             try
             {
-                var builder = new SiloHostBuilder();
-                if (Constants.localCluster == false)
+                var siloBuilder = new SiloHostBuilder()
+                    .Configure<ClusterOptions>(options =>
+                    {
+                        options.ClusterId = Constants.ClusterID;
+                        options.ServiceId = Constants.ServiceID;
+                    })
+                    .Configure<EndpointOptions>(options =>
+                    {
+                        options.SiloPort = siloPort;
+                        options.GatewayPort = gatewayPort;
+                    })
+                    .ConfigureServices(ConfigureServices);
+                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+
+                if (Constants.localCluster)
+                {
+                    if (Constants.multiSilo)
+                    {
+                        var primarySiloEndpoint = new IPEndPoint(IPAddress.Loopback, 11111);
+                        siloBuilder.UseDevelopmentClustering(primarySiloEndpoint)
+                            // The IP address used for clustering / to be advertised in membership tables
+                            .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback);
+                    }
+                    else siloBuilder.UseLocalhostClustering();
+                }
+                else
                 {
                     Action<DynamoDBClusteringOptions> dynamoDBOptions = options =>
                     {
@@ -56,44 +74,31 @@ namespace OrleansSiloHost
                         options.ReadCapacityUnits = 10;
                     };
 
-                    builder.UseDynamoDBClustering(dynamoDBOptions);
+                    siloBuilder
+                        .UseDynamoDBClustering(dynamoDBOptions)
+                        .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(GetLocalIPAddress()));
                 }
-                else builder.UseLocalhostClustering();
-
-                builder
-                    .Configure<ClusterOptions>(options =>
-                    {
-                        options.ClusterId = Constants.ClusterSilo;
-                        options.ServiceId = Constants.ServiceID;
-                    })
-                    .Configure<EndpointOptions>(options =>
-                    {
-                        options.SiloPort = siloPort;
-                        options.GatewayPort = gatewayPort;
-                        //options.AdvertisedIPAddress = IPAddress.Parse(GetLocalIPAddress());  // IP Address to advertise in the cluster
-                    })
-                    .ConfigureServices(ConfigureServices);
-                    //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
 
                 if (enableOrleansTxn)
                 {
-                    if (Constants.loggingType == LoggingType.NOLOGGING) builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
-                    else builder.AddFileTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                    if (Constants.loggingType == LoggingType.NOLOGGING)
+                        siloBuilder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                    else siloBuilder.AddFileTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
 
-                    builder
+                    siloBuilder
                         //.Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromSeconds(20))
                         //.Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(200))
                         //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20))
                         .UseTransactions();
                 }
-                else builder.AddMemoryGrainStorageAsDefault();
+                else siloBuilder.AddMemoryGrainStorageAsDefault();
 
-                var host = builder.Build();
-                await host.StartAsync();
+                var siloHost = siloBuilder.Build();
+                await siloHost.StartAsync();
 
                 Console.WriteLine("Press Enter to terminate...");
                 Console.ReadLine();
-                await host.StopAsync();
+                await siloHost.StopAsync();
                 return 0;
             }
             catch (Exception ex)
@@ -103,7 +108,7 @@ namespace OrleansSiloHost
             }
         }
 
-        private static void ConfigureServices(IServiceCollection services)
+        static void ConfigureServices(IServiceCollection services)
         {
             // all the singletons have one instance per silo host??
 
@@ -127,7 +132,7 @@ namespace OrleansSiloHost
 
         }
 
-        private static string GetLocalIPAddress()
+        static string GetLocalIPAddress()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
             foreach (var ip in host.AddressList) if (ip.AddressFamily == AddressFamily.InterNetwork) return ip.ToString();

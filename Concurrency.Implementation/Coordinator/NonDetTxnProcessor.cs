@@ -11,7 +11,7 @@ namespace Concurrency.Implementation.Coordinator
         int numReservedTid;
         int nextAvailableTid;
         float smoothingFactor;
-        List<TaskCompletionSource<int>> nonDetRequests;                                  // int: tid assigned to the ACT
+        List<TaskCompletionSource<int>> nonDetRequests;    // int: tid assigned to the ACT
 
         public NonDetTxnProcessor(int myID)
         {
@@ -48,7 +48,7 @@ namespace Concurrency.Implementation.Coordinator
 
         public void EmitNonDetTransactions(BasicToken token)
         {
-            var waitingTxns = nonDetRequests.Count;
+            var waitingTxns = nonDetRequests.Count; 
 
             // assign tids to waited ACTs
             foreach (var txn in nonDetRequests) txn.SetResult(++token.lastEmitTid);

@@ -401,12 +401,8 @@ namespace ExperimentProcess
         static async Task InitializeClients()
         {
             clients = new IClusterClient[numDetConsumer + numNonDetConsumer];
-            var clientConfig = new ClientConfiguration();
             for (int i = 0; i < numDetConsumer + numNonDetConsumer; i++)
-            {
-                if (Constants.localCluster) clients[i] = await clientConfig.StartClientWithRetries();
-                else clients[i] = await clientConfig.StartClientWithRetriesToCluster();
-            }
+                clients[i] = await ClientConfiguration.StartOrleansClient();
         }
 
         static void InitializeConsumerThreads()

@@ -188,11 +188,8 @@ namespace ExperimentProcess
         private  int SelectNumSilo(int txnSize)
         {
             //Debug.Assert(txnSize == 4);
-            // 1 silo: 0%
-            // 2 silo: 100%
-            // 4 silo: 0%
             var sample = numSiloDist.Sample();
-            if (sample < 0) return 2;
+            if (sample < 100) return 2;
             else return 1;
         }
 

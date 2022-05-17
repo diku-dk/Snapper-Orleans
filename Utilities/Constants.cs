@@ -29,7 +29,7 @@
         public const bool hierarchicalCoord = false;
 
         // Silo config
-        public const int numSilo = 1;
+        public const int numSilo = 2;
         public const int numCPUBasic = 4;
         public const int numCPUPerSilo = 4;
         public const bool multiSilo = numSilo > 1;
@@ -60,8 +60,9 @@
         public const string TPCC_namespace = "TPCC.Grain.";
         public const string SmallBank_namespace = "SmallBank.Grain.";
 
-        public const string logPath = @"C:\Users\jhs316\Desktop\log\";
-        public const string dataPath = @"C:\Users\jhs316\Desktop\data\";
+        public const string dataPath = @"..\Snapper-Orleans\data\";
+        public const string logPath = dataPath + @"log\";
+        public const string resultPath = dataPath + "result.txt";
 
         public const string controller_Local_SinkAddress = "@tcp://localhost:5558";
         public const string controller_Local_WorkerAddress = "@tcp://localhost:5575";
@@ -74,8 +75,7 @@
         public const string worker_Remote_ControllerAddress = ">tcp://1.1.1.1:5575";  // controller public IP
 
         public const bool localCluster = true;
-        public const string LocalSilo = "dev";
-        public const string ClusterSilo = "ec2";
+        public const string ClusterID = "cluster";
         public const string ServiceID = "Snapper";
         public const string LogTable = "SnapperLog";
         public const string ServiceRegion = "";

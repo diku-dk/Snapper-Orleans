@@ -308,7 +308,7 @@ namespace Concurrency.Implementation.Coordinator
         {
             var neighborID = GlobalCoordGrainPlacementHelper.MapCoordIDToNeighborID(myID);
             neighborCoord = GrainFactory.GetGrain<ILocalCoordGrain>(neighborID);
-
+            Console.WriteLine($"set local coord {myID}'s neighbor as {neighborID}");
             for (int i = 0; i < Constants.numGlobalCoord; i++)
             {
                 var coord = GrainFactory.GetGrain<ILocalCoordGrain>(i);
