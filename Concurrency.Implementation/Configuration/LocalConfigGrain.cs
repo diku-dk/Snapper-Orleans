@@ -14,9 +14,10 @@ namespace Concurrency.Implementation.Configuration
     [LocalConfigGrainPlacementStrategy]
     public class LocalConfigGrain : Grain, ILocalConfigGrain
     {
-        private int siloID;
-        private bool tokenEnabled;
-        private readonly ILoggerGroup loggerGroup;  // this logger group is only accessible within this silo host
+        int siloID;
+        bool tokenEnabled;
+        readonly ILoggerGroup loggerGroup;  // this logger group is only accessible within this silo host
+        readonly ICoordMap coordMap;
 
         public override Task OnActivateAsync()
         {
@@ -25,9 +26,10 @@ namespace Concurrency.Implementation.Configuration
             return base.OnActivateAsync();
         }
 
-        public LocalConfigGrain(ILoggerGroup loggerGroup)   // dependency injection
+        public LocalConfigGrain(ILoggerGroup loggerGroup, ICoordMap coordMap)   // dependency injection
         {
             this.loggerGroup = loggerGroup;
+            this.coordMap = coordMap;
         }
 
         public Task SetIOCount()
@@ -61,6 +63,7 @@ namespace Concurrency.Implementation.Configuration
             if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numLoggerPerSilo);
 
             // in this case, all coordinators locate in a separate silo
+            coordMap.Init(GrainFactory);
             if (Constants.multiSilo && Constants.hierarchicalCoord == false) return;
 
             // initialize local coordinators in this silo
@@ -71,7 +74,6 @@ namespace Concurrency.Implementation.Configuration
                 var coordID = i + firstCoordID;
                 var coord = GrainFactory.GetGrain<ILocalCoordGrain>(coordID);
                 tasks.Add(coord.SpawnLocalCoordGrain());
-                Console.WriteLine($"local config try start local coord {coordID}");
             }
             await Task.WhenAll(tasks);
 

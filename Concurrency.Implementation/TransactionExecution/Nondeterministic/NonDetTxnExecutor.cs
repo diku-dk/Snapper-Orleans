@@ -20,12 +20,15 @@ namespace Concurrency.Implementation.TransactionExecution
         TransactionScheduler myScheduler;
 
         // ACT execution
-        Dictionary<int, NonDetFuncResult> nonDetFuncResults;                   // key: global ACT tid
+        Dictionary<int, NonDetFuncResult> nonDetFuncResults;    // key: global ACT tid
 
         // hybrid execution
         // TODO: in multi-silo deployment, we need to check both local batch and global batch!!!!!!!!!!!!
-        int maxBeforeBidOnGrain;                                               // maxBeforeBid of the current executing / latest executed ACT
-        readonly TimeSpan deadlockTimeout;                                     // detect deadlock between ACT and batches
+        // NOTICE: if every PACT awaits every grain call, then if there is no deadlock, there is also no global sesrializability issue
+        // In Snapper, every ACT's grain call must await, because Snapper needs to collect grain access info
+        // In Snapper, if we allow PACT to not await every grain call, we must do serailizability check for every ACT
+        int maxBeforeBidOnGrain;                                // maxBeforeBid of the current executing / latest executed ACT
+        readonly TimeSpan deadlockTimeout;                      // detect deadlock between ACT and batches
 
         public void CheckGC()
         {

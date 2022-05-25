@@ -24,9 +24,21 @@ namespace Concurrency.Implementation.Logging
             }
         }
 
-        public ILogger GetSingleton(int index)
+        public ILogger GetLogger(int index)
         {
             return loggers[index];
+        }
+
+        public void GetLoggingProtocol(int myID, out ILoggingProtocol log)
+        {
+            if (Constants.loggingType == LoggingType.LOGGER)
+            {
+                var loggerID = Helper.MapGrainIDToServiceID(myID, loggers.Length);
+                log = new LoggingProtocol(GetType().ToString(), myID, GetLogger(loggerID));
+            }
+            else if (Constants.loggingType == LoggingType.ONGRAIN)
+                log = new LoggingProtocol(GetType().ToString(), myID);
+            else log = null;
         }
 
         public long GetIOCount()

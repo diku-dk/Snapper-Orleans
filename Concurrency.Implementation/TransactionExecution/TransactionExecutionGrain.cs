@@ -22,8 +22,8 @@ namespace Concurrency.Implementation.TransactionExecution
         // grain basic info
         int myID;
         int siloID;
-        string myClassName;
-        static IGrainFactory myGrainFactory;
+        readonly ICoordMap coordMap;
+        readonly string myClassName;
         static int myLocalCoordID;
         static ILocalCoordGrain myLocalCoord;   // use this coord to get tid for local transactions
         static IGlobalCoordGrain myGlobalCoord;
@@ -46,9 +46,10 @@ namespace Concurrency.Implementation.TransactionExecution
         NonDetTxnExecutor<TState> nonDetTxnExecutor;
         NonDetCommitter<TState> nonDetCommitter;
 
-        public TransactionExecutionGrain(ILoggerGroup loggerGroup, string myClassName)
+        public TransactionExecutionGrain(ILoggerGroup loggerGroup, ICoordMap coordMap, string myClassName)
         {
             this.loggerGroup = loggerGroup;
+            this.coordMap = coordMap;
             this.myClassName = myClassName;
         }
 
@@ -70,21 +71,11 @@ namespace Concurrency.Implementation.TransactionExecution
             highestCommittedBid = -1;
             
             // grain basic info
-            myGrainFactory = GrainFactory;
             myID = (int)this.GetPrimaryKeyLong();
             siloID = TransactionExecutionGrainPlacementHelper.MapGrainIDToSilo(myID);
 
             // transaction execution
-            if (Constants.loggingType == LoggingType.LOGGER)
-            {
-                var loggerID = Helper.MapGrainIDToServiceID(myID, Constants.numLoggerPerSilo);
-                var logger = loggerGroup.GetSingleton(loggerID);
-                log = new LoggingProtocol(GetType().ToString(), myID, logger);
-            }
-            else if (Constants.loggingType == LoggingType.ONGRAIN)
-                log = new LoggingProtocol(GetType().ToString(), myID);
-            else log = null;
-
+            loggerGroup.GetLoggingProtocol(myID, out log);
             myScheduler = new TransactionScheduler(myID);
             state = new HybridState<TState>();
             batchCommit = new Dictionary<int, TaskCompletionSource<bool>>();
@@ -100,7 +91,7 @@ namespace Concurrency.Implementation.TransactionExecution
                     myLocalCoord = GrainFactory.GetGrain<ILocalCoordGrain>(myLocalCoordID);
 
                     var globalCoordID = Helper.MapGrainIDToServiceID(myID, Constants.numGlobalCoord);
-                    myGlobalCoord = myGrainFactory.GetGrain<IGlobalCoordGrain>(globalCoordID);
+                    myGlobalCoord = GrainFactory.GetGrain<IGlobalCoordGrain>(globalCoordID);
                 }
                 else   // all local coordinators are put in a separate silo
                 {
@@ -117,10 +108,11 @@ namespace Concurrency.Implementation.TransactionExecution
             detTxnExecutor = new DetTxnExecutor<TState>(
                 myID,
                 siloID,
+                coordMap,
                 myLocalCoordID,
                 myLocalCoord,
                 myGlobalCoord,
-                myGrainFactory,
+                GrainFactory,
                 myScheduler,
                 state,
                 log);
@@ -138,16 +130,17 @@ namespace Concurrency.Implementation.TransactionExecution
                 coordinatorMap,
                 state,
                 log,
-                myGrainFactory);
+                GrainFactory);
 
             return Task.CompletedTask;
         }
 
-        /// <summary> Call this interface to submit a PACT to Snapper </summary>
+        // Notice: the current implementation assumes each actor will be accessed at most once
         public async Task<TransactionResult> StartTransaction(string startFunc, object funcInput, List<int> grainAccessInfo, List<string> grainClassName)
         {
             var cxtInfo = await detTxnExecutor.GetDetContext(grainAccessInfo, grainClassName);
             var cxt = cxtInfo.Item2;
+
             if (highestCommittedBid < cxtInfo.Item1)
             {
                 highestCommittedBid = cxtInfo.Item1;
@@ -165,7 +158,6 @@ namespace Concurrency.Implementation.TransactionExecution
             return txnResult;
         }
 
-        /// <summary> Call this interface to submit an ACT to Snapper </summary>
         public async Task<TransactionResult> StartTransaction(string startFunc, object funcInput)
         {
             var cxtInfo = await nonDetTxnExecutor.GetNonDetContext();
@@ -276,7 +268,7 @@ namespace Concurrency.Implementation.TransactionExecution
         {
             await detTxnExecutor.WaitForTurn(cxt);
             var txnRes = await InvokeFunction(call, cxt);   // execute the function call;
-            await detTxnExecutor.FinishExecuteDetTxn(cxt.localTid, cxt.localBid);
+            await detTxnExecutor.FinishExecuteDetTxn(cxt);
             detTxnExecutor.CleanUp(cxt.localTid);
             return txnRes.resultObj;
         }

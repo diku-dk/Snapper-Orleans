@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Concurrency.Implementation.TransactionExecution;
 using Concurrency.Interface.Logging;
 using System.Runtime.Serialization;
+using Concurrency.Interface.Coordinator;
 
 namespace TPCC.Grains
 {
@@ -39,7 +40,7 @@ namespace TPCC.Grains
     // each DistrictGrain only represents one district in an warehouse
     public class DistrictGrain : TransactionExecutionGrain<DistrictInfo>, IDistrictGrain
     {
-        public DistrictGrain(ILoggerGroup loggerGroup) : base(loggerGroup, "TPCC.Grains.DistrictGrain")
+        public DistrictGrain(ILoggerGroup loggerGroup, ICoordMap coordMap) : base(loggerGroup, coordMap, "TPCC.Grains.DistrictGrain")
         {
         }
 

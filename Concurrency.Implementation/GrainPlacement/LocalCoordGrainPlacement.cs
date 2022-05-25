@@ -22,7 +22,6 @@ namespace Concurrency.Implementation.GrainPlacement
                 {
                     var coordID = (int)target.GrainIdentity.PrimaryKeyLong;
                     silo = LocalCoordGrainPlacementHelper.MapCoordIDToSiloID(coordID);
-                    Console.WriteLine($"put local coord {coordID} to silo {silo}");
                 }
             }
             return Task.FromResult(silos[silo]);

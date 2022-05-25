@@ -5,7 +5,8 @@ namespace Concurrency.Interface.Logging
     public interface ILoggerGroup
     {
         void Init(int numLogger);
-        ILogger GetSingleton(int index);
+        ILogger GetLogger(int index);
+        void GetLoggingProtocol(int myID, out ILoggingProtocol log);
         long GetIOCount();
         void SetIOCount();
     }

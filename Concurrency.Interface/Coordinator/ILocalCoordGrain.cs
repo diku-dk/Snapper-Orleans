@@ -2,7 +2,6 @@
 using Utilities;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System;
 
 namespace Concurrency.Interface.Coordinator
 {
@@ -20,8 +19,10 @@ namespace Concurrency.Interface.Coordinator
 
         Task WaitBatchCommit(int bid);
 
+        Task AckGlobalBatchCommit(int globalBid);
+
         // for global transactions (hierarchical architecture)
-        Task<TransactionRegistInfo> NewGlobalTransaction(int globalTid, List<int> grainAccessInfo);
+        Task<TransactionRegistInfo> NewGlobalTransaction(int globalBid, int globalTid, List<int> grainAccessInfo, List<string> grainClassName);
         Task ReceiveBatchSchedule(SubBatch batch);
 
         Task CheckGC();

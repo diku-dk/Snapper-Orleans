@@ -25,6 +25,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
 
         public void CheckGC()
         {
+            if (transactionList.size != 0) Console.WriteLine($"TimestampTransactionalState: transactionList.Count = {transactionList.size}");
             if (transactionMap.Count != 0) Console.WriteLine($"TimestampTransactionalState: transactionMap.Count = {transactionMap.Count}");
             if (readDependencyMap.Count != 0) Console.WriteLine($"TimestampTransactionalState: readDependencyMap.Count = {readDependencyMap.Count}");
         }

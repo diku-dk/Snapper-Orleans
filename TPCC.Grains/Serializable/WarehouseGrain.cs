@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Concurrency.Implementation.TransactionExecution;
 using Concurrency.Interface.Logging;
 using System.Runtime.Serialization;
+using Concurrency.Interface.Coordinator;
 
 namespace TPCC.Grains
 {
@@ -35,7 +36,7 @@ namespace TPCC.Grains
 
     public class WarehouseGrain : TransactionExecutionGrain<WarehouseInfo>, IWarehouseGrain
     {
-        public WarehouseGrain(ILoggerGroup loggerGroup) : base(loggerGroup, "TPCC.Grains.WarehouseGrain")
+        public WarehouseGrain(ILoggerGroup loggerGroup, ICoordMap coordMap) : base(loggerGroup, coordMap, "TPCC.Grains.WarehouseGrain")
         {
         }
 

@@ -1,16 +1,14 @@
 ﻿using System;
 using Orleans;
 using Utilities;
-using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
-using Concurrency.Implementation.Logging;
 using Concurrency.Interface.Coordinator;
 using Concurrency.Implementation.GrainPlacement;
 using Concurrency.Interface.TransactionExecution;
 using Orleans.Concurrency;
-using System.Threading;
+using System.Linq;
 
 namespace Concurrency.Implementation.Coordinator
 {
@@ -20,29 +18,30 @@ namespace Concurrency.Implementation.Coordinator
     {
         // coord basic info
         int myID;
-        int highestCommittedBid;
-        ILoggerGroup loggerGroup;
-        ILoggingProtocol log;
+        readonly ICoordMap coordMap;
         ILocalCoordGrain neighborCoord;
-        List<ILocalCoordGrain> coordList;
         Dictionary<int, string> grainClassName;                                          // grainID, grainClassName
+        ILoggingProtocol log;
+        readonly ILoggerGroup loggerGroup;
 
         // PACT
         DetTxnProcessor detTxnProcessor;
-        Dictionary<int, int> bidToLastBid;                                               // <bid, lastBid>
-        Dictionary<int, int> bidToLastCoordID;                                           // <bid, coordID who emit this bid's lastBid>
-        Dictionary<int, int> expectedAcksPerBatch; 
-        Dictionary<int, TaskCompletionSource<bool>> batchCommit;
+        Dictionary<int, int> expectedAcksPerBatch;
         Dictionary<int, Dictionary<int, SubBatch>> bidToSubBatches;
 
+        // Hierarchical Architecture
         // for global batches sent from global coordinators
         SortedDictionary<int, SubBatch> globalBatchInfo;                                 // key: global bid
-        Dictionary<int, CountdownEvent> globalBatchPromise;                              // key: global bid, make sure we have received all transactions' grainAccessInfo
-        Dictionary<int, List<int>> globalTransactionInfo;                                // <global tid, grainAccessInfo>
+        Dictionary<int, Dictionary<int, List<int>>> globalTransactionInfo;               // <global bid, <global tid, grainAccessInfo>>
         Dictionary<int, TaskCompletionSource<Tuple<int, int>>> globalDetRequestPromise;  // <global tid, <local bid, local tid>>
         Dictionary<int, int> localBidToGlobalBid;
         Dictionary<int, Dictionary<int, int>> globalTidToLocalTidPerBatch;               // local bid, <global tid, local tid>
-
+        // for global batch commitment
+        int highestCommittedGlobalBid;
+        Dictionary<int, int> globalBidToGlobalCoordID;
+        Dictionary<int, bool> globalBidToIsPrevBatchGlobal;                              // global bid, if this batch's previous one is also a global batch
+        Dictionary<int, TaskCompletionSource<bool>> globalBatchCommit;                   // global bid, commit promise
+        
         // ACT
         NonDetTxnProcessor nonDetTxnProcessor;
 
@@ -50,67 +49,76 @@ namespace Concurrency.Implementation.Coordinator
         {
             detTxnProcessor.CheckGC();
             nonDetTxnProcessor.CheckGC();
-            if (bidToLastBid.Count != 0) Console.WriteLine($"LocalCoord {myID}: bidToLastBid.Count = {bidToLastBid.Count}");
-            if (bidToLastCoordID.Count != 0) Console.WriteLine($"LocalCoord {myID}: bidToLastCoordID.Count = {bidToLastCoordID.Count}");
             if (expectedAcksPerBatch.Count != 0) Console.WriteLine($"LocalCoord {myID}: expectedAcksPerBatch.Count = {expectedAcksPerBatch.Count}");
-            if (batchCommit.Count != 0) Console.WriteLine($"LocalCoord {myID}: batchCommit.Count = {batchCommit.Count}");
             if (bidToSubBatches.Count != 0) Console.WriteLine($"LocalCoord {myID}: batchSchedulePerGrain.Count = {bidToSubBatches.Count}");
             if (globalBatchInfo.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalBatchInfo.Count = {globalBatchInfo.Count}");
-            if (globalBatchPromise.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalBatchPromise.Count = {globalBatchPromise.Count}");
             if (globalTransactionInfo.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalTransactionInfo.Count = {globalTransactionInfo.Count}");
             if (globalDetRequestPromise.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalDetRequestPromise.Count = {globalDetRequestPromise.Count}");
             if (localBidToGlobalBid.Count != 0) Console.WriteLine($"LocalCoord {myID}: localBidToGlobalBid.Count = {localBidToGlobalBid.Count}");
             if (globalTidToLocalTidPerBatch.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalTidToLocalTidPerBatch.Count = {globalTidToLocalTidPerBatch.Count}");
+            if (globalBidToIsPrevBatchGlobal.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalBidToIsPrevBatchGlobal.Count = {globalBidToIsPrevBatchGlobal.Count}");
+            if (globalBatchCommit.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalBatchCommit.Count = {globalBatchCommit.Count}");
+            if (globalBidToGlobalCoordID.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalBidToGlobalCoordID.Count = {globalBidToGlobalCoordID.Count}");
             return Task.CompletedTask;
         }
 
         public override Task OnActivateAsync()
         {
             myID = (int)this.GetPrimaryKeyLong();
-            highestCommittedBid = -1;
-            coordList = new List<ILocalCoordGrain>();
+            highestCommittedGlobalBid = -1;
             grainClassName = new Dictionary<int, string>();
-            bidToLastBid = new Dictionary<int, int>();
-            bidToLastCoordID = new Dictionary<int, int>();
             expectedAcksPerBatch = new Dictionary<int, int>();
-            batchCommit = new Dictionary<int, TaskCompletionSource<bool>>();
             bidToSubBatches = new Dictionary<int, Dictionary<int, SubBatch>>();
             globalBatchInfo = new SortedDictionary<int, SubBatch>();
-            globalBatchPromise = new Dictionary<int, CountdownEvent>();
-            globalTransactionInfo = new Dictionary<int, List<int>>();
+            globalTransactionInfo = new Dictionary<int, Dictionary<int, List<int>>>();
             globalDetRequestPromise = new Dictionary<int, TaskCompletionSource<Tuple<int, int>>>();
             localBidToGlobalBid = new Dictionary<int, int>();
             globalTidToLocalTidPerBatch = new Dictionary<int, Dictionary<int, int>>();
+            globalBidToIsPrevBatchGlobal = new Dictionary<int, bool>();
+            globalBatchCommit = new Dictionary<int, TaskCompletionSource<bool>>();
+            globalBidToGlobalCoordID = new Dictionary<int, int>();
             nonDetTxnProcessor = new NonDetTxnProcessor(myID);
             detTxnProcessor = new DetTxnProcessor(
                 myID,
-                bidToLastBid,
-                bidToLastCoordID,
+                coordMap,
                 expectedAcksPerBatch,
                 bidToSubBatches);
             return base.OnActivateAsync();
         }
 
-        public LocalCoordGrain(ILoggerGroup loggerGroup)
+        public LocalCoordGrain(ILoggerGroup loggerGroup, ICoordMap coordMap)
         {
             this.loggerGroup = loggerGroup;
+            this.coordMap = coordMap;
         }
 
         public Task ReceiveBatchSchedule(SubBatch batch)
         {
-            globalBatchInfo.Add(batch.bid, batch);
-            var countDown = new CountdownEvent(batch.txnList.Count);
-            globalBatchPromise.Add(batch.bid, countDown);
+            var globalBid = batch.bid;
+            globalBatchInfo.Add(globalBid, batch);
+            globalBidToGlobalCoordID.Add(globalBid, batch.coordID);
+            if (globalTransactionInfo.ContainsKey(globalBid) == false)
+                globalTransactionInfo.Add(globalBid, new Dictionary<int, List<int>>());
             return Task.CompletedTask;
         }
 
-        public async Task<TransactionRegistInfo> NewGlobalTransaction(int globalTid, List<int> grainAccessInfo)
+        public async Task<TransactionRegistInfo> NewGlobalTransaction(int globalBid, int globalTid, List<int> grainAccessInfo, List<string> grainClassName)
         {
-            globalTransactionInfo.Add(globalTid, grainAccessInfo);
+            for (int i = 0; i < grainAccessInfo.Count; i++)
+            {
+                var grainID = grainAccessInfo[i];
+                if (this.grainClassName.ContainsKey(grainID) == false)
+                    this.grainClassName.Add(grainID, grainClassName[i]);
+            }
+                
+            if (globalTransactionInfo.ContainsKey(globalBid) == false)
+                globalTransactionInfo.Add(globalBid, new Dictionary<int, List<int>>());
+            globalTransactionInfo[globalBid].Add(globalTid, grainAccessInfo);
+            
             var promise = new TaskCompletionSource<Tuple<int, int>>();
             globalDetRequestPromise.Add(globalTid, promise);
             await promise.Task;
-            return new TransactionRegistInfo(promise.Task.Result.Item1, promise.Task.Result.Item2, highestCommittedBid);
+            return new TransactionRegistInfo(promise.Task.Result.Item1, promise.Task.Result.Item2, detTxnProcessor.highestCommittedBid);
         }
 
         // for PACT
@@ -124,23 +132,26 @@ namespace Concurrency.Implementation.Coordinator
                     this.grainClassName.Add(grain, grainClassName[i]);
             }
             var id = await task;
-            return new TransactionRegistInfo(id.Item1, id.Item2, highestCommittedBid);
+            return new TransactionRegistInfo(id.Item1, id.Item2, detTxnProcessor.highestCommittedBid);
         }
 
         // for ACT
         public async Task<TransactionRegistInfo> NewTransaction()
         {
             var tid = await nonDetTxnProcessor.NewNonDet();
-            return new TransactionRegistInfo(tid, highestCommittedBid);
+            return new TransactionRegistInfo(tid, detTxnProcessor.highestCommittedBid);
         }
 
         public async Task PassToken(LocalToken token)
         {
-            highestCommittedBid = Math.Max(highestCommittedBid, token.highestCommittedBid);
             var curBatchID = detTxnProcessor.GenerateBatch(token);
             var curBatchIDs = ProcessGlobalBatch(token);
             nonDetTxnProcessor.EmitNonDetTransactions(token);
-            detTxnProcessor.GarbageCollectTokenInfo(highestCommittedBid , token);
+
+            if (detTxnProcessor.highestCommittedBid > token.highestCommittedBid)
+                detTxnProcessor.GarbageCollectTokenInfo(token);
+            else detTxnProcessor.highestCommittedBid = token.highestCommittedBid;
+
             _ = neighborCoord.PassToken(token);
             if (curBatchID != -1) await EmitBatch(curBatchID);
             if (curBatchIDs.Count != 0)
@@ -150,170 +161,164 @@ namespace Concurrency.Implementation.Coordinator
         List<int> ProcessGlobalBatch(LocalToken token)
         {
             var curBatchIDs = new List<int>();
-            foreach (var batch in globalBatchInfo)
+            while (globalBatchInfo.Count != 0)
             {
+                var batch = globalBatchInfo.First();
                 var globalBid = batch.Key;
+               
                 if (batch.Value.lastBid != token.lastEmitGlobalBid) return curBatchIDs;
-                if (globalBatchPromise[globalBid].CurrentCount != 0) return curBatchIDs;
-                globalBatchInfo[globalBid].txnList.Clear();
-                globalBatchPromise.Remove(globalBid);
+                if (batch.Value.txnList.Count != globalTransactionInfo[globalBid].Count) return curBatchIDs;
 
                 var curBatchID = token.lastEmitTid + 1;
                 curBatchIDs.Add(curBatchID);
                 localBidToGlobalBid.Add(curBatchID, globalBid);
                 globalTidToLocalTidPerBatch.Add(curBatchID, new Dictionary<int, int>());
+
                 foreach (var globalTid in batch.Value.txnList)
                 {
                     var localTid = ++token.lastEmitTid;
                     globalDetRequestPromise[globalTid].SetResult(new Tuple<int, int>(curBatchID, localTid));
 
-                    var grainAccessInfo = globalTransactionInfo[globalTid];
+                    var grainAccessInfo = globalTransactionInfo[globalBid][globalTid];
                     detTxnProcessor.GnerateSchedulePerService(localTid, curBatchID, grainAccessInfo);
 
                     globalTidToLocalTidPerBatch[curBatchID].Add(globalTid, localTid);
-
                     globalDetRequestPromise.Remove(globalTid);
-                    globalTransactionInfo.Remove(globalTid);
                 }
-                detTxnProcessor.UpdateToken(token, curBatchID);
+                globalBidToIsPrevBatchGlobal.Add(globalBid, token.isLastEmitBidGlobal);
+                globalBatchInfo.Remove(globalBid);
+                globalTransactionInfo.Remove(globalBid);
+                detTxnProcessor.UpdateToken(token, curBatchID, true);
                 token.lastEmitGlobalBid = globalBid;
             }
-
+            
             return curBatchIDs;
         }
 
-        async Task EmitBatch(int curBatchID)
+        async Task EmitBatch(int bid)
         {
-            var curScheduleMap = bidToSubBatches[curBatchID];
+            var curScheduleMap = bidToSubBatches[bid];
 
-            if (log != null) await log.HandleOnPrepareInDeterministicProtocol(curBatchID, new HashSet<int>(curScheduleMap.Keys));
+            if (log != null) await log.HandleOnPrepareInDeterministicProtocol(bid, new HashSet<int>(curScheduleMap.Keys));
+
+            var globalBid = -1;
+            if (localBidToGlobalBid.ContainsKey(bid))
+                globalBid = localBidToGlobalBid[bid];
+
+            var globalTidToLocalTid = new Dictionary<int, int>();
+            if (globalTidToLocalTidPerBatch.ContainsKey(bid))
+            {
+                globalTidToLocalTid = globalTidToLocalTidPerBatch[bid];
+                globalTidToLocalTidPerBatch.Remove(bid);
+            }
 
             foreach (var item in curScheduleMap)
             {
                 var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, grainClassName[item.Key]);
                 var batch = item.Value;
 
-                var globalBid = -1;
-                if (localBidToGlobalBid.ContainsKey(curBatchID))
-                    globalBid = localBidToGlobalBid[curBatchID];
-
                 var localSubBatch = new LocalSubBatch(globalBid, batch);
-
-                if (globalTidToLocalTidPerBatch.ContainsKey(curBatchID))
-                    localSubBatch.globalTidToLocalTid = globalTidToLocalTidPerBatch[curBatchID];
-
-                localSubBatch.highestCommittedBid = highestCommittedBid;
+                localSubBatch.highestCommittedBid = detTxnProcessor.highestCommittedBid;
+                localSubBatch.globalTidToLocalTid = globalTidToLocalTid;
+                
                 _ = dest.ReceiveBatchSchedule(localSubBatch);
             }
+        }
+
+        void ACKGlobalCoord(int globalBid)
+        {
+            var globalCoordID = globalBidToGlobalCoordID[globalBid];
+            var globalCoord = coordMap.GetGlobalCoord(globalCoordID);
+            _ = globalCoord.AckBatchCompletion(globalBid);
         }
 
         public async Task AckBatchCompletion(int bid)
         {
             expectedAcksPerBatch[bid]--;
-            if (expectedAcksPerBatch[bid] == 0)
+            if (expectedAcksPerBatch[bid] != 0) return;
+
+            // the batch has been completed in this silo
+            var globalBid = -1;
+            var isPrevGlobal = false;
+            var isGlobal = localBidToGlobalBid.ContainsKey(bid);
+            
+            if (isGlobal)
             {
-                var lastBid = bidToLastBid[bid];
-                if (highestCommittedBid < lastBid)
-                {
-                    var coord = bidToLastCoordID[bid];
-                    if (coord == myID) await WaitBatchCommit(lastBid);
-                    else
-                    {
-                        var lastCoord = coordList[coord];
-                        await lastCoord.WaitBatchCommit(lastBid);
-                    }
-                }
-                else Debug.Assert(highestCommittedBid == lastBid);
-                highestCommittedBid = bid;
-                if (batchCommit.ContainsKey(bid)) batchCommit[bid].SetResult(true);
-                _ = NotifyGrains(bid);
-                CleanUp(bid);
-                if (log != null) await log.HandleOnCommitInDeterministicProtocol(bid);
+                // ACK the global coordinator
+                globalBid = localBidToGlobalBid[bid];
+                isPrevGlobal = globalBidToIsPrevBatchGlobal[globalBid];
+
+                if (isPrevGlobal) ACKGlobalCoord(globalBid);
             }
-        }
 
-        public async Task WaitBatchCommit(int bid)
-        {
-            if (highestCommittedBid == bid) return;
-            if (batchCommit.ContainsKey(bid) == false) batchCommit.Add(bid, new TaskCompletionSource<bool>());
-            await batchCommit[bid].Task;
-        }
+            await detTxnProcessor.WaitPrevBatchToCommit(bid);
 
-        async Task NotifyGrains(int bid)
-        {
-            foreach (var item in bidToSubBatches[bid])
+            if (isGlobal)
+            {
+                if (isPrevGlobal == false) ACKGlobalCoord(globalBid);
+                await WaitGlobalBatchCommit(globalBid);
+
+                localBidToGlobalBid.Remove(bid);
+                globalBidToGlobalCoordID.Remove(globalBid);
+                globalBidToIsPrevBatchGlobal.Remove(globalBid);
+            } 
+
+            if (log != null) await log.HandleOnCommitInDeterministicProtocol(bid);
+
+            detTxnProcessor.AckBatchCommit(bid);
+
+            var curScheduleMap = bidToSubBatches[bid];
+            foreach (var item in curScheduleMap)
             {
                 var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, grainClassName[item.Key]);
                 _ = dest.AckBatchCommit(bid);
             }
-            await Task.CompletedTask;
+
+            bidToSubBatches.Remove(bid);
+            expectedAcksPerBatch.Remove(bid);
         }
 
-        void CleanUp(int bid)
+        public async Task WaitBatchCommit(int bid)
         {
-            expectedAcksPerBatch.Remove(bid);
-            bidToSubBatches.Remove(bid);
-            bidToLastCoordID.Remove(bid);
-            bidToLastBid.Remove(bid);
-            if (batchCommit.ContainsKey(bid)) batchCommit.Remove(bid);
+            await detTxnProcessor.WaitBatchCommit(bid);
+        }
+
+        async Task WaitGlobalBatchCommit(int globalBid)
+        {
+            if (highestCommittedGlobalBid >= globalBid) return;
+            if (globalBatchCommit.ContainsKey(globalBid) == false) 
+                globalBatchCommit.Add(globalBid, new TaskCompletionSource<bool>());
+            await globalBatchCommit[globalBid].Task;
+        }
+
+        public Task AckGlobalBatchCommit(int globalBid)
+        {
+            highestCommittedGlobalBid = Math.Max(globalBid, highestCommittedGlobalBid);
+            if (globalBatchCommit.ContainsKey(globalBid))
+            {
+                globalBatchCommit[globalBid].SetResult(true);
+                globalBatchCommit.Remove(globalBid);
+            }
+            return Task.CompletedTask;
         }
 
         public Task SpawnLocalCoordGrain()
         {
-            highestCommittedBid = -1;
+            highestCommittedGlobalBid = -1;
+            detTxnProcessor.Init();
             nonDetTxnProcessor.Init();
 
-            int numLogger;
+            int neighborID;
             if (Constants.multiSilo == false || Constants.hierarchicalCoord)
-            {
-                SetHierarchicalArchitecture();
-                numLogger = Constants.numLoggerPerSilo;
-            }
-            else
-            {
-                SetSimpleArchitecture();
-                numLogger = Constants.numGlobalLogger;
-            }
+                neighborID = LocalCoordGrainPlacementHelper.MapCoordIDToNeighborID(myID);
+            else neighborID = GlobalCoordGrainPlacementHelper.MapCoordIDToNeighborID(myID);
+            
+            neighborCoord = GrainFactory.GetGrain<ILocalCoordGrain>(neighborID);
 
-            if (Constants.loggingType == LoggingType.LOGGER)
-            {
-                var loggerID = Helper.MapGrainIDToServiceID(myID, numLogger);
-                var logger = loggerGroup.GetSingleton(loggerID);
-                log = new LoggingProtocol(GetType().ToString(), myID, logger);
-            }
-            else if (Constants.loggingType == LoggingType.ONGRAIN)
-                log = new LoggingProtocol(GetType().ToString(), myID);
-
+            loggerGroup.GetLoggingProtocol(myID, out log);
             Console.WriteLine($"Local coord {myID} initialize logging {Constants.loggingType}.");
 
             return Task.CompletedTask;
-        }
-
-        void SetHierarchicalArchitecture()
-        {
-            var neighborID = LocalCoordGrainPlacementHelper.MapCoordIDToNeighborID(myID);
-            neighborCoord = GrainFactory.GetGrain<ILocalCoordGrain>(neighborID);
-            Console.WriteLine($"set local coord {myID}'s neighbor as {neighborID}");
-            var siloID = LocalCoordGrainPlacementHelper.MapCoordIDToSiloID(myID);
-            var firstCoordID = LocalCoordGrainPlacementHelper.MapSiloIDToFirstLocalCoordID(siloID);
-            for (int i = 0; i < Constants.numLocalCoordPerSilo; i++)
-            {
-                var coordID = firstCoordID + i;
-                var coord = GrainFactory.GetGrain<ILocalCoordGrain>(coordID);
-                coordList.Add(coord);     // add all local coordinators in this silo to the list
-            }
-        }
-
-        void SetSimpleArchitecture()
-        {
-            var neighborID = GlobalCoordGrainPlacementHelper.MapCoordIDToNeighborID(myID);
-            neighborCoord = GrainFactory.GetGrain<ILocalCoordGrain>(neighborID);
-            Console.WriteLine($"set local coord {myID}'s neighbor as {neighborID}");
-            for (int i = 0; i < Constants.numGlobalCoord; i++)
-            {
-                var coord = GrainFactory.GetGrain<ILocalCoordGrain>(i);
-                coordList.Add(coord);     // add all local coordinators to the list
-            }
         }
     }
 }

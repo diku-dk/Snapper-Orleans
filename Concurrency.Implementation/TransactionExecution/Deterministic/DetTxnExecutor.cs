@@ -25,10 +25,9 @@ namespace Concurrency.Implementation.TransactionExecution
 
         // local and global coordinators
         readonly int myLocalCoordID;
+        readonly ICoordMap coordMap;
         readonly ILocalCoordGrain myLocalCoord;
         readonly IGlobalCoordGrain myGlobalCoord;                               // use this coord to get tid for global transactions
-        readonly Dictionary<int, ILocalCoordGrain> localCoordMap;               // <coordID, local coord>    !!!!!!!!!!!!!!!!!!!!!
-        readonly Dictionary<int, IGlobalCoordGrain> globalCoordMap;             // <coordID, global coord>
 
         // PACT execution
         Dictionary<int, TaskCompletionSource<bool>> localBtchInfoPromise;       // key: local bid, use to check if the SubBatch has arrived or not
@@ -37,7 +36,7 @@ namespace Concurrency.Implementation.TransactionExecution
         // only for global PACT
         Dictionary<int, int> globalBidToLocalBid;
         Dictionary<int, Dictionary<int, int>> globalTidToLocalTidPerBatch;      // key: global bid, <global tid, local tid>
-        Dictionary<int, TaskCompletionSource<bool>> globallocalBtchInfoPromise; // key: global bid, use to check if the SubBatch has arrived or not
+        Dictionary<int, TaskCompletionSource<bool>> globalBtchInfoPromise;      // key: global bid, use to check if the SubBatch has arrived or not
 
         public void CheckGC()
         {
@@ -45,12 +44,13 @@ namespace Concurrency.Implementation.TransactionExecution
             if (detFuncResults.Count != 0) Console.WriteLine($"DetTxnExecutor: detFuncResults.Count = {detFuncResults.Count}");
             if (globalBidToLocalBid.Count != 0) Console.WriteLine($"DetTxnExecutor: globalBidToLocalBid.Count = {globalBidToLocalBid.Count}");
             if (globalTidToLocalTidPerBatch.Count != 0) Console.WriteLine($"DetTxnExecutor: globalTidToLocalTidPerBatch.Count = {globalTidToLocalTidPerBatch.Count}");
-            if (globallocalBtchInfoPromise.Count != 0) Console.WriteLine($"DetTxnExecutor: globallocalBtchInfoPromise.Count = {globallocalBtchInfoPromise.Count}");
+            if (globalBtchInfoPromise.Count != 0) Console.WriteLine($"DetTxnExecutor: globalBtchInfoPromise.Count = {globalBtchInfoPromise.Count}");
         }
 
         public DetTxnExecutor(
             int myID,
             int siloID, 
+            ICoordMap coordMap,
             int myLocalCoordID,
             ILocalCoordGrain myLocalCoord,
             IGlobalCoordGrain myGlobalCoord,
@@ -61,6 +61,7 @@ namespace Concurrency.Implementation.TransactionExecution
         {
             this.myID = myID;
             this.siloID = siloID;
+            this.coordMap = coordMap;
             this.myLocalCoordID = myLocalCoordID;
             this.myLocalCoord = myLocalCoord;
             this.myGlobalCoord = myGlobalCoord;
@@ -68,50 +69,11 @@ namespace Concurrency.Implementation.TransactionExecution
             this.state = state;
             this.log = log;
 
-            localCoordMap = new Dictionary<int, ILocalCoordGrain>();
-            globalCoordMap = new Dictionary<int, IGlobalCoordGrain>();
             localBtchInfoPromise = new Dictionary<int, TaskCompletionSource<bool>>();
             detFuncResults = new Dictionary<int, BasicFuncResult>();
             globalBidToLocalBid = new Dictionary<int, int>();
             globalTidToLocalTidPerBatch = new Dictionary<int, Dictionary<int, int>>();
-            globallocalBtchInfoPromise = new Dictionary<int, TaskCompletionSource<bool>>();
-
-            // set up local and global coordinator info
-            if (Constants.multiSilo)
-            {
-                if (Constants.hierarchicalCoord)
-                {
-                    var firstCoordID = LocalCoordGrainPlacementHelper.MapSiloIDToFirstLocalCoordID(siloID);
-                    for (int i = 0; i < Constants.numLocalCoordPerSilo; i++)
-                    {
-                        var ID = i + firstCoordID;
-                        var coord = myGrainFactory.GetGrain<ILocalCoordGrain>(ID);
-                        localCoordMap.Add(ID, coord);
-                    }
-
-                    for (int i = 0; i < Constants.numGlobalCoord; i++)
-                    {
-                        var coord = myGrainFactory.GetGrain<IGlobalCoordGrain>(i);
-                        globalCoordMap.Add(i, coord);
-                    }
-                }
-                else   // all local coordinators are put in a separate silo
-                {
-                    for (int i = 0; i < Constants.numGlobalCoord; i++)
-                    {
-                        var coord = myGrainFactory.GetGrain<ILocalCoordGrain>(i);
-                        localCoordMap.Add(i, coord);
-                    }
-                }
-            }
-            else   // single silo deployment
-            {
-                for (int i = 0; i < Constants.numLocalCoordPerSilo; i++)
-                {
-                    var coord = myGrainFactory.GetGrain<ILocalCoordGrain>(i);
-                    localCoordMap.Add(i, coord);
-                }
-            }
+            globalBtchInfoPromise = new Dictionary<int, TaskCompletionSource<bool>>();
         }
 
         // int: the highestCommittedBid get from local coordinator
@@ -121,7 +83,6 @@ namespace Concurrency.Implementation.TransactionExecution
             {
                 // check if the transaction will access multiple silos
                 var siloList = new List<int>();
-                var coordList = new List<int>();
                 var grainListPerSilo = new Dictionary<int, List<int>>();
                 var grainNamePerSilo = new Dictionary<int, List<string>>();
                 for (int i = 0; i < grainList.Count; i++)
@@ -131,10 +92,6 @@ namespace Concurrency.Implementation.TransactionExecution
                     if (grainListPerSilo.ContainsKey(siloID) == false)
                     {
                         siloList.Add(siloID);
-                        int coordID;
-                        if (siloID == this.siloID) coordID = myLocalCoordID;
-                        else coordID = LocalCoordGrainPlacementHelper.MapSiloIDToRandomCoordID(siloID);
-                        coordList.Add(coordID);
                         grainListPerSilo.Add(siloID, new List<int>());
                         grainNamePerSilo.Add(siloID, new List<string>());
                     }
@@ -146,27 +103,29 @@ namespace Concurrency.Implementation.TransactionExecution
                 if (siloList.Count != 1)
                 {
                     // get global tid from global coordinator
-                    var globalInfo = await myGlobalCoord.NewTransaction(siloList, coordList);
-                    var globalTid = globalInfo.tid;
-
+                    var globalInfo = await myGlobalCoord.NewTransaction(siloList);
+                    var globalTid = globalInfo.Item1.tid;
+                    var globalBid = globalInfo.Item1.bid;
+                    var siloIDToLocalCoordID = globalInfo.Item2;
+                    
                     // send corresponding grainAccessInfo to local coordinators in different silos
                     Debug.Assert(grainListPerSilo.ContainsKey(siloID));
-                    TransactionRegistInfo localInfo = null;
+                    Task<TransactionRegistInfo> task = null;
                     for (int i = 0; i < siloList.Count; i++)
                     {
                         var siloID = siloList[i];
+                        Debug.Assert(siloIDToLocalCoordID.ContainsKey(siloID));
+                        var coordID = siloIDToLocalCoordID[siloID];
 
                         // get local tid, bid from local coordinator
-                        if (siloID == myLocalCoordID)
-                            localInfo = await myLocalCoord.NewGlobalTransaction(globalTid, grainListPerSilo[siloID]);
-                        else
-                        {
-                            var coordID = coordList[i];
-                            _ = localCoordMap[coordID].NewGlobalTransaction(globalTid, grainListPerSilo[siloID]);
-                        }
+                        var localCoord = coordMap.GetLocalCoord(coordID);
+                        if (siloID == this.siloID) task = localCoord.NewGlobalTransaction(globalBid, globalTid, grainListPerSilo[siloID], grainNamePerSilo[siloID]);
+                        else _ = localCoord.NewGlobalTransaction(globalBid, globalTid, grainListPerSilo[siloID], grainNamePerSilo[siloID]);
                     }
 
-                    var cxt1 = new TransactionContext(localInfo.bid, localInfo.tid, globalInfo.bid, globalInfo.tid);
+                    Debug.Assert(task != null);
+                    var localInfo = await task;
+                    var cxt1 = new TransactionContext(localInfo.bid, localInfo.tid, globalBid, globalTid);
                     return new Tuple<int, TransactionContext>(-1, cxt1) ;
                 }
             }
@@ -182,9 +141,9 @@ namespace Concurrency.Implementation.TransactionExecution
             if (cxt.globalBid != -1)
             {
                 // wait until the SubBatch has arrived this grain
-                if (globallocalBtchInfoPromise.ContainsKey(cxt.globalBid) == false)
-                    globallocalBtchInfoPromise.Add(cxt.globalBid, new TaskCompletionSource<bool>());
-                await globallocalBtchInfoPromise[cxt.globalBid].Task;
+                if (globalBtchInfoPromise.ContainsKey(cxt.globalBid) == false)
+                    globalBtchInfoPromise.Add(cxt.globalBid, new TaskCompletionSource<bool>());
+                await globalBtchInfoPromise[cxt.globalBid].Task;
 
                 // need to map global info to the corresponding local tid and bid
                 cxt.localBid = globalBidToLocalBid[cxt.globalBid];
@@ -197,30 +156,36 @@ namespace Concurrency.Implementation.TransactionExecution
                     localBtchInfoPromise.Add(cxt.localBid, new TaskCompletionSource<bool>());
                 await localBtchInfoPromise[cxt.localBid].Task;
             }
-
+            
             Debug.Assert(detFuncResults.ContainsKey(cxt.localTid) == false);
             detFuncResults.Add(cxt.localTid, new BasicFuncResult());
-            
             await myScheduler.WaitForTurn(cxt.localBid, cxt.localTid);
         }
 
-        public async Task FinishExecuteDetTxn(int localTid, int localBid)
+        public async Task FinishExecuteDetTxn(TransactionContext cxt)
         {
-            var coordID = myScheduler.AckComplete(localBid, localTid);
+            var coordID = myScheduler.AckComplete(cxt.localBid, cxt.localTid);
             if (coordID != -1)   // the current batch has completed on this grain
             {
                 // TODO: only writer transaction needs to persist the updated grain state
                 if (log != null)
                 {
-                    var data = MessagePackSerializer.Serialize(state.GetCommittedState(localBid));
-                    await log.HandleOnCompleteInDeterministicProtocol(data, localBid, coordID);
+                    var data = MessagePackSerializer.Serialize(state.GetCommittedState(cxt.localBid));
+                    await log.HandleOnCompleteInDeterministicProtocol(data, cxt.localBid, coordID);
                 } 
 
-                localBtchInfoPromise.Remove(localBid);
-                myScheduler.scheduleInfo.CompleteDetBatch(localBid);
+                localBtchInfoPromise.Remove(cxt.localBid);
+                if (cxt.globalBid != -1)
+                {
+                    globalBidToLocalBid.Remove(cxt.globalBid);
+                    globalTidToLocalTidPerBatch.Remove(cxt.globalBid);
+                    globalBtchInfoPromise.Remove(cxt.globalBid);
+                }
 
-                var coord = localCoordMap[coordID];
-                _ = coord.AckBatchCompletion(localBid);
+                myScheduler.scheduleInfo.CompleteDetBatch(cxt.localBid);
+
+                var coord = coordMap.GetLocalCoord(coordID);
+                _ = coord.AckBatchCompletion(cxt.localBid);
             }
         }
 
@@ -237,9 +202,9 @@ namespace Concurrency.Implementation.TransactionExecution
                 globalBidToLocalBid.Add(batch.globalBid, batch.bid);
                 globalTidToLocalTidPerBatch.Add(batch.globalBid, batch.globalTidToLocalTid);
 
-                if (globallocalBtchInfoPromise.ContainsKey(batch.globalBid) == false)
-                    globallocalBtchInfoPromise.Add(batch.globalBid, new TaskCompletionSource<bool>());
-                globallocalBtchInfoPromise[batch.globalBid].SetResult(true);
+                if (globalBtchInfoPromise.ContainsKey(batch.globalBid) == false)
+                    globalBtchInfoPromise.Add(batch.globalBid, new TaskCompletionSource<bool>());
+                globalBtchInfoPromise[batch.globalBid].SetResult(true);
             }
         }
 

@@ -2,6 +2,7 @@
 using Utilities;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System;
 
 namespace Concurrency.Interface.Coordinator
 {
@@ -13,11 +14,11 @@ namespace Concurrency.Interface.Coordinator
 
         Task<TransactionRegistInfo> NewTransaction();
 
-        Task<TransactionRegistInfo> NewTransaction(List<int> siloList, List<int> coordList);
+        Task<Tuple<TransactionRegistInfo, Dictionary<int, int>>> NewTransaction(List<int> siloList);
 
-        //Task AckBatchCompletion(int bid);
+        Task AckBatchCompletion(int bid);
 
-        //sTask WaitBatchCommit(int bid);
+        Task WaitBatchCommit(int bid);
 
         Task CheckGC();
     }

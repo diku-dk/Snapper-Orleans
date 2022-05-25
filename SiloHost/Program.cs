@@ -13,6 +13,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Concurrency.Implementation.GrainPlacement;
 using Concurrency.Interface.Logging;
 using Concurrency.Implementation.Logging;
+using Concurrency.Interface.Coordinator;
+using Concurrency.Implementation.Coordinator;
 
 namespace OrleansSiloHost
 {
@@ -114,6 +116,7 @@ namespace OrleansSiloHost
 
             // dependency injection
             services.AddSingleton<ILoggerGroup, LoggerGroup>();
+            services.AddSingleton<ICoordMap, CoordMap>();
 
             services.AddSingletonNamedService<PlacementStrategy, GlobalConfigGrainPlacementStrategy>(nameof(GlobalConfigGrainPlacementStrategy));
             services.AddSingletonKeyedService<Type, IPlacementDirector, GlobalConfigGrainPlacement>(typeof(GlobalConfigGrainPlacementStrategy));

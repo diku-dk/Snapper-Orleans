@@ -7,6 +7,7 @@ using Concurrency.Implementation.TransactionExecution;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
 using System.Runtime.Serialization;
+using Concurrency.Interface.Coordinator;
 
 namespace TPCC.Grains
 {
@@ -58,7 +59,7 @@ namespace TPCC.Grains
 
     public class StockGrain : TransactionExecutionGrain<StockTable>, IStockGrain
     {
-        public StockGrain(ILoggerGroup loggerGroup) : base(loggerGroup, "TPCC.Grains.StockGrain")
+        public StockGrain(ILoggerGroup loggerGroup, ICoordMap coordMap) : base(loggerGroup, coordMap, "TPCC.Grains.StockGrain")
         {
         }
 

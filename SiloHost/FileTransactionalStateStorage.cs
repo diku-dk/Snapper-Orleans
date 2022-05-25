@@ -42,7 +42,7 @@ namespace OrleansSiloHost
             var strs = str.Split('/', StringSplitOptions.RemoveEmptyEntries);
             var partitionKey = strs[strs.Length - 1];    // use grainID (long) as partitionKey
             var grainID = int.Parse(partitionKey);
-            var logger = loggerGroup.GetSingleton(Helper.MapGrainIDToServiceID(grainID, Constants.numLoggerPerSilo));
+            var logger = loggerGroup.GetLogger(grainID);
             return ActivatorUtilities.CreateInstance<FileTransactionalStateStorage<TState>>(context.ActivationServices, logger, partitionKey);
         }
 

@@ -15,6 +15,7 @@ namespace Concurrency.Implementation.Configuration
         bool tokenEnabled;
         ILocalConfigGrain[] configGrains;
         readonly ILoggerGroup loggerGroup;  // this logger group is only accessible within this silo host
+        readonly ICoordMap coordMap;
 
         public override Task OnActivateAsync()
         {
@@ -22,9 +23,10 @@ namespace Concurrency.Implementation.Configuration
             return base.OnActivateAsync();
         }
 
-        public GlobalConfigGrain(ILoggerGroup loggerGroup)   // dependency injection
+        public GlobalConfigGrain(ILoggerGroup loggerGroup, ICoordMap coordMap)   // dependency injection
         {
             this.loggerGroup = loggerGroup;
+            this.coordMap = coordMap;
         }
 
         public async Task<long> GetIOCount()
@@ -123,6 +125,8 @@ namespace Concurrency.Implementation.Configuration
             if (Constants.multiSilo == false) return;
 
             if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numGlobalLogger);
+
+            coordMap.Init(GrainFactory);
             if (Constants.hierarchicalCoord) await ConfigHierarchicalArchitecture();
             else await ConfigSimpleArchitecture();
         }

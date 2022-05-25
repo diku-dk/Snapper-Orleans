@@ -187,9 +187,10 @@ namespace ExperimentProcess
 
         private  int SelectNumSilo(int txnSize)
         {
-            //Debug.Assert(txnSize == 4);
-            var sample = numSiloDist.Sample();
-            if (sample < 100) return 2;
+            if (Constants.multiSilo == false) return 1;
+            
+            var sample = numSiloDist.Sample(); // sample = [0, 100)
+            if (sample < 0) return 2;
             else return 1;
         }
 
@@ -228,7 +229,6 @@ namespace ExperimentProcess
 
                                 for (int k = 0; k < workload.txnSize; k++)
                                 {
-                                    /*
                                     var silo = siloList[k % numSiloAccess];
                                     var grainInSilo = grainDist.Sample();
                                     var grainID = silo * Constants.numGrainPerSilo + grainInSilo;
@@ -237,11 +237,11 @@ namespace ExperimentProcess
                                         grainInSilo = grainDist.Sample();
                                         grainID = silo * Constants.numGrainPerSilo + grainInSilo;
                                     }
-                                    grainsPerTxn.Add(grainID);*/
-
+                                    grainsPerTxn.Add(grainID);
+                                    /*
                                     if (flag == Constants.numGrainPerSilo) flag = 0;
                                     grainsPerTxn.Add(flag);
-                                    flag++;
+                                    flag++;*/
                                 }
                                 Debug.Assert(grainsPerTxn.Count == workload.txnSize);
                                 shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
