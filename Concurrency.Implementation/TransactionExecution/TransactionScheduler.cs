@@ -32,9 +32,9 @@ namespace Concurrency.Implementation.TransactionExecution
             if (detExecutionPromise.Count != 0) Console.WriteLine($"TransactionScheduler: detExecutionPromise.Count = {detExecutionPromise.Count}");
         }
 
-        public void RegisterBatch(SubBatch batch, int highestCommittedBid)
+        public void RegisterBatch(SubBatch batch, int globalBid, int highestCommittedBid)
         {
-            scheduleInfo.InsertDetBatch(batch, highestCommittedBid);
+            scheduleInfo.InsertDetBatch(batch, globalBid, highestCommittedBid);
 
             batchInfo.Add(batch.bid, batch);
             for (int i = 0; i < batch.txnList.Count; i++)
@@ -103,7 +103,11 @@ namespace Concurrency.Implementation.TransactionExecution
             {
                 if (node.isDet)
                 {
-                    if (node.id <= bid) scheduleInfo.detNodes.Remove(node.id);
+                    if (node.id <= bid)
+                    {
+                        scheduleInfo.detNodes.Remove(node.id);
+                        scheduleInfo.localBidToGlobalBid.Remove(node.id);
+                    } 
                     else break;   // meet a det node whose id > bid
                 }
                 else

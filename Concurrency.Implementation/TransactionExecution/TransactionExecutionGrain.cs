@@ -6,7 +6,6 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Concurrency.Interface.Logging;
-using Concurrency.Implementation.Logging;
 using Concurrency.Interface.TransactionExecution;
 using Concurrency.Implementation.GrainPlacement;
 using Concurrency.Interface.Coordinator;
@@ -21,15 +20,12 @@ namespace Concurrency.Implementation.TransactionExecution
     {
         // grain basic info
         int myID;
-        int siloID;
+        int mySiloID;
         readonly ICoordMap coordMap;
         readonly string myClassName;
         static int myLocalCoordID;
         static ILocalCoordGrain myLocalCoord;   // use this coord to get tid for local transactions
         static IGlobalCoordGrain myGlobalCoord;
-
-        // garbage collection
-        int highestCommittedBid;                // local bid
 
         // transaction execution
         ILoggingProtocol log;
@@ -45,6 +41,9 @@ namespace Concurrency.Implementation.TransactionExecution
         Dictionary<int, int> coordinatorMap;
         NonDetTxnExecutor<TState> nonDetTxnExecutor;
         NonDetCommitter<TState> nonDetCommitter;
+
+        // garbage collection
+        int highestCommittedLocalBid;
 
         public TransactionExecutionGrain(ILoggerGroup loggerGroup, ICoordMap coordMap, string myClassName)
         {
@@ -68,11 +67,11 @@ namespace Concurrency.Implementation.TransactionExecution
 
         public override Task OnActivateAsync()
         {
-            highestCommittedBid = -1;
-            
+            highestCommittedLocalBid = -1;
+
             // grain basic info
             myID = (int)this.GetPrimaryKeyLong();
-            siloID = TransactionExecutionGrainPlacementHelper.MapGrainIDToSilo(myID);
+            mySiloID = TransactionExecutionGrainPlacementHelper.MapGrainIDToSilo(myID);
 
             // transaction execution
             loggerGroup.GetLoggingProtocol(myID, out log);
@@ -87,7 +86,7 @@ namespace Concurrency.Implementation.TransactionExecution
                 if (Constants.hierarchicalCoord)
                 {
                     var localCoordIndex = Helper.MapGrainIDToServiceID(myID, Constants.numLocalCoordPerSilo);
-                    myLocalCoordID = LocalCoordGrainPlacementHelper.MapCoordIndexToCoordID(localCoordIndex, siloID);
+                    myLocalCoordID = LocalCoordGrainPlacementHelper.MapCoordIndexToCoordID(localCoordIndex, mySiloID);
                     myLocalCoord = GrainFactory.GetGrain<ILocalCoordGrain>(myLocalCoordID);
 
                     var globalCoordID = Helper.MapGrainIDToServiceID(myID, Constants.numGlobalCoord);
@@ -107,7 +106,7 @@ namespace Concurrency.Implementation.TransactionExecution
 
             detTxnExecutor = new DetTxnExecutor<TState>(
                 myID,
-                siloID,
+                mySiloID,
                 coordMap,
                 myLocalCoordID,
                 myLocalCoord,
@@ -119,6 +118,7 @@ namespace Concurrency.Implementation.TransactionExecution
 
             nonDetTxnExecutor = new NonDetTxnExecutor<TState>(
                 myID,
+                mySiloID,
                 myClassName,
                 myLocalCoord,
                 myGlobalCoord,
@@ -141,10 +141,10 @@ namespace Concurrency.Implementation.TransactionExecution
             var cxtInfo = await detTxnExecutor.GetDetContext(grainAccessInfo, grainClassName);
             var cxt = cxtInfo.Item2;
 
-            if (highestCommittedBid < cxtInfo.Item1)
+            if (highestCommittedLocalBid < cxtInfo.Item1)
             {
-                highestCommittedBid = cxtInfo.Item1;
-                myScheduler.AckBatchCommit(highestCommittedBid);
+                highestCommittedLocalBid = cxtInfo.Item1;
+                myScheduler.AckBatchCommit(highestCommittedLocalBid);
             }
 
             // execute PACT
@@ -161,10 +161,10 @@ namespace Concurrency.Implementation.TransactionExecution
         public async Task<TransactionResult> StartTransaction(string startFunc, object funcInput)
         {
             var cxtInfo = await nonDetTxnExecutor.GetNonDetContext();
-            if (highestCommittedBid < cxtInfo.Item1)
+            if (highestCommittedLocalBid < cxtInfo.Item1)
             {
-                highestCommittedBid = cxtInfo.Item1;
-                myScheduler.AckBatchCommit(highestCommittedBid);
+                highestCommittedLocalBid = cxtInfo.Item1;
+                myScheduler.AckBatchCommit(highestCommittedLocalBid);
             }
             var cxt = cxtInfo.Item2;
 
@@ -174,13 +174,11 @@ namespace Concurrency.Implementation.TransactionExecution
 
             // check serializability and do 2PC
             var canCommit = !funcResult.exception;
-            var maxBeforeBid = -1;
             var res = new TransactionResult(funcResult.resultObj);
             var isPrepared = false;
             if (canCommit)
             {
-                maxBeforeBid = funcResult.maxBeforeBid;
-                var result = nonDetCommitter.CheckSerializability(highestCommittedBid, funcResult.maxBeforeBid, funcResult.minAfterBid, funcResult.isBeforeAfterConsecutive);
+                var result = nonDetCommitter.CheckSerializability(funcResult.globalScheduleInfo, funcResult.scheduleInfoPerSilo);
                 canCommit = result.Item1;
                 if (canCommit)
                 {
@@ -195,22 +193,22 @@ namespace Concurrency.Implementation.TransactionExecution
             }
             else res.Exp_Deadlock |= funcResult.Exp_Deadlock;  // when deadlock = false, exception may from RW conflict
 
-            if (canCommit) await nonDetCommitter.CoordCommit(cxt.globalTid, maxBeforeBid, funcResult.grainOpInfo);
+            if (canCommit) await nonDetCommitter.CoordCommit(cxt.globalTid, funcResult);
             else
             {
                 res.exception = true;
                 await nonDetCommitter.CoordAbort(cxt.globalTid, funcResult.grainOpInfo, isPrepared);
             }
 
-            // wait for previous batch to commit
-            if (canCommit && highestCommittedBid < funcResult.maxBeforeBid)
+            // wait for maxBeforeLocalBid in each silo to commit
+            if (canCommit)
             {
-                var grainID = funcResult.grainWithHighestBeforeBid;
-                if (grainID.Item1 == myID) await WaitForBatchCommit(funcResult.maxBeforeBid);
-                else
+                foreach (var siloInfo in funcResult.grainWithMaxBeforeLocalBidPerSilo)
                 {
+                    var siloID = siloInfo.Key;
+                    var grainID = siloInfo.Value;
                     var grain = GrainFactory.GetGrain<ITransactionExecutionGrain>(grainID.Item1, grainID.Item2);
-                    await grain.WaitForBatchCommit(funcResult.maxBeforeBid);
+                    await grain.WaitForBatchCommit(funcResult.scheduleInfoPerSilo[siloID].maxBeforeBid);
                 }
             }
 
@@ -221,15 +219,15 @@ namespace Concurrency.Implementation.TransactionExecution
         public Task ReceiveBatchSchedule(LocalSubBatch batch)
         {
             // do garbage collection for committed local batches
-            if (highestCommittedBid < batch.highestCommittedBid)
+            if (highestCommittedLocalBid < batch.highestCommittedBid)
             {
-                highestCommittedBid = batch.highestCommittedBid;
-                myScheduler.AckBatchCommit(highestCommittedBid);
+                highestCommittedLocalBid = batch.highestCommittedBid;
+                myScheduler.AckBatchCommit(highestCommittedLocalBid);
             }
             batchCommit.Add(batch.bid, new TaskCompletionSource<bool>());
 
             // register the local SubBatch info
-            myScheduler.RegisterBatch(batch, highestCommittedBid);
+            myScheduler.RegisterBatch(batch, batch.globalBid, highestCommittedLocalBid);
             detTxnExecutor.BatchArrive(batch);
             
             return Task.CompletedTask;
@@ -238,17 +236,17 @@ namespace Concurrency.Implementation.TransactionExecution
         /// <summary> When commit an ACT, call this interface to wait for a specific local batch to commit </summary>
         public async Task WaitForBatchCommit(int bid)
         {
-            if (highestCommittedBid >= bid) return;
+            if (highestCommittedLocalBid >= bid) return;
             await batchCommit[bid].Task;
         }
 
         /// <summary> A local coordinator calls this interface to notify the commitment of a local batch </summary>
         public Task AckBatchCommit(int bid)
         {
-            if (highestCommittedBid < bid)
+            if (highestCommittedLocalBid < bid)
             {
-                highestCommittedBid = bid;
-                myScheduler.AckBatchCommit(highestCommittedBid);
+                highestCommittedLocalBid = bid;
+                myScheduler.AckBatchCommit(highestCommittedLocalBid);
             }
             batchCommit[bid].SetResult(true);
             batchCommit.Remove(bid);
@@ -298,7 +296,7 @@ namespace Concurrency.Implementation.TransactionExecution
                     // exceptions thrown from GetState will be caught here
                     exception = true;
                 }
-                var funcResult = nonDetTxnExecutor.UpdateExecutionResult(cxt.globalTid);
+                var funcResult = nonDetTxnExecutor.UpdateExecutionResult(cxt.globalTid, highestCommittedLocalBid);
                 if (resultObj != null) funcResult.SetResultObj(resultObj);
                 nonDetTxnExecutor.CleanUp(cxt.globalTid);
                 if (exception) CleanUp(cxt.globalTid);
@@ -334,10 +332,11 @@ namespace Concurrency.Implementation.TransactionExecution
             return vote;
         }
 
-        public async Task Commit(int tid, int maxBeforeBid)   // only writer grain needs 2nd phase of 2PC
+        // only writer grain needs 2nd phase of 2PC
+        public async Task Commit(int tid, int maxBeforeLocalBid, int maxBeforeGlobalBid)   
         {
-            nonDetTxnExecutor.Commit(maxBeforeBid);
-            await nonDetCommitter.Commit(tid, maxBeforeBid);
+            nonDetTxnExecutor.Commit(maxBeforeLocalBid, maxBeforeGlobalBid);
+            await nonDetCommitter.Commit(tid);
             CleanUp(tid);
         }
 

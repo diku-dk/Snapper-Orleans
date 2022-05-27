@@ -9,6 +9,7 @@ using Concurrency.Implementation.GrainPlacement;
 using Concurrency.Interface.TransactionExecution;
 using Orleans.Concurrency;
 using System.Linq;
+using System.Diagnostics;
 
 namespace Concurrency.Implementation.Coordinator
 {
@@ -50,7 +51,7 @@ namespace Concurrency.Implementation.Coordinator
             detTxnProcessor.CheckGC();
             nonDetTxnProcessor.CheckGC();
             if (expectedAcksPerBatch.Count != 0) Console.WriteLine($"LocalCoord {myID}: expectedAcksPerBatch.Count = {expectedAcksPerBatch.Count}");
-            if (bidToSubBatches.Count != 0) Console.WriteLine($"LocalCoord {myID}: batchSchedulePerGrain.Count = {bidToSubBatches.Count}");
+            if (bidToSubBatches.Count != 0) Console.WriteLine($"LocalCoord {myID}: bidToSubBatches.Count = {bidToSubBatches.Count}");
             if (globalBatchInfo.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalBatchInfo.Count = {globalBatchInfo.Count}");
             if (globalTransactionInfo.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalTransactionInfo.Count = {globalTransactionInfo.Count}");
             if (globalDetRequestPromise.Count != 0) Console.WriteLine($"LocalCoord {myID}: globalDetRequestPromise.Count = {globalDetRequestPromise.Count}");
@@ -62,9 +63,8 @@ namespace Concurrency.Implementation.Coordinator
             return Task.CompletedTask;
         }
 
-        public override Task OnActivateAsync()
+        void Init()
         {
-            myID = (int)this.GetPrimaryKeyLong();
             highestCommittedGlobalBid = -1;
             grainClassName = new Dictionary<int, string>();
             expectedAcksPerBatch = new Dictionary<int, int>();
@@ -77,6 +77,12 @@ namespace Concurrency.Implementation.Coordinator
             globalBidToIsPrevBatchGlobal = new Dictionary<int, bool>();
             globalBatchCommit = new Dictionary<int, TaskCompletionSource<bool>>();
             globalBidToGlobalCoordID = new Dictionary<int, int>();
+        }
+
+        public override Task OnActivateAsync()
+        {
+            Init();
+            myID = (int)this.GetPrimaryKeyLong();
             nonDetTxnProcessor = new NonDetTxnProcessor(myID);
             detTxnProcessor = new DetTxnProcessor(
                 myID,
@@ -188,7 +194,7 @@ namespace Concurrency.Implementation.Coordinator
                 globalBidToIsPrevBatchGlobal.Add(globalBid, token.isLastEmitBidGlobal);
                 globalBatchInfo.Remove(globalBid);
                 globalTransactionInfo.Remove(globalBid);
-                detTxnProcessor.UpdateToken(token, curBatchID, true);
+                detTxnProcessor.UpdateToken(token, curBatchID, globalBid);
                 token.lastEmitGlobalBid = globalBid;
             }
             

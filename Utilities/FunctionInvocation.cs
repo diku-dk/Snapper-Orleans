@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace Utilities
 {
@@ -66,19 +67,46 @@ namespace Utilities
     }
 
     [Serializable]
+    public class NonDetScheduleInfo
+    {
+        public int maxBeforeBid;
+        public int minAfterBid;
+        public bool isAfterComplete;
+
+        public NonDetScheduleInfo()
+        {
+            maxBeforeBid = -1;
+            minAfterBid = int.MaxValue;
+            isAfterComplete = true;
+        }
+
+        public NonDetScheduleInfo(int maxBeforeBid, int minAfterBid, bool isAfterComplete)
+        {
+            this.maxBeforeBid = maxBeforeBid;
+            this.minAfterBid = minAfterBid;
+            this.isAfterComplete = isAfterComplete;
+        }
+    }
+
+    [Serializable]
     public class NonDetFuncResult : BasicFuncResult
     {
         public bool exception = false;
         public bool Exp_Deadlock = false;
 
-        public int minAfterBid = -1;
-        public int maxBeforeBid = -1;
-        public bool isBeforeAfterConsecutive = true;
+        // this info is used to check global serializability
+        public NonDetScheduleInfo globalScheduleInfo;
+        public Dictionary<int, NonDetScheduleInfo> scheduleInfoPerSilo;     // <silo ID, scheule info>
 
-        public Tuple<int, string> grainWithHighestBeforeBid = new Tuple<int, string>(-1, "");
+        // <silo ID, grain ID, grain name>
+        // this info is used to commit an ACT after its dependent batch has committed
+        public Dictionary<int, Tuple<int, string>> grainWithMaxBeforeLocalBidPerSilo;
 
         public NonDetFuncResult() : base()
         {
+            globalScheduleInfo = new NonDetScheduleInfo();
+            scheduleInfoPerSilo = new Dictionary<int, NonDetScheduleInfo>();
+            grainWithMaxBeforeLocalBidPerSilo = new Dictionary<int, Tuple<int, string>>();
         }
 
         public void MergeFuncResult(NonDetFuncResult res)
@@ -86,32 +114,45 @@ namespace Utilities
             exception |= res.exception;
             Exp_Deadlock |= res.Exp_Deadlock;
 
-            if (res.minAfterBid != -1 || res.minAfterBid < minAfterBid) 
-                minAfterBid = res.minAfterBid;     // r.minAfterBid != -1
+            foreach (var info in res.scheduleInfoPerSilo)
+                MergeBeforeAfterLocalInfo(info.Value, res.grainWithMaxBeforeLocalBidPerSilo[info.Key], info.Key);
 
-            if (maxBeforeBid < res.maxBeforeBid)   // r.maxBeforeBid != -1
-            {
-                maxBeforeBid = res.maxBeforeBid;
-                grainWithHighestBeforeBid = res.grainWithHighestBeforeBid;
-            }
-
-            isBeforeAfterConsecutive &= res.isBeforeAfterConsecutive;
+            MergeBeforeAfterGlobalInfo(res.globalScheduleInfo);
 
             MergeGrainOpInfo(res);
         }
 
-        public void SetBeforeAfterInfo(int maxBeforeBid, int minAfterBid, bool isConsecutive, Tuple<int, string> grainFullID)
+        public void MergeBeforeAfterLocalInfo(
+            NonDetScheduleInfo newLocalInfo, 
+            Tuple<int, string> grainFullID, 
+            int mySiloID)
         {
-            if (minAfterBid != -1 && minAfterBid < this.minAfterBid)
-                this.minAfterBid = minAfterBid;
-
-            if (this.maxBeforeBid < maxBeforeBid)   // maxBeforeBid != -1
+            if (scheduleInfoPerSilo.ContainsKey(mySiloID) == false)
             {
-                this.maxBeforeBid = maxBeforeBid;
-                grainWithHighestBeforeBid = grainFullID;
+                scheduleInfoPerSilo.Add(mySiloID, newLocalInfo);
+                grainWithMaxBeforeLocalBidPerSilo.Add(mySiloID, grainFullID);
             }
-            
-            isBeforeAfterConsecutive &= isConsecutive;
+            else
+            {
+                var myLocalInfo = scheduleInfoPerSilo[mySiloID];
+                
+                if (myLocalInfo.maxBeforeBid < newLocalInfo.maxBeforeBid)
+                {
+                    myLocalInfo.maxBeforeBid = newLocalInfo.maxBeforeBid;
+                    Debug.Assert(grainWithMaxBeforeLocalBidPerSilo.ContainsKey(mySiloID));
+                    grainWithMaxBeforeLocalBidPerSilo[mySiloID] = grainFullID;
+                }
+
+                myLocalInfo.minAfterBid = Math.Min(myLocalInfo.minAfterBid, newLocalInfo.minAfterBid);
+                myLocalInfo.isAfterComplete &= newLocalInfo.isAfterComplete;
+            }
+        }
+
+        public void MergeBeforeAfterGlobalInfo(NonDetScheduleInfo newGlobalInfo)
+        {
+            globalScheduleInfo.maxBeforeBid = Math.Max(globalScheduleInfo.maxBeforeBid, newGlobalInfo.maxBeforeBid);
+            globalScheduleInfo.minAfterBid = Math.Min(globalScheduleInfo.minAfterBid, newGlobalInfo.minAfterBid);
+            globalScheduleInfo.isAfterComplete &= newGlobalInfo.isAfterComplete;
         }
     }
 

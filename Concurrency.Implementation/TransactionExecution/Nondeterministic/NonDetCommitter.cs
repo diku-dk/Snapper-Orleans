@@ -7,6 +7,7 @@ using Concurrency.Interface.Logging;
 using Orleans;
 using System.Runtime.Serialization;
 using MessagePack;
+using System.Diagnostics;
 
 namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
 {
@@ -39,11 +40,33 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
         }
 
         // serializable or not, sure or not sure
-        public Tuple<bool, bool> CheckSerializability(int highestCommittedBid, int maxBeforeBid, int minAfterBid, bool isBeforeAfterConsecutive)
+        public Tuple<bool, bool> CheckSerializability(
+            NonDetScheduleInfo globalScheduleInfo,
+            Dictionary<int, NonDetScheduleInfo> scheduleInfoPerSilo)
         {
-            if (maxBeforeBid <= highestCommittedBid) return new Tuple<bool, bool>(true, true);
-            if (isBeforeAfterConsecutive && maxBeforeBid < minAfterBid) return new Tuple<bool, bool>(true, true);
-            if (maxBeforeBid >= minAfterBid && minAfterBid != -1) return new Tuple<bool, bool>(false, true);
+            // check global bids
+            var globalRes = Check(globalScheduleInfo.maxBeforeBid, globalScheduleInfo.minAfterBid, globalScheduleInfo.isAfterComplete);
+            var isSerializable = globalRes.Item1;
+            var isSure = globalRes.Item2;
+
+            // check local bids in each silo
+            foreach (var infoPerSilo in scheduleInfoPerSilo)
+            {
+                var info = infoPerSilo.Value;
+                var res = Check(info.maxBeforeBid, info.minAfterBid, info.isAfterComplete);
+                isSerializable &= res.Item1;
+                isSure &= res.Item2;
+            }
+
+            return new Tuple<bool, bool>(isSerializable, isSure);
+        }
+
+        // serializable or not, sure or not sure
+        Tuple<bool, bool> Check(int maxBeforeBid, int minAfterBid, bool isAfterComplete)
+        {
+            if (maxBeforeBid == -1) return new Tuple<bool, bool>(true, true);
+            if (isAfterComplete && maxBeforeBid < minAfterBid) return new Tuple<bool, bool>(true, true);
+            if (maxBeforeBid >= minAfterBid) return new Tuple<bool, bool>(false, true);
             return new Tuple<bool, bool>(false, false);
         }
 
@@ -68,18 +91,21 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             return true;
         }
 
-        public async Task CoordCommit(int tid, int maxBeforeBid, Dictionary<int, OpOnGrain> grainOpInfo)
+        public async Task CoordCommit(int tid, NonDetFuncResult funcResult)
         {
             if (log != null) await log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]);
 
             var commitTask = new List<Task>();
-            foreach (var item in grainOpInfo)
+            foreach (var item in funcResult.grainOpInfo)
             {
                 // if the grain has only been read or it's no-op, no need 2nd phase
                 if (item.Value.isNoOp || item.Value.isReadonly) continue;   
+
                 // writer grain needs 2nd phase, because it can only release the write lock in the 2nd phase
                 var grain = myGrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, item.Value.grainClassName);
-                commitTask.Add(grain.Commit(tid, maxBeforeBid));
+                var siloID = TransactionExecutionGrainPlacementHelper.MapGrainIDToSilo(item.Key);
+                Debug.Assert(funcResult.scheduleInfoPerSilo.ContainsKey(siloID));
+                commitTask.Add(grain.Commit(tid, funcResult.scheduleInfoPerSilo[siloID].maxBeforeBid, funcResult.globalScheduleInfo.maxBeforeBid));
             }
             await Task.WhenAll(commitTask);
         }
@@ -113,7 +139,7 @@ namespace Concurrency.Implementation.TransactionExecution.Nondeterministic
             return vote;
         }
 
-        public async Task Commit(int tid, int maxBeforeBid)
+        public async Task Commit(int tid)
         {
             state.Commit(tid);
             if (log != null) await log.HandleOnCommitIn2PC(tid, coordinatorMap[tid]);

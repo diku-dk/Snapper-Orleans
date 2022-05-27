@@ -15,6 +15,9 @@ namespace Utilities
         // for global coordinator: <siloID, latest global bid emitted to this silo>
         public Dictionary<int, int> lastBidPerService;
 
+        // this info is only used for local coordinators
+        public Dictionary<int, int> lastGlobalBidPerGrain;   // grainID, the global bid of the latest emitted local batch
+
         public BasicToken()
         {
             lastEmitBid = -1;
@@ -23,6 +26,7 @@ namespace Utilities
             highestCommittedBid = -1;
             isLastEmitBidGlobal = false;
             lastBidPerService = new Dictionary<int, int>();
+            lastGlobalBidPerGrain = new Dictionary<int, int>();
         }
     }
 

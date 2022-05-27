@@ -46,6 +46,7 @@ namespace Concurrency.Implementation.Coordinator
                 this.coordPerBatchPerSilo = coordPerBatchPerSilo;
             }
             else isGlobalCoord = false;
+
             Init();
         }
 
@@ -89,7 +90,7 @@ namespace Concurrency.Implementation.Coordinator
                 GnerateSchedulePerService(tid, curBatchID, detRequests[i]);
                 detRequestPromise[i].SetResult(new Tuple<int, int>(curBatchID, tid));
             }
-            UpdateToken(token, curBatchID, false);
+            UpdateToken(token, curBatchID, -1);
 
             detRequests.Clear();
             detRequestPromise.Clear();
@@ -103,7 +104,7 @@ namespace Concurrency.Implementation.Coordinator
                 bidToSubBatches.Add(curBatchID, new Dictionary<int, SubBatch>());
                 if (isGlobalCoord) coordPerBatchPerSilo.Add(curBatchID, new Dictionary<int, int>());
             }
-                
+
             var serviceIDToSubBatch = bidToSubBatches[curBatchID];
 
             for (int i = 0; i < serviceList.Count; i++)
@@ -117,14 +118,14 @@ namespace Concurrency.Implementation.Coordinator
                         // randomly choose a local coord as the coordinator for this batch on that silo
                         var chosenCoordID = LocalCoordGrainPlacementHelper.MapSiloIDToRandomCoordID(serviceID);
                         coordPerBatchPerSilo[curBatchID].Add(serviceID, chosenCoordID);
-                    } 
+                    }
                 }
-                  
+
                 serviceIDToSubBatch[serviceID].txnList.Add(tid);
             }
         }
 
-        public void UpdateToken(BasicToken token, int curBatchID, bool isGlobalBatch)
+        public void UpdateToken(BasicToken token, int curBatchID, int globalBid)
         {
             var serviceIDToSubBatch = bidToSubBatches[curBatchID];
             expectedAcksPerBatch.Add(curBatchID, serviceIDToSubBatch.Count);
@@ -134,29 +135,38 @@ namespace Concurrency.Implementation.Coordinator
             {
                 var serviceID = serviceInfo.Key;
                 var subBatch = serviceInfo.Value;
-                
-                if (token.lastBidPerService.ContainsKey(serviceID)) 
+
+                if (token.lastBidPerService.ContainsKey(serviceID))
+                {
                     subBatch.lastBid = token.lastBidPerService[serviceID];
-                else subBatch.lastBid = -1;
+                    if (isGlobalCoord == false) subBatch.lastGlobalBid = token.lastGlobalBidPerGrain[serviceID];
+                }
+                // else, the default value is -1
 
                 Debug.Assert(subBatch.bid > subBatch.lastBid);
                 token.lastBidPerService[serviceID] = subBatch.bid;
+                if (isGlobalCoord == false) token.lastGlobalBidPerGrain[serviceID] = globalBid;
             }
             bidToLastBid.Add(curBatchID, token.lastEmitBid);
             if (token.lastEmitBid != -1) bidToLastCoordID.Add(curBatchID, token.lastCoordID);
             token.lastEmitBid = curBatchID;
-            token.isLastEmitBidGlobal = isGlobalBatch;
+            token.isLastEmitBidGlobal = globalBid != -1;
             token.lastCoordID = myID;
         }
 
         public void GarbageCollectTokenInfo(BasicToken token)
         {
+            Debug.Assert(isGlobalCoord == false);
             var expiredGrains = new HashSet<int>();
 
             // only when last batch is already committed, the next emmitted batch can have its lastBid = -1 again
             foreach (var item in token.lastBidPerService)
                 if (item.Value <= highestCommittedBid) expiredGrains.Add(item.Key);
-            foreach (var item in expiredGrains) token.lastBidPerService.Remove(item);
+            foreach (var item in expiredGrains)
+            {
+                token.lastBidPerService.Remove(item);
+                token.lastGlobalBidPerGrain.Remove(item);
+            } 
 
             token.highestCommittedBid = highestCommittedBid;
         }

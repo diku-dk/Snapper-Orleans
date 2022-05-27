@@ -16,7 +16,7 @@ namespace Concurrency.Interface.TransactionExecution
         Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
         Task<NonDetFuncResult> ExecuteNonDet(FunctionCall call, TransactionContext ctx);
         Task<bool> Prepare(int tid, bool isReader);
-        Task Commit(int tid, int maxBeforeBid);
+        Task Commit(int tid, int maxBeforeLocalBid, int maxBeforeGlobalBid);
         Task Abort(int tid);
 
         // hybrid execution

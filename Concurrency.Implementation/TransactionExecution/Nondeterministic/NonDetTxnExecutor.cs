@@ -11,6 +11,7 @@ namespace Concurrency.Implementation.TransactionExecution
     public class NonDetTxnExecutor<TState> where TState : ICloneable
     {
         readonly int myID;
+        readonly int mySiloID;
         readonly string myClassName;
         readonly Tuple<int, string> myFullID;
         readonly ILocalCoordGrain myLocalCoord;
@@ -27,7 +28,8 @@ namespace Concurrency.Implementation.TransactionExecution
         // NOTICE: if every PACT awaits every grain call, then if there is no deadlock, there is also no global sesrializability issue
         // In Snapper, every ACT's grain call must await, because Snapper needs to collect grain access info
         // In Snapper, if we allow PACT to not await every grain call, we must do serailizability check for every ACT
-        int maxBeforeBidOnGrain;                                // maxBeforeBid of the current executing / latest executed ACT
+        int maxBeforeLocalBidOnGrain;                           // maxBeforeBid of the current executing / latest executed ACT
+        int maxBeforeGlobalBidOnGrain;
         readonly TimeSpan deadlockTimeout;                      // detect deadlock between ACT and batches
 
         public void CheckGC()
@@ -37,6 +39,7 @@ namespace Concurrency.Implementation.TransactionExecution
 
         public NonDetTxnExecutor(
             int myID,
+            int mySiloID,
             string myClassName,
             ILocalCoordGrain myLocalCoord,
             IGlobalCoordGrain myGlobalCoord,
@@ -44,6 +47,7 @@ namespace Concurrency.Implementation.TransactionExecution
             ITransactionalState<TState> state)
         {
             this.myID = myID;
+            this.mySiloID = mySiloID;
             this.myClassName = myClassName;
             this.myLocalCoord = myLocalCoord;
             this.myGlobalCoord = myGlobalCoord;
@@ -52,7 +56,8 @@ namespace Concurrency.Implementation.TransactionExecution
 
             myFullID = new Tuple<int, string>(myID, myClassName);
             nonDetFuncResults = new Dictionary<int, NonDetFuncResult>();
-            maxBeforeBidOnGrain = -1;
+            maxBeforeLocalBidOnGrain = -1;
+            maxBeforeGlobalBidOnGrain = -1;
             deadlockTimeout = TimeSpan.FromMilliseconds(20);
         }
 
@@ -120,27 +125,29 @@ namespace Concurrency.Implementation.TransactionExecution
         }
 
         // Update the metadata of the execution results, including accessed grains, before/after set, etc.
-        public NonDetFuncResult UpdateExecutionResult(int tid)
+        public NonDetFuncResult UpdateExecutionResult(int tid, int highestCommittedLocalBid)
         {
             var res = nonDetFuncResults[tid];
-
-            if (res.grainWithHighestBeforeBid.Item1 == -1) res.grainWithHighestBeforeBid = myFullID;
-
+            
             if (res.grainOpInfo.ContainsKey(myID) == false)
                 res.grainOpInfo.Add(myID, new OpOnGrain(myClassName, res.isNoOpOnGrain, res.isReadOnlyOnGrain));
 
-            var result = myScheduler.scheduleInfo.GetBeforeAfter(tid);   // <maxBeforeBid, minAfterBid, isConsecutive>
-            var maxBeforeBid = result.Item1;
-            if (maxBeforeBidOnGrain > maxBeforeBid) maxBeforeBid = maxBeforeBidOnGrain;
-            res.SetBeforeAfterInfo(maxBeforeBid, result.Item2, result.Item3, myFullID);
+            var localInfo = new NonDetScheduleInfo();
+            var globalInfo = new NonDetScheduleInfo();
+            myScheduler.scheduleInfo.GetBeforeAfterInfo(tid, highestCommittedLocalBid, localInfo, globalInfo);
+            localInfo.maxBeforeBid = Math.Max(localInfo.maxBeforeBid, maxBeforeLocalBidOnGrain);
+            globalInfo.maxBeforeBid = Math.Max(globalInfo.maxBeforeBid, maxBeforeLocalBidOnGrain);
+            res.MergeBeforeAfterLocalInfo(localInfo, myFullID, mySiloID);
+            res.MergeBeforeAfterGlobalInfo(globalInfo);
 
             return res;
         }
 
-        public void Commit(int maxBeforeBid)
+        public void Commit(int maxBeforeLocalBid, int maxBeforeGlobalBid)
         {
-            Debug.Assert(maxBeforeBidOnGrain <= maxBeforeBid);
-            maxBeforeBidOnGrain = maxBeforeBid;
+            Debug.Assert(maxBeforeLocalBidOnGrain <= maxBeforeLocalBid && maxBeforeGlobalBidOnGrain <= maxBeforeGlobalBid);
+            maxBeforeLocalBidOnGrain = maxBeforeLocalBid;
+            maxBeforeGlobalBidOnGrain = maxBeforeGlobalBid;
         }
 
         public void CleanUp(int tid)
