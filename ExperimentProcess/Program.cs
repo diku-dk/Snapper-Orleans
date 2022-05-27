@@ -400,9 +400,10 @@ namespace ExperimentProcess
 
         static async Task InitializeClients()
         {
+            var manager = new OrleansClientManager();
             clients = new IClusterClient[numDetConsumer + numNonDetConsumer];
             for (int i = 0; i < numDetConsumer + numNonDetConsumer; i++)
-                clients[i] = await ClientConfiguration.StartOrleansClient();
+                clients[i] = await manager.StartOrleansClient();
         }
 
         static void InitializeConsumerThreads()

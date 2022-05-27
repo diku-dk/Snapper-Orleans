@@ -9,7 +9,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Concurrency.Implementation"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Utilities", "Utilities\Utilities.csproj", "{5E31DAD0-3493-4D6A-81B1-A0A03483305C}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SiloHost", "SiloHost\SiloHost.csproj", "{29D51B58-BC0A-4083-8CF5-351DC46A90EA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SnapperSiloHost", "SnapperSiloHost\SnapperSiloHost.csproj", "{29D51B58-BC0A-4083-8CF5-351DC46A90EA}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TPCC.Interfaces", "TPCC.Interfaces\TPCC.Interfaces.csproj", "{DD5957B3-DBB6-43B7-9D61-CADCEB4FD094}"
 EndProject

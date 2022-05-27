@@ -5,26 +5,41 @@ using Orleans.Hosting;
 using Orleans.Configuration;
 using System.Threading.Tasks;
 using System.Net;
+using System.IO;
 
 namespace ExperimentProcess
 {
-    public static class ClientConfiguration
+    public class OrleansClientManager
     {
-        readonly static int maxAttempts = 10;
-        public static async Task<IClusterClient> StartOrleansClient()
+        readonly int maxAttempt = 5;
+        readonly string ServiceRegion;
+        readonly string AccessKey;
+        readonly string SecretKey;
+
+        public OrleansClientManager()
         {
-            for (int i = 0; i < maxAttempts; i++)
+            using (var file = new StreamReader(Constants.credentialFile))
+            {
+                ServiceRegion = file.ReadLine();
+                AccessKey = file.ReadLine();
+                SecretKey = file.ReadLine();
+            }
+        }
+
+        public async Task<IClusterClient> StartOrleansClient()
+        {
+            for (int i = 0; i < maxAttempt; i++)
             {
                 try
                 {
                     var clientBuilder = new ClientBuilder()
                         .Configure<ClusterOptions>(options =>
                         {
-                            options.ClusterId = Constants.ClusterID;
+                            options.ClusterId = Constants.ClusterSilo;
                             options.ServiceId = Constants.ServiceID;
                         });
 
-                    if (Constants.localCluster)
+                    if (Constants.LocalCluster)
                     {
                         if (Constants.multiSilo)
                         {
@@ -39,12 +54,13 @@ namespace ExperimentProcess
                     else
                     {
                         Action<DynamoDBGatewayOptions> dynamoDBOptions = options => {
-                            options.AccessKey = Constants.AccessKey;
-                            options.SecretKey = Constants.SecretKey;
+                            options.AccessKey = AccessKey;
+                            options.SecretKey = SecretKey;
                             options.TableName = Constants.SiloMembershipTable;
-                            options.Service = Constants.ServiceRegion;
+                            options.Service = ServiceRegion;
                             options.WriteCapacityUnits = 10;
                             options.ReadCapacityUnits = 10;
+
                         };
 
                         clientBuilder.UseDynamoDBClustering(dynamoDBOptions);
@@ -57,11 +73,10 @@ namespace ExperimentProcess
                 }
                 catch (Exception)
                 {
-                    Console.WriteLine($"Attemp {i} fails.");
+                    Console.WriteLine($"Attempt {i} failed to initialize the Orleans client.");
                 }
             }
-
-            throw new Exception("Exception: fail to start Orleans Client. ");
+            throw new Exception($"Fail to create OrleansClient");
         }
     }
 }

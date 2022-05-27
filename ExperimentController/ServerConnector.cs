@@ -51,7 +51,8 @@ namespace ExperimentController
 
         async void InitiateClientAndServerAsync()
         {
-            client = await ClientConfiguration.StartOrleansClient();
+            var manager = new OrleansClientManager();
+            client = await manager.StartOrleansClient();
             
             if (Constants.implementationType == ImplementationType.SNAPPER)
             {

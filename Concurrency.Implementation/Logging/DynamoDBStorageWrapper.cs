@@ -19,8 +19,6 @@ namespace Concurrency.Implementation.Logging
         const string ATT_KEY_1 = "GRAIN_REFERENCE";
         const string ATT_KEY_2 = "SEQUENCE_NUMBER";
         const string ATT_VALUE = "VALUE";
-        const string DYNAMODB_ACCESS_KEY_ID = Constants.AccessKey;
-        const string DYNAMODB_ACCESS_KEY_VALUE = Constants.SecretKey;
         const int READ_CAPACITY_UNITS = 10;
         const int WRITE_CAPACITY_UNITS = 10;
 
@@ -30,12 +28,25 @@ namespace Concurrency.Implementation.Logging
 
         public DynamoDBStorageWrapper(string grainType, int grainID)
         {
-            client = new AmazonDynamoDBClient(DYNAMODB_ACCESS_KEY_ID, DYNAMODB_ACCESS_KEY_VALUE, Amazon.RegionEndpoint.USEast2);
+            string ServiceRegion;
+            string AccessKey;
+            string SecretKey;
+
+            using (var file = new StreamReader(Constants.credentialFile))
+            {
+                ServiceRegion = file.ReadLine();
+                AccessKey = file.ReadLine();
+                SecretKey = file.ReadLine();
+            }
+
+            client = new AmazonDynamoDBClient(AccessKey, SecretKey, Amazon.RegionEndpoint.USEast2);
             //Console.WriteLine("Initialized dynamodb client");
             this.grainType = grainType;
             this.grainKey = BitConverter.GetBytes(grainID);
             if (singleTable) logName = Constants.ServiceID;
             else logName = grainType + grainKey;
+
+
         }
 
         async Task createTableIfNotExists()

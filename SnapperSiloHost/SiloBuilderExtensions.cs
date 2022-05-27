@@ -8,7 +8,7 @@ using Orleans.Transactions.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace OrleansSiloHost
+namespace SnapperSiloHost
 {
     public static class SiloBuilderExtensions
     {

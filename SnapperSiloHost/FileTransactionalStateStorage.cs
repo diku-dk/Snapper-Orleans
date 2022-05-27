@@ -1,5 +1,6 @@
 ﻿using System;
 using Orleans;
+using Utilities;
 using Newtonsoft.Json;
 using Orleans.Runtime;
 using System.Threading;
@@ -9,34 +10,45 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Options;
 using Orleans.Transactions.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
+using Concurrency.Interface.Logging;
+using MessagePack;
 
-namespace OrleansSiloHost
+namespace SnapperSiloHost
 {
-    public class MemoryTransactionalStateStorageFactory : ITransactionalStateStorageFactory, ILifecycleParticipant<ISiloLifecycle>
+    public class FileTransactionalStateStorageFactory : ITransactionalStateStorageFactory, ILifecycleParticipant<ISiloLifecycle>
     {
         private readonly string name;
+        private readonly ILoggerGroup loggerGroup;
         private readonly MyTransactionalStateOptions options;
 
         public static ITransactionalStateStorageFactory Create(IServiceProvider services, string name)
         {
+            Console.WriteLine($"Create FileStorageFactory");
             var optionsMonitor = services.GetRequiredService<IOptionsMonitor<MyTransactionalStateOptions>>();
-            return ActivatorUtilities.CreateInstance<MemoryTransactionalStateStorageFactory>(services, name, optionsMonitor.Get(name));
+            return ActivatorUtilities.CreateInstance<FileTransactionalStateStorageFactory>(services, name, optionsMonitor.Get(name));
         }
 
-        public MemoryTransactionalStateStorageFactory(string name, MyTransactionalStateOptions options)
+        public FileTransactionalStateStorageFactory(ILoggerGroup loggerGroup, string name, MyTransactionalStateOptions options)
         {
             this.name = name;
             this.options = options;
+            this.loggerGroup = loggerGroup;
+            loggerGroup.Init(Constants.numLoggerPerSilo);
         }
 
         public ITransactionalStateStorage<TState> Create<TState>(string stateName, IGrainActivationContext context) where TState : class, new()
         {
-            return ActivatorUtilities.CreateInstance<MemoryTransactionalStateStorage<TState>>(context.ActivationServices);
+            var str = context.GrainIdentity.ToString();
+            var strs = str.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var partitionKey = strs[strs.Length - 1];    // use grainID (long) as partitionKey
+            var grainID = int.Parse(partitionKey);
+            var logger = loggerGroup.GetLogger(grainID);
+            return ActivatorUtilities.CreateInstance<FileTransactionalStateStorage<TState>>(context.ActivationServices, logger, partitionKey);
         }
 
         public void Participate(ISiloLifecycle lifecycle)
         {
-            lifecycle.Subscribe(OptionFormattingUtilities.Name<MemoryTransactionalStateStorageFactory>(name), options.InitStage, Init);
+            lifecycle.Subscribe(OptionFormattingUtilities.Name<FileTransactionalStateStorageFactory>(name), options.InitStage, Init);
         }
 
         private Task Init(CancellationToken cancellationToken)
@@ -45,23 +57,29 @@ namespace OrleansSiloHost
         }
     }
 
-    public class MemoryTransactionalStateStorage<TState> : ITransactionalStateStorage<TState> where TState : class, new()
+    public class FileTransactionalStateStorage<TState> : ITransactionalStateStorage<TState> where TState : class, new()
     {
         private KeyEntity key;
+        private readonly string partitionKey;
         private List<KeyValuePair<long, StateEntity>> states;
 
-        public MemoryTransactionalStateStorage()
+        private readonly ILogger logger;
+
+        public FileTransactionalStateStorage(ILogger logger, string partitionKey)
         {
+            this.partitionKey = partitionKey;
+            this.logger = logger;
         }
 
-        public Task<TransactionalStorageLoadResponse<TState>> Load()
+        public async Task<TransactionalStorageLoadResponse<TState>> Load()
         {
             try
             {
-                if (key == null) key = new KeyEntity("default");
-                if (states == null) states = new List<KeyValuePair<long, StateEntity>>();
+                await Task.CompletedTask;
+                key = new KeyEntity(partitionKey);
+                states = new List<KeyValuePair<long, StateEntity>>();
 
-                if (string.IsNullOrEmpty(key.ETag)) return Task.FromResult(new TransactionalStorageLoadResponse<TState>());
+                if (string.IsNullOrEmpty(key.ETag)) return new TransactionalStorageLoadResponse<TState>();
                 else
                 {
                     TState committedState;
@@ -82,10 +100,12 @@ namespace OrleansSiloHost
                         var kvp = states[i];
 
                         // pending states for already committed transactions can be ignored
-                        if (kvp.Key <= key.CommittedSequenceId) continue;
+                        if (kvp.Key <= key.CommittedSequenceId)
+                            continue;
 
                         // upon recovery, local non-committed transactions are considered aborted
-                        if (kvp.Value.TransactionManager == null) break;
+                        if (kvp.Value.TransactionManager == null)
+                            break;
 
                         var tm = JsonConvert.DeserializeObject<ParticipantId>(kvp.Value.TransactionManager);
 
@@ -103,7 +123,7 @@ namespace OrleansSiloHost
                     for (int i = 0; i < states.Count; i++) states[i].Value.StateJson = null;
 
                     var metadata = JsonConvert.DeserializeObject<TransactionalStateMetaData>(key.Metadata);
-                    return Task.FromResult(new TransactionalStorageLoadResponse<TState>(key.ETag, committedState, key.CommittedSequenceId, metadata, PrepareRecordsToRecover));
+                    return new TransactionalStorageLoadResponse<TState>(key.ETag, committedState, key.CommittedSequenceId, metadata, PrepareRecordsToRecover);
                 }
             }
             catch (Exception)
@@ -115,8 +135,6 @@ namespace OrleansSiloHost
 
         public async Task<string> Store(string expectedETag, TransactionalStateMetaData metadata, List<PendingTransactionState<TState>> statesToPrepare, long? commitUpTo, long? abortAfter)
         {
-            /*
-            //Console.WriteLine($"MemoryStorage: Store()");
             if (key.ETag != expectedETag) throw new ArgumentException(nameof(expectedETag), "Etag does not match");
 
             // first, clean up aborted records
@@ -124,7 +142,6 @@ namespace OrleansSiloHost
             {
                 while (states.Count > 0 && states[states.Count - 1].Key > abortAfter)
                     states.RemoveAt(states.Count - 1);
-
             }
 
             // second, persist non-obsolete prepare records
@@ -160,27 +177,25 @@ namespace OrleansSiloHost
                 states.RemoveRange(0, pos);
             }
 
-            return key.ETag;*/
-            return "";
+            // persist KeyEntity and StateEntity
+            await logger.Write(MessagePackSerializer.Serialize(key));
+            await logger.Write(MessagePackSerializer.Serialize(states));
+            return key.ETag;
         }
 
         // find the StateEntity who's Key == sequenceId
         private bool FindState(long sequenceId, out int pos)
         {
-            pos = 0;
-            while (pos < states.Count)
+            for (var i = 0; i < states.Count; i++)
             {
-                switch (states[pos].Key.CompareTo(sequenceId))
+                if (states[i].Key == sequenceId)
                 {
-                    case 0:
-                        return true;
-                    case -1:
-                        pos++;
-                        continue;
-                    case 1:
-                        return false;
+                    pos = i;
+                    return true;
                 }
             }
+
+            pos = states.Count;
             return false;
         }
     }

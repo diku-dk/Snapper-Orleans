@@ -63,6 +63,7 @@
         public const string dataPath = @"..\Snapper-Orleans\data\";
         public const string logPath = dataPath + @"log\";
         public const string resultPath = dataPath + "result.txt";
+        public const string credentialFile = dataPath + "AWS_credential.txt";
 
         public const string controller_Local_SinkAddress = "@tcp://localhost:5558";
         public const string controller_Local_WorkerAddress = "@tcp://localhost:5575";
@@ -74,15 +75,13 @@
         public const string worker_Remote_SinkAddress = ">tcp://1.1.1.1.212:5558";    // controller public IP
         public const string worker_Remote_ControllerAddress = ">tcp://1.1.1.1:5575";  // controller public IP
 
-        public const bool localCluster = true;
-        public const string ClusterID = "cluster";
+        public const bool LocalCluster = false;
+        public const string LocalSilo = "dev";
+        public const string ClusterSilo = "ec2";
         public const string ServiceID = "Snapper";
         public const string LogTable = "SnapperLog";
-        public const string ServiceRegion = "";
-        public const string AccessKey = "";
         public const string GrainStateTable = "SnapperGrainStateTable";
-        public const string SiloMembershipTable = "";
-        public const string SecretKey = "";
+        public const string SiloMembershipTable = "SnapperMembershipTable";
 
         // for workload generation
         public const int BASE_NUM_MULTITRANSFER = 150000;
