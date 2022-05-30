@@ -59,6 +59,8 @@ namespace Utilities
 
             var str = GetSiloProcessorAffinity(processID);
             var serverProcessorAffinity = Convert.ToInt64(str, 2);     // server uses the highest n bits
+
+            if (processName == "SnapperExperimentController") processID = 0;
             processes[processID].ProcessorAffinity = (IntPtr)serverProcessorAffinity;
             Console.WriteLine($"Process affinity is set up for {processName}[{processID}]");
         }
