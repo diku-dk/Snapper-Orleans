@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using MathNet.Numerics.Distributions;
 using System.Linq;
 
-namespace ExperimentProcess
+namespace SnapperExperimentProcess
 {
     public class SmallBankBenchmark : IBenchmark
     {

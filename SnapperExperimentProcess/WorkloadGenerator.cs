@@ -6,7 +6,7 @@ using MathNet.Numerics.Distributions;
 using System.Diagnostics;
 using System.IO;
 
-namespace ExperimentProcess
+namespace SnapperExperimentProcess
 {
     public class WorkloadGenerator
     {
@@ -181,7 +181,7 @@ namespace ExperimentProcess
                     }
                     break;
                 default:
-                    throw new Exception("Exception: ExperimentProcess only support Uniform for GetBalance. ");
+                    throw new Exception("Exception: SnapperExperimentProcess only support Uniform for GetBalance. ");
             }
         }
 

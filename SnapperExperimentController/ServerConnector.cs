@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using TPCC.Interfaces;
-using ExperimentProcess;
+using SnapperExperimentProcess;
 using SmallBank.Interfaces;
 using Orleans;
 using Concurrency.Interface.Configuration;
@@ -10,7 +10,7 @@ using Utilities;
 using System.Diagnostics;
 using System.Threading;
 
-namespace ExperimentController
+namespace SnapperExperimentController
 {
     public class ServerConnector
     {

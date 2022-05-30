@@ -10,15 +10,14 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using MessagePack;
 
-namespace ExperimentProcess
+namespace SnapperExperimentProcess
 {
     static class Program
     {
+        static int workerID = 0;
         // for communication between ExpController and ExpProcess
-        static PushSocket sink;
-        static string sinkAddress;
-        static string controllerAddress;
-        //static ISerializer serializer;
+        static SubscriberSocket inputSocket;
+        static PushSocket outputSocket;
         static CountdownEvent[] threadAcks;
         static WorkloadConfiguration workload;
         static bool initializationDone = false;
@@ -40,24 +39,20 @@ namespace ExperimentProcess
         static WorkloadGenerator workloadGenerator;
         static WorkloadResult[] results;
 
-        static void Main()
+        static void Main(string[] args)
         {
-            if (Constants.numWorker > 1)
-            {
-                sinkAddress = Constants.worker_Remote_SinkAddress;
-                controllerAddress = Constants.worker_Remote_ControllerAddress;
-            }
-            else
-            {
-                sinkAddress = Constants.worker_Local_SinkAddress;
-                controllerAddress = Constants.worker_Local_ControllerAddress;
-            }
-            sink = new PushSocket(sinkAddress);
-            //serializer = new MsgPackSerializer();
+            workerID = int.Parse(args[0]);
+            inputSocket = new SubscriberSocket(Constants.worker_InputAddress);
+            outputSocket = new PushSocket(Constants.worker_OutputAddress);
 
+            if (Constants.LocalCluster == false && Constants.LocalTest == false)
+            {
+                Debug.Assert(Environment.ProcessorCount >= (Constants.numWorker + 1) * Constants.numCPUPerSilo);
+                Helper.SetCPU(workerID, "SnapperExperimentProcess");
+            }
+            
             Console.WriteLine("Worker is Started...");
             ProcessWork();
-            //Console.ReadLine();
         }
 
         static async void ThreadWorkAsync(object obj)
@@ -209,58 +204,54 @@ namespace ExperimentProcess
 
         static void ProcessWork()
         {
-            Console.WriteLine("====== WORKER ======");
-            using (var controller = new SubscriberSocket(controllerAddress))
+            Console.WriteLine($"worker is ready to connect controller");
+            inputSocket.Subscribe("WORKLOAD_INIT");
+            //Acknowledge the controller thread
+            var msg = new NetworkMessage(Utilities.MsgType.WORKER_CONNECT);
+            outputSocket.SendFrame(MessagePackSerializer.Serialize(msg));
+            Console.WriteLine("Connected to controller");
+
+            inputSocket.Options.ReceiveHighWatermark = 1000;
+            var messageTopicReceived = inputSocket.ReceiveFrameString();
+            var messageReceived = inputSocket.ReceiveFrameBytes();
+            //Wait to receive workload msg
+            msg = MessagePackSerializer.Deserialize<NetworkMessage>(messageReceived);
+            Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT);
+            Console.WriteLine("Receive workload configuration.");
+            inputSocket.Unsubscribe("WORKLOAD_INIT");
+            inputSocket.Subscribe("RUN_EPOCH");
+            workload = MessagePackSerializer.Deserialize<WorkloadConfiguration>(msg.content);
+            Console.WriteLine("Received workload message from controller");
+            Console.WriteLine($"detPipe per thread = {workload.pactPipeSize}, nonDetPipe per thread = {workload.actPipeSize}");
+
+            //Initialize threads and other data-structures for epoch runs
+            Initialize();
+            while (!initializationDone) Thread.Sleep(100);
+
+            Console.WriteLine("Finished initialization, sending ACK to controller");
+            //Send an ACK
+            msg = new NetworkMessage(Utilities.MsgType.WORKLOAD_INIT_ACK);
+            outputSocket.SendFrame(MessagePackSerializer.Serialize(msg));
+
+            for (int i = 0; i < workload.numEpochs; i++)
             {
-                Console.WriteLine($"worker is ready to connect controller");
-                controller.Subscribe("WORKLOAD_INIT");
-                //Acknowledge the controller thread
-                var msg = new NetworkMessage(Utilities.MsgType.WORKER_CONNECT);
-                sink.SendFrame(MessagePackSerializer.Serialize(msg));
-                Console.WriteLine("Connected to controller");
-
-                controller.Options.ReceiveHighWatermark = 1000;
-                var messageTopicReceived = controller.ReceiveFrameString();
-                var messageReceived = controller.ReceiveFrameBytes();
-                //Wait to receive workload msg
+                messageTopicReceived = inputSocket.ReceiveFrameString();
+                messageReceived = inputSocket.ReceiveFrameBytes();
+                //Wait for EPOCH RUN signal
                 msg = MessagePackSerializer.Deserialize<NetworkMessage>(messageReceived);
-                Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT);
-                Console.WriteLine("Receive workload configuration.");
-                controller.Unsubscribe("WORKLOAD_INIT");
-                controller.Subscribe("RUN_EPOCH");
-                workload = MessagePackSerializer.Deserialize<WorkloadConfiguration>(msg.content);
-                Console.WriteLine("Received workload message from controller");
-                Console.WriteLine($"detPipe per thread = {workload.pactPipeSize}, nonDetPipe per thread = {workload.actPipeSize}");
-
-                //Initialize threads and other data-structures for epoch runs
-                Initialize();
-                while (!initializationDone) Thread.Sleep(100);
-
-                Console.WriteLine("Finished initialization, sending ACK to controller");
-                //Send an ACK
-                msg = new NetworkMessage(Utilities.MsgType.WORKLOAD_INIT_ACK);
-                sink.SendFrame(MessagePackSerializer.Serialize(msg));
-
-                for (int i = 0; i < workload.numEpochs; i++)
-                {
-                    messageTopicReceived = controller.ReceiveFrameString();
-                    messageReceived = controller.ReceiveFrameBytes();
-                    //Wait for EPOCH RUN signal
-                    msg = MessagePackSerializer.Deserialize<NetworkMessage>(messageReceived);
-                    Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH);
-                    //Console.WriteLine($"Received signal from controller. Running epoch {i} across {numDetConsumer + numNonDetConsumer} worker threads");
-                    //Signal the barrier
-                    barriers[i].SignalAndWait();
-                    //Wait for all threads to finish the epoch
-                    threadAcks[i].Wait();
-                    var result = ExperimentResultAggregator.AggregateResultForEpoch(results);
-                    msg = new NetworkMessage(Utilities.MsgType.RUN_EPOCH_ACK, MessagePackSerializer.Serialize(result));
-                    sink.SendFrame(MessagePackSerializer.Serialize(msg));
-                }
-
-                Console.WriteLine("Finished running epochs, exiting");
-                foreach (var thread in threads) thread.Join();
+                Trace.Assert(msg.msgType == Utilities.MsgType.RUN_EPOCH);
+                //Console.WriteLine($"Received signal from controller. Running epoch {i} across {numDetConsumer + numNonDetConsumer} worker threads");
+                //Signal the barrier
+                barriers[i].SignalAndWait();
+                //Wait for all threads to finish the epoch
+                threadAcks[i].Wait();
+                var result = ExperimentResultAggregator.AggregateResultForEpoch(results);
+                msg = new NetworkMessage(Utilities.MsgType.RUN_EPOCH_ACK, MessagePackSerializer.Serialize(result));
+                outputSocket.SendFrame(MessagePackSerializer.Serialize(msg));
             }
+
+            Console.WriteLine("Finished running epochs, exiting");
+            foreach (var thread in threads) thread.Join();
         }
 
         static async void Initialize()
@@ -282,7 +273,7 @@ namespace ExperimentProcess
                     for (int i = 0; i < numDetConsumer + numNonDetConsumer; i++) benchmarks[i] = new TPCCBenchmark();
                     break;
                 default:
-                    throw new Exception("Exception: ExperimentProcess only support SmallBank and TPCC benchmarks");
+                    throw new Exception("Exception: SnapperExperimentProcess only support SmallBank and TPCC benchmarks");
             }
             results = new WorkloadResult[numDetConsumer + numNonDetConsumer];
             for (int i = 0; i < numDetConsumer + numNonDetConsumer; i++)

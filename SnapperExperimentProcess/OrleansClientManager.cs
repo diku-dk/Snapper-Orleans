@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using System.Net;
 using System.IO;
 
-namespace ExperimentProcess
+namespace SnapperExperimentProcess
 {
     public class OrleansClientManager
     {

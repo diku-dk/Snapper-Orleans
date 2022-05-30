@@ -2,7 +2,7 @@
 using Utilities;
 using System.Threading.Tasks;
 
-namespace ExperimentProcess
+namespace SnapperExperimentProcess
 {
     public interface IBenchmark
     {

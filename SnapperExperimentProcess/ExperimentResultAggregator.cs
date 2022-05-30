@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using Utilities;
 
-namespace ExperimentProcess
+namespace SnapperExperimentProcess
 {
     public class ExperimentResultAggregator
     {

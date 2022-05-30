@@ -2,7 +2,7 @@
 using TPCC.Grains;
 using System.Collections.Generic;
 
-namespace ExperimentProcess
+namespace SnapperExperimentProcess
 {
     [Serializable]
     public class RequestData

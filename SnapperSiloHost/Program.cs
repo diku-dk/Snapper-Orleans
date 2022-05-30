@@ -116,41 +116,16 @@ namespace SnapperSiloHost
             await siloHost.StartAsync();
             Console.WriteLine("Silo is started...");
 
-            SetCPU();
-
+            if (Constants.LocalCluster == false && Constants.LocalTest == false)
+            {
+                Debug.Assert(Environment.ProcessorCount >= (Constants.numSilo + 1) * Constants.numCPUPerSilo);
+                Helper.SetCPU(siloID, "SnapperSiloHost");
+            }
+            
             Console.WriteLine("Press Enter to terminate...");
             Console.ReadLine();
             await siloHost.StopAsync();
             return 0;
-        }
-
-        static void SetCPU()
-        {
-            Console.WriteLine("Set processor affinity for SnapperSiloHost...");
-            var processes = Process.GetProcessesByName("SnapperSiloHost");
-
-            var str = GetSiloProcessorAffinity();
-            var serverProcessorAffinity = Convert.ToInt64(str, 2);     // server uses the lowest n bits
-            processes[siloID].ProcessorAffinity = (IntPtr)serverProcessorAffinity;
-        }
-
-        static string GetSiloProcessorAffinity()
-        {
-            Debug.Assert(Environment.ProcessorCount >= (Constants.numSilo + 1) * Constants.numCPUPerSilo);
-
-            var str = "";
-            var firstCPUIndex = siloID * Constants.numCPUPerSilo;
-            for (int i = 0; i < Environment.ProcessorCount; i++)
-            {
-                if (i == firstCPUIndex)
-                {
-                    for (int j = 0; j < Constants.numCPUPerSilo; j++) str += "1";
-                    i += Constants.numCPUPerSilo - 1;
-                }
-                else str += "0";
-            }
-            Console.WriteLine($"silo {siloID}: {str}");
-            return str;
         }
 
         static void ConfigureServices(IServiceCollection services)

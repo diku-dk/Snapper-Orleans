@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
 
 namespace Utilities
 {
@@ -47,6 +50,47 @@ namespace Utilities
             var part1 = rnd.Next(0, A + 1);
             var part2 = rnd.Next(x, y + 1);
             return (((part1 | part2) + C) % (y - x + 1)) + x;
+        }
+
+        public static void SetCPU(int processID, string processName)
+        {
+            Console.WriteLine($"Set processor affinity for {processName}...");
+            var processes = Process.GetProcessesByName(processName);
+
+            var str = GetSiloProcessorAffinity(processID);
+            var serverProcessorAffinity = Convert.ToInt64(str, 2);     // server uses the highest n bits
+            processes[processID].ProcessorAffinity = (IntPtr)serverProcessorAffinity;
+            Console.WriteLine($"Process affinity is set up for {processName}[{processID}]");
+        }
+
+        static string GetSiloProcessorAffinity(int processID)
+        {
+            var str = "";
+            var firstCPUIndex = processID * Constants.numCPUPerSilo;
+            for (int i = 0; i < Environment.ProcessorCount; i++)
+            {
+                if (i == firstCPUIndex)
+                {
+                    for (int j = 0; j < Constants.numCPUPerSilo; j++) str += "1";
+                    i += Constants.numCPUPerSilo - 1;
+                }
+                else str += "0";
+            }
+            return str;
+        }
+
+        public static string GetLocalIPAddress()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (var ip in host.AddressList)
+                if (ip.AddressFamily == AddressFamily.InterNetwork) return ip.ToString();
+
+            throw new Exception("No network adapters with an IPv4 address in the system!");
+        }
+
+        public static string GetPublicIPAddress()
+        {
+            return new WebClient().DownloadString("https://ipv4.icanhazip.com/").TrimEnd();
         }
     }
 }

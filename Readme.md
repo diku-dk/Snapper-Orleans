@@ -13,7 +13,7 @@ Snapper is developed on **.NET Core** platform.
 Set `localCluster` in `Utilities/Constants.cs` as `true` to run experiment on a local machine.
 
 ### Workload Setting
-Customise your workload by changing `<BenchmarkConfig>` settings in `ExperimentController/App.config`.
+Customise your workload by changing `<BenchmarkConfig>` settings in `SnapperExperimentController/App.config`.
 
 ### Build and Run
 Use the following command to start the server:
@@ -21,6 +21,6 @@ Use the following command to start the server:
 
 To build and run our sample client, run the following two projects one after the other:
 
-`dotnet run --project ExperimentController/ExperimentController.csproj`
+`dotnet run --project SnapperExperimentController/SnapperExperimentController.csproj`
 
-`dotnet run --project ExperimentProcess/ExperimentProcess.csproj`
+`dotnet run --project SnapperExperimentProcess/SnapperExperimentProcess.csproj`

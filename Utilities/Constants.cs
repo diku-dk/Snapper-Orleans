@@ -12,7 +12,7 @@
     public class Constants
     {
         // Client config
-        public const int numWorker = 1;
+        public const int numWorker = 2;
 
         // architecture 1: single silo
         //                 local coordinators (num = numLocalCoordPerSilo)
@@ -65,16 +65,12 @@
         public const string resultPath = dataPath + "result.txt";
         public const string credentialFile = dataPath + "AWS_credential.txt";
 
-        public const string controller_Local_SinkAddress = "@tcp://localhost:5558";
-        public const string controller_Local_WorkerAddress = "@tcp://localhost:5575";
-        public const string worker_Local_SinkAddress = ">tcp://localhost:5558";
-        public const string worker_Local_ControllerAddress = ">tcp://localhost:5575";
+        public const string controller_InputAddress = $"@tcp://localhost:5557";   // pull
+        public const string controller_OutputAddress = "@tcp://localhost:5558";   // publish
+        public const string worker_InputAddress = ">tcp://localhost:5558";        // subscribe
+        public const string worker_OutputAddress = ">tcp://localhost:5557";       // push
 
-        public const string controller_Remote_SinkAddress = "@tcp://1.1.1.1:5558";    // controller private IP
-        public const string controller_Remote_WorkerAddress = "@tcp://*:5575";
-        public const string worker_Remote_SinkAddress = ">tcp://1.1.1.1.212:5558";    // controller public IP
-        public const string worker_Remote_ControllerAddress = ">tcp://1.1.1.1:5575";  // controller public IP
-
+        public const bool LocalTest = true;
         public const bool LocalCluster = false;
         public const string LocalSilo = "dev";
         public const string ClusterSilo = "ec2";

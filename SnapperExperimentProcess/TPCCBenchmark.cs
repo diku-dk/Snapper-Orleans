@@ -5,7 +5,7 @@ using TPCC.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
-namespace ExperimentProcess
+namespace SnapperExperimentProcess
 {
     public class TPCCBenchmark : IBenchmark
     {

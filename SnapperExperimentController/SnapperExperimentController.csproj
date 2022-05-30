@@ -28,7 +28,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
-		<ProjectReference Include="..\ExperimentProcess\ExperimentProcess.csproj" />
+		<ProjectReference Include="..\SnapperExperimentProcess\SnapperExperimentProcess.csproj" />
 		<ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj" />
 		<ProjectReference Include="..\TPCC.Interfaces\TPCC.Interfaces.csproj" />
 		<ProjectReference Include="..\Utilities\Utilities.csproj" />

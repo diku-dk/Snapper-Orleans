@@ -32,10 +32,10 @@ for ($j = 0; $j -le 0; $j++)
         {
             #$detPipe = $pipe
             #$nonDetPipe = $pipe
-            Start-Process "dotnet" -ArgumentList "run --project ExperimentController --no-build -- $zipF $detPercent $cpu"
+            Start-Process "dotnet" -ArgumentList "run --project SnapperExperimentController --no-build -- $zipF $detPercent $cpu"
             Start-Sleep 8
-            Start-Process "dotnet" -ArgumentList "run --project ExperimentProcess --no-build -- $cpu $detPipe $nonDetPipe"
-            #Start-Process "dotnet" -ArgumentList "run --project ExperimentProcess --no-build -- $cpu $pipe"
+            Start-Process "dotnet" -ArgumentList "run --project SnapperExperimentProcess --no-build -- $cpu $detPipe $nonDetPipe"
+            #Start-Process "dotnet" -ArgumentList "run --project SnapperExperimentProcess --no-build -- $cpu $pipe"
             #Start-Sleep 62
         }
     }
