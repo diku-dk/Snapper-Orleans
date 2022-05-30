@@ -261,18 +261,37 @@ namespace SnapperExperimentProcess
                         for (int txn = 0; txn < numTxnPerEpoch; txn++)
                         {
                             var grainsPerTxn = new List<int>();
-                            for (int normal = 0; normal < workload.txnSize - numHotGrainPerTxn; normal++)
+
+                            // get the list of silos
+                            var numSiloAccess = SelectNumSilo(workload.txnSize);
+                            Debug.Assert(numSiloAccess <= workload.txnSize);
+                            var siloList = new List<int>();
+                            for (int j = 0; j < numSiloAccess; j++)   // how many silos the txn will access
                             {
-                                var normalGrain = normal_dist.Sample();
-                                while (grainsPerTxn.Contains(normalGrain)) normalGrain = normal_dist.Sample();
-                                grainsPerTxn.Add(normalGrain);
+                                var silo = siloDist.Sample();
+                                while (siloList.Contains(silo)) silo = siloDist.Sample();
+                                siloList.Add(silo);
                             }
-                            for (int hot = 0; hot < numHotGrainPerTxn; hot++)
+                            Debug.Assert(siloList.Count == numSiloAccess);
+
+                            for (int i = 0; i < workload.txnSize; i++)
                             {
-                                var hotGrain = hot_dist.Sample();
-                                while (grainsPerTxn.Contains(hotGrain)) hotGrain = hot_dist.Sample();
-                                grainsPerTxn.Add(hotGrain);
+                                if (i < numHotGrainPerTxn)   // those grains are selected from hot set
+                                {
+                                    var silo = siloList[i % numSiloAccess];
+                                    var hotGrain = hot_dist.Sample() + silo * Constants.numGrainPerSilo;
+                                    while (grainsPerTxn.Contains(hotGrain)) hotGrain = hot_dist.Sample() + silo * Constants.numGrainPerSilo;
+                                    grainsPerTxn.Add(hotGrain);
+                                }
+                                else   // those grains are selected from non-hot set
+                                {
+                                    var silo = siloList[i % numSiloAccess];
+                                    var normalGrain = normal_dist.Sample() + silo * Constants.numGrainPerSilo;
+                                    while (grainsPerTxn.Contains(normalGrain)) normalGrain = normal_dist.Sample() + silo * Constants.numGrainPerSilo;
+                                    grainsPerTxn.Add(normalGrain);
+                                }
                             }
+
                             shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
                         }
                     }
