@@ -11,6 +11,15 @@
 
     public class Constants
     {
+        public const bool LocalTest = false;
+        public const bool LocalCluster = false;
+        public const string LocalSilo = "dev";
+        public const string ClusterSilo = "ec2";
+        public const string ServiceID = "Snapper";
+        public const string LogTable = "SnapperLog";
+        public const string GrainStateTable = "SnapperGrainStateTable";
+        public const string SiloMembershipTable = "SnapperMembershipTable";
+
         // Client config
         public const int numWorker = 2;
 
@@ -35,16 +44,16 @@
         public const bool multiSilo = numSilo > 1;
         public const CCType ccType = CCType.S2PL;
         public const ImplementationType implementationType = ImplementationType.SNAPPER;
-        public const LoggingType loggingType = LoggingType.NOLOGGING;
+        public const LoggingType loggingType = LoggingType.LOGGER;
         public const StorageType storageType = StorageType.FILESYSTEM;
-        public const int numGlobalCoord = numSilo * 2;
-        public const int numLocalCoordPerSilo = numCPUPerSilo / numCPUBasic * 8;
+        public const int numGlobalCoord = numSilo * 1;
+        public const int numLocalCoordPerSilo = numCPUPerSilo / numCPUBasic * 4;
         public const int loggingBatchSize = 1;
         public const bool loggingBatching = false;
         public const int numGlobalLogger = 1;
-        public const int numLoggerPerSilo = numCPUPerSilo / numCPUBasic * 8;
+        public const int numLoggerPerSilo = numCPUPerSilo / numCPUBasic * 4;
         // for SmallBank
-        public const int numGrainPerSilo = 10 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
+        public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
         // for TPCC
         public const int NUM_W_PER_SILO = 2 * numCPUPerSilo / numCPUBasic;
         public const int NUM_D_PER_W = 10;
@@ -69,15 +78,6 @@
         public const string controller_OutputAddress = "@tcp://localhost:5558";   // publish
         public const string worker_InputAddress = ">tcp://localhost:5558";        // subscribe
         public const string worker_OutputAddress = ">tcp://localhost:5557";       // push
-
-        public const bool LocalTest = true;
-        public const bool LocalCluster = false;
-        public const string LocalSilo = "dev";
-        public const string ClusterSilo = "ec2";
-        public const string ServiceID = "Snapper";
-        public const string LogTable = "SnapperLog";
-        public const string GrainStateTable = "SnapperGrainStateTable";
-        public const string SiloMembershipTable = "SnapperMembershipTable";
 
         // for workload generation
         public const int BASE_NUM_MULTITRANSFER = 150000;

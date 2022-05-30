@@ -14,13 +14,13 @@ namespace Concurrency.Implementation.Logging
     {
         private ILogger[] loggers = null;
 
-        public void Init(int numLogger)
+        public void Init(int numLogger, string loggerName)
         {
             if (loggers != null) foreach (var logger in loggers) logger.CleanFile();
             else
             {
                 loggers = new ILogger[numLogger];
-                for (int i = 0; i < numLogger; i++) loggers[i] = new Logger(i);
+                for (int i = 0; i < numLogger; i++) loggers[i] = new Logger(loggerName, i);
             }
         }
 
@@ -70,7 +70,7 @@ namespace Concurrency.Implementation.Logging
 
         private long IOcount = 0;
 
-        public Logger(int myID)
+        public Logger(string loggerName, int myID)
         {
             index = 0;
             this.myID = myID;
@@ -81,7 +81,7 @@ namespace Concurrency.Implementation.Logging
                 buffer = new byte[maxBufferSize];
                 waitFlush = new TaskCompletionSource<bool>();
             }
-            fileName = Constants.logPath + myID;
+            fileName = Constants.logPath + loggerName + myID;
             instanceLock = new SemaphoreSlim(1);
             file = new FileStream(fileName, FileMode.Append, FileAccess.Write);
         }

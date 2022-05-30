@@ -16,6 +16,7 @@ using Concurrency.Interface.Coordinator;
 using Concurrency.Implementation.Coordinator;
 using System.IO;
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace SnapperSiloHost
 {
@@ -78,7 +79,7 @@ namespace SnapperSiloHost
                         .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback);
                 }
                 else builder.UseLocalhostClustering();
-            } 
+            }
 
             builder
                 .Configure<ClusterOptions>(options =>

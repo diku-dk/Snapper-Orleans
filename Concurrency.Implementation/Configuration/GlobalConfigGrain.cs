@@ -124,7 +124,7 @@ namespace Concurrency.Implementation.Configuration
 
             if (Constants.multiSilo == false) return;
 
-            if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numGlobalLogger);
+            if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numGlobalLogger, "GlobalLog");
 
             coordMap.Init(GrainFactory);
             if (Constants.hierarchicalCoord) await ConfigHierarchicalArchitecture();

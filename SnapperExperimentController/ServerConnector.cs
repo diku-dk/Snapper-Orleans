@@ -190,7 +190,7 @@ namespace SnapperExperimentController
                         throw new Exception("Unknown grain implementation type");
                 }
 
-                if (sequence)
+                if (sequence && tasks.Count == Constants.numGrainPerSilo / 10)
                 {
                     Console.WriteLine($"Load {Environment.ProcessorCount} grains, i = {i}");
                     await Task.WhenAll(tasks);

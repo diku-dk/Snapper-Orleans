@@ -33,7 +33,7 @@ namespace SnapperSiloHost
             this.name = name;
             this.options = options;
             this.loggerGroup = loggerGroup;
-            loggerGroup.Init(Constants.numLoggerPerSilo);
+            loggerGroup.Init(Constants.numLoggerPerSilo, "OrleansTransactionLog");
         }
 
         public ITransactionalStateStorage<TState> Create<TState>(string stateName, IGrainActivationContext context) where TState : class, new()

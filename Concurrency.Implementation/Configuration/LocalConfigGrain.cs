@@ -60,7 +60,7 @@ namespace Concurrency.Implementation.Configuration
         public async Task ConfigLocalEnv()
         {
             Console.WriteLine($"local config grain {siloID} is initiated, silo ID = {siloID}");
-            if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numLoggerPerSilo);
+            if (Constants.loggingType == LoggingType.LOGGER) loggerGroup.Init(Constants.numLoggerPerSilo, $"Silo{siloID}_LocalLog");
 
             // in this case, all coordinators locate in a separate silo
             coordMap.Init(GrainFactory);

@@ -57,7 +57,9 @@ namespace Utilities
             Console.WriteLine($"Set processor affinity for {processName}...");
             var processes = Process.GetProcessesByName(processName);
 
-            var str = GetSiloProcessorAffinity(processID);
+            var numCPU = Constants.numCPUPerSilo;
+            if (processName == "SnapperSiloHost" && processID == Constants.numSilo) numCPU /= 2; 
+            var str = GetSiloProcessorAffinity(processID, numCPU);
             var serverProcessorAffinity = Convert.ToInt64(str, 2);     // server uses the highest n bits
 
             if (processName == "SnapperExperimentController") processID = 0;
@@ -65,7 +67,7 @@ namespace Utilities
             Console.WriteLine($"Process affinity is set up for {processName}[{processID}]");
         }
 
-        static string GetSiloProcessorAffinity(int processID)
+        static string GetSiloProcessorAffinity(int processID, int numCPU)
         {
             var str = "";
             var firstCPUIndex = processID * Constants.numCPUPerSilo;
@@ -73,8 +75,8 @@ namespace Utilities
             {
                 if (i == firstCPUIndex)
                 {
-                    for (int j = 0; j < Constants.numCPUPerSilo; j++) str += "1";
-                    i += Constants.numCPUPerSilo - 1;
+                    for (int j = 0; j < numCPU; j++) str += "1";
+                    i += numCPU - 1;
                 }
                 else str += "0";
             }
