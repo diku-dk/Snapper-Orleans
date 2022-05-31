@@ -44,7 +44,6 @@ namespace SnapperExperimentProcess
 
         public static WorkloadResult AggregateResultForEpoch(WorkloadResult[] result)
         {
-            Debug.Assert(result.Length == Constants.numWorker);
             var aggResult = result[0];
             for (int i = 1; i < result.Length; i++) aggResult.MergeData(result[i]);
             return aggResult;
@@ -112,68 +111,78 @@ namespace SnapperExperimentProcess
 
             using (file = new StreamWriter(filePath, true))
             {
-                file.Write($"{ChangeFormat(pact_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(pact_dist_tp_meanAndSd.StandardDeviation, 0)} ");
-                file.Write($"{ChangeFormat(pact_non_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(pact_non_dist_tp_meanAndSd.StandardDeviation, 0)} ");
-
-                file.Write($"{ChangeFormat(act_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(act_dist_tp_meanAndSd.StandardDeviation, 0)} ");
-                file.Write($"{ChangeFormat(act_non_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(act_non_dist_tp_meanAndSd.StandardDeviation, 0)} ");
-
-                var act_dist_abort_rw = 100.0 - act_dist_abort_deadlock.Mean() - act_dist_abort_notSerializable.Mean() - act_dist_abort_notSureSerializable.Mean();
-                file.Write($"{ChangeFormat(act_dist_abort.Mean(), 2)}% " +
-                           $"{ChangeFormat(act_dist_abort_rw, 2)}% " +
-                           $"{ChangeFormat(act_dist_abort_deadlock.Mean(), 2)}% " +
-                           $"{ChangeFormat(act_dist_abort_notSerializable.Mean(), 2)}% " +
-                           $"{ChangeFormat(act_dist_abort_notSureSerializable.Mean(), 2)}% ");
-
-                var act_non_dist_abort_rw = 100.0 - act_non_dist_abort_deadlock.Mean() - act_non_dist_abort_notSerializable.Mean() - act_non_dist_abort_notSureSerializable.Mean();
-                file.Write($"{ChangeFormat(act_non_dist_abort.Mean(), 2)}% " +
-                           $"{ChangeFormat(act_non_dist_abort_rw, 2)}% " +
-                           $"{ChangeFormat(act_non_dist_abort_deadlock.Mean(), 2)}% " +
-                           $"{ChangeFormat(act_non_dist_abort_notSerializable.Mean(), 2)}% " +
-                           $"{ChangeFormat(act_non_dist_abort_notSureSerializable.Mean(), 2)}% ");
-
-                foreach (var percentile in percentilesToCalculate)
+                if (pactPercent > 0)
                 {
-                    var latency = ArrayStatistics.PercentileInplace(pact_dist_latencies.latency.ToArray(), percentile);
-                    file.Write($"{ChangeFormat(latency, 1)} ");
+                    file.Write($"{ChangeFormat(pact_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(pact_dist_tp_meanAndSd.StandardDeviation, 0)} ");
+                    file.Write($"{ChangeFormat(pact_non_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(pact_non_dist_tp_meanAndSd.StandardDeviation, 0)} ");
                 }
 
-                file.Write($"{ChangeFormat(pact_dist_latencies.prepareTxnTime.Mean(), 1)} ");
-                file.Write($"{ChangeFormat(pact_dist_latencies.executeTxnTime.Mean(), 1)} ");
-                file.Write($"{ChangeFormat(pact_dist_latencies.commitTxnTime.Mean(), 1)} ");
-
-                foreach (var percentile in percentilesToCalculate)
+                if (pactPercent < 100)
                 {
-                    var latency = ArrayStatistics.PercentileInplace(pact_non_dist_latencies.latency.ToArray(), percentile);
-                    file.Write($"{ChangeFormat(latency, 1)} ");
+                    file.Write($"{ChangeFormat(act_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(act_dist_tp_meanAndSd.StandardDeviation, 0)} ");
+                    file.Write($"{ChangeFormat(act_non_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(act_non_dist_tp_meanAndSd.StandardDeviation, 0)} ");
+
+                    var act_dist_abort_rw = 100.0 - act_dist_abort_deadlock.Mean() - act_dist_abort_notSerializable.Mean() - act_dist_abort_notSureSerializable.Mean();
+                    file.Write($"{ChangeFormat(act_dist_abort.Mean(), 2)}% " +
+                               $"{ChangeFormat(act_dist_abort_rw, 2)}% " +
+                               $"{ChangeFormat(act_dist_abort_deadlock.Mean(), 2)}% " +
+                               $"{ChangeFormat(act_dist_abort_notSerializable.Mean(), 2)}% " +
+                               $"{ChangeFormat(act_dist_abort_notSureSerializable.Mean(), 2)}% ");
+
+                    var act_non_dist_abort_rw = 100.0 - act_non_dist_abort_deadlock.Mean() - act_non_dist_abort_notSerializable.Mean() - act_non_dist_abort_notSureSerializable.Mean();
+                    file.Write($"{ChangeFormat(act_non_dist_abort.Mean(), 2)}% " +
+                               $"{ChangeFormat(act_non_dist_abort_rw, 2)}% " +
+                               $"{ChangeFormat(act_non_dist_abort_deadlock.Mean(), 2)}% " +
+                               $"{ChangeFormat(act_non_dist_abort_notSerializable.Mean(), 2)}% " +
+                               $"{ChangeFormat(act_non_dist_abort_notSureSerializable.Mean(), 2)}% ");
                 }
 
-                file.Write($"{ChangeFormat(pact_non_dist_latencies.prepareTxnTime.Mean(), 1)} ");
-                file.Write($"{ChangeFormat(pact_non_dist_latencies.executeTxnTime.Mean(), 1)} ");
-                file.Write($"{ChangeFormat(pact_non_dist_latencies.commitTxnTime.Mean(), 1)} ");
-
-                foreach (var percentile in percentilesToCalculate)
+                if (pactPercent > 0)
                 {
-                    var latency = ArrayStatistics.PercentileInplace(act_dist_latencies.latency.ToArray(), percentile);
-                    file.Write($"{ChangeFormat(latency, 1)} ");
+                    foreach (var percentile in percentilesToCalculate)
+                    {
+                        var latency = ArrayStatistics.PercentileInplace(pact_dist_latencies.latency.ToArray(), percentile);
+                        file.Write($"{ChangeFormat(latency, 1)} ");
+                    }
+
+                    file.Write($"{ChangeFormat(pact_dist_latencies.prepareTxnTime.Mean(), 1)} ");
+                    file.Write($"{ChangeFormat(pact_dist_latencies.executeTxnTime.Mean(), 1)} ");
+                    file.Write($"{ChangeFormat(pact_dist_latencies.commitTxnTime.Mean(), 1)} ");
+
+                    foreach (var percentile in percentilesToCalculate)
+                    {
+                        var latency = ArrayStatistics.PercentileInplace(pact_non_dist_latencies.latency.ToArray(), percentile);
+                        file.Write($"{ChangeFormat(latency, 1)} ");
+                    }
+
+                    file.Write($"{ChangeFormat(pact_non_dist_latencies.prepareTxnTime.Mean(), 1)} ");
+                    file.Write($"{ChangeFormat(pact_non_dist_latencies.executeTxnTime.Mean(), 1)} ");
+                    file.Write($"{ChangeFormat(pact_non_dist_latencies.commitTxnTime.Mean(), 1)} ");
                 }
 
-                file.Write($"{ChangeFormat(act_dist_latencies.prepareTxnTime.Mean(), 1)} ");
-                file.Write($"{ChangeFormat(act_dist_latencies.executeTxnTime.Mean(), 1)} ");
-                file.Write($"{ChangeFormat(act_dist_latencies.commitTxnTime.Mean(), 1)} ");
-
-                foreach (var percentile in percentilesToCalculate)
+                if (pactPercent < 100)
                 {
-                    var latency = ArrayStatistics.PercentileInplace(act_non_dist_latencies.latency.ToArray(), percentile);
-                    file.Write($"{ChangeFormat(latency, 1)} ");
+                    foreach (var percentile in percentilesToCalculate)
+                    {
+                        var latency = ArrayStatistics.PercentileInplace(act_dist_latencies.latency.ToArray(), percentile);
+                        file.Write($"{ChangeFormat(latency, 1)} ");
+                    }
+
+                    file.Write($"{ChangeFormat(act_dist_latencies.prepareTxnTime.Mean(), 1)} ");
+                    file.Write($"{ChangeFormat(act_dist_latencies.executeTxnTime.Mean(), 1)} ");
+                    file.Write($"{ChangeFormat(act_dist_latencies.commitTxnTime.Mean(), 1)} ");
+
+                    foreach (var percentile in percentilesToCalculate)
+                    {
+                        var latency = ArrayStatistics.PercentileInplace(act_non_dist_latencies.latency.ToArray(), percentile);
+                        file.Write($"{ChangeFormat(latency, 1)} ");
+                    }
+
+                    file.Write($"{ChangeFormat(act_non_dist_latencies.prepareTxnTime.Mean(), 1)} ");
+                    file.Write($"{ChangeFormat(act_non_dist_latencies.executeTxnTime.Mean(), 1)} ");
+                    file.Write($"{ChangeFormat(act_non_dist_latencies.commitTxnTime.Mean(), 1)} ");
                 }
-
-                file.Write($"{ChangeFormat(act_non_dist_latencies.prepareTxnTime.Mean(), 1)} ");
-                file.Write($"{ChangeFormat(act_non_dist_latencies.executeTxnTime.Mean(), 1)} ");
-                file.Write($"{ChangeFormat(act_non_dist_latencies.commitTxnTime.Mean(), 1)} ");
-
-
-
+                
                 file.WriteLine();
             }
         }

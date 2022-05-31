@@ -309,8 +309,8 @@ namespace SnapperExperimentProcess
         static async void Initialize()
         {
             numProducer = 1;
-            numDetConsumer = Constants.numCPUPerSilo;
-            numNonDetConsumer = Constants.numCPUPerSilo;
+            numDetConsumer = Constants.numCPUPerSilo / 2;
+            numNonDetConsumer = Constants.numCPUPerSilo / 2;
             if (workload.pactPercent == 100) numNonDetConsumer = 0;
             else if (workload.pactPercent == 0) numDetConsumer = 0;
 
