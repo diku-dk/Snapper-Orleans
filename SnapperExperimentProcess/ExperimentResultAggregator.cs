@@ -44,202 +44,143 @@ namespace SnapperExperimentProcess
 
         public static WorkloadResult AggregateResultForEpoch(WorkloadResult[] result)
         {
-            Trace.Assert(result.Length >= 1);
-            int aggNumDetCommitted = result[0].numDetCommitted;
-            int aggNumNonDetCommitted = result[0].numNonDetCommitted;
-            int aggNumDetTransactions = result[0].numDetTxn;
-            int aggNumNonDetTransactions = result[0].numNonDetTxn;
-            int aggNumNotSerializable = result[0].numNotSerializable;
-            int aggNumNotSureSerializable = result[0].numNotSerializable;
-            int aggNumDeadlock = result[0].numDeadlock;
-            long aggStartTime = result[0].startTime;
-            long aggEndTime = result[0].endTime;
-            var aggLatencies = new List<double>();
-            aggLatencies.AddRange(result[0].latencies);
-
-            var aggDistLatencies = new List<double>();
-            var aggNonDistLatencies = new List<double>();
-            aggDistLatencies.AddRange(result[0].dist_latencies);
-            aggNonDistLatencies.AddRange(result[0].non_dist_latencies);
-
-            var aggDist_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
-            var aggDist_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
-            var aggDist_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
-            aggDist_prepareTxnTime.AddRange(result[0].dist_prepareTxnTime);
-            aggDist_executeTxnTime.AddRange(result[0].dist_executeTxnTime);
-            aggDist_commitTxnTime.AddRange(result[0].dist_commitTxnTime);
-
-            var aggNonDist_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
-            var aggNonDist_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
-            var aggNonDist_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
-            aggNonDist_prepareTxnTime.AddRange(result[0].non_dist_prepareTxnTime);
-            aggNonDist_executeTxnTime.AddRange(result[0].non_dist_executeTxnTime);
-            aggNonDist_commitTxnTime.AddRange(result[0].non_dist_commitTxnTime);
-
-            for (int i = 1; i < result.Length; i++)    // reach thread has a result
-            {
-                aggNumDetCommitted += result[i].numDetCommitted;
-                aggNumNonDetCommitted += result[i].numNonDetCommitted;
-                aggNumDetTransactions += result[i].numDetTxn;
-                aggNumNonDetTransactions += result[i].numNonDetTxn;
-                aggNumNotSerializable += result[i].numNotSerializable;
-                aggNumNotSureSerializable += result[i].numNotSureSerializable;
-                aggNumDeadlock += result[i].numDeadlock;
-                aggStartTime = (result[i].startTime < aggStartTime) ? result[i].startTime : aggStartTime;
-                aggEndTime = (result[i].endTime < aggEndTime) ? result[i].endTime : aggEndTime;
-                aggLatencies.AddRange(result[i].latencies);
-
-                aggDistLatencies.AddRange(result[i].dist_latencies);
-                aggNonDistLatencies.AddRange(result[i].non_dist_latencies);
-
-                aggDist_prepareTxnTime.AddRange(result[i].dist_prepareTxnTime);
-                aggDist_executeTxnTime.AddRange(result[i].dist_executeTxnTime);
-                aggDist_commitTxnTime.AddRange(result[i].dist_commitTxnTime);
-
-                aggNonDist_prepareTxnTime.AddRange(result[i].non_dist_prepareTxnTime);
-                aggNonDist_executeTxnTime.AddRange(result[i].non_dist_executeTxnTime);
-                aggNonDist_commitTxnTime.AddRange(result[i].non_dist_commitTxnTime);
-            }
-            var res = new WorkloadResult(aggNumDetTransactions, aggNumNonDetTransactions, aggNumDetCommitted, aggNumNonDetCommitted, aggStartTime, aggEndTime, aggNumNotSerializable, aggNumNotSureSerializable, aggNumDeadlock);
-            res.setLatency(aggLatencies, aggDistLatencies, aggNonDistLatencies);
-            res.setBreakdownLatency(
-                aggDist_prepareTxnTime, aggDist_executeTxnTime, aggDist_commitTxnTime,
-                aggNonDist_prepareTxnTime, aggNonDist_executeTxnTime, aggNonDist_commitTxnTime);
-            return res;
+            Debug.Assert(result.Length == Constants.numWorker);
+            var aggResult = result[0];
+            for (int i = 1; i < result.Length; i++) aggResult.MergeData(result[i]);
+            return aggResult;
         }
 
         public void AggregateResultsAndPrint()
         {
             Console.WriteLine("Aggregating results and printing");
 
-            var detThroughPutAccumulator = new List<float>();
-            var nonDetThroughPutAccumulator = new List<float>();
-            var abortRateAccumulator = new List<double>();
-            var notSerializableRateAccumulator = new List<float>();
-            var notSureSerializableRateAccumulator = new List<float>();
-            var deadlockRateAccumulator = new List<float>();
-            var ioThroughputAccumulator = new List<float>();
+            var pact_dist_tp = new List<double>();
+            var pact_non_dist_tp = new List<double>();
 
-            //Skip the epochs upto warm up epochs
-            WorkloadResult aggResult = null;
-            for (int epochNumber = numWarmupEpoch; epochNumber < numEpochs; epochNumber++)
+            var act_dist_tp = new List<double>();
+            var act_dist_abort = new List<double>();
+            var act_dist_abort_deadlock = new List<double>();
+            var act_dist_abort_notSerializable = new List<double>();
+            var act_dist_abort_notSureSerializable = new List<double>();
+
+            var act_non_dist_tp = new List<double>();
+            var act_non_dist_abort = new List<double>();
+            var act_non_dist_abort_deadlock = new List<double>();
+            var act_non_dist_abort_notSerializable = new List<double>();
+            var act_non_dist_abort_notSureSerializable = new List<double>();
+
+            // latencies
+            var pact_dist_latencies = new BasicLatencyInfo();
+            var pact_non_dist_latencies = new BasicLatencyInfo();
+
+            var act_dist_latencies = new BasicLatencyInfo();
+            var act_non_dist_latencies = new BasicLatencyInfo();
+
+            for (int e = numWarmupEpoch; e < numEpochs; e++) 
             {
-                if (Constants.numWorker == 1) aggResult = results[epochNumber, 0];
-                else
-                {
-                    var result = new WorkloadResult[Constants.numWorker];
-                    for (int i = 0; i < Constants.numWorker; i++) result[i] = results[epochNumber, i];
-                    aggResult = AggregateResultForEpoch(result);
-                }
-                
-                var time = aggResult.endTime - aggResult.startTime;
-                float detCommittedTxnThroughput = (float)aggResult.numDetCommitted * 1000 / time;  // the throughput only include committed transactions
-                float nonDetCommittedTxnThroughput = (float)aggResult.numNonDetCommitted * 1000 / time;
-                double abortRate = 0;
-                var numAbort = aggResult.numNonDetTxn - aggResult.numNonDetCommitted;
-                if (pactPercent < 100)
-                {
-                    abortRate = numAbort * 100.0 / aggResult.numNonDetTxn;    // the abort rate is based on all non-det txns
-                    if (numAbort > 0)
-                    {
-                        var notSerializable = aggResult.numNotSerializable * 100.0 / numAbort;   // number of transactions abort due to not serializable among all aborted transactions
-                        notSerializableRateAccumulator.Add((float)notSerializable);
-                        var notSureSerializable = aggResult.numNotSureSerializable * 100.0 / numAbort;   // abort due to incomplete AfterSet
-                        notSureSerializableRateAccumulator.Add((float)notSureSerializable);
-                        var deadlock = aggResult.numDeadlock * 100.0 / numAbort;
-                        deadlockRateAccumulator.Add((float)deadlock);
-                    }
-                }
-                detThroughPutAccumulator.Add(detCommittedTxnThroughput);
-                nonDetThroughPutAccumulator.Add(nonDetCommittedTxnThroughput);
-                abortRateAccumulator.Add(abortRate);
+                var result = new WorkloadResult[Constants.numWorker];
+                for (int i = 0; i < Constants.numWorker; i++) result[i] = results[e, i];
+                var aggResultForOneEpoch = AggregateResultForEpoch(result);
 
-                ioThroughputAccumulator.Add((float)IOCount[epochNumber] * 1000 / time);
+                pact_dist_latencies.MergeData(aggResultForOneEpoch.pact_dist_result.latencies);
+                pact_non_dist_latencies.MergeData(aggResultForOneEpoch.pact_non_dist_result.latencies);
+                act_dist_latencies.MergeData(aggResultForOneEpoch.act_dist_result.basic_result.latencies);
+                act_non_dist_latencies.MergeData(aggResultForOneEpoch.act_non_dist_result.basic_result.latencies);
+
+                var data = aggResultForOneEpoch.GetPrintData();
+                pact_dist_tp.Add(data.pact_dist_print.throughput);
+                pact_non_dist_tp.Add(data.pact_non_dist_print.throughput);
+
+                act_dist_tp.Add(data.act_dist_print.basic_data.throughput);
+                act_dist_abort.Add(data.act_dist_print.abort);
+                act_dist_abort_deadlock.Add(data.act_dist_print.abort_deadlock);
+                act_dist_abort_notSerializable.Add(data.act_dist_print.abort_notSerializable);
+                act_dist_abort_notSureSerializable.Add(data.act_dist_print.abort_notSureSerializable);
+
+                act_non_dist_tp.Add(data.act_non_dist_print.basic_data.throughput);
+                act_non_dist_abort.Add(data.act_non_dist_print.abort);
+                act_non_dist_abort_deadlock.Add(data.act_non_dist_print.abort_deadlock);
+                act_non_dist_abort_notSerializable.Add(data.act_non_dist_print.abort_notSerializable);
+                act_non_dist_abort_notSureSerializable.Add(data.act_non_dist_print.abort_notSureSerializable);
             }
 
-            //Compute statistics on the accumulators, maybe a better way is to maintain a sorted list
-            var detThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(detThroughPutAccumulator.ToArray());
-            var nonDetThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(nonDetThroughPutAccumulator.ToArray());
-            var abortRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(abortRateAccumulator.ToArray());
-            var notSerializableRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(notSerializableRateAccumulator.ToArray());
-            var notSureSerializableRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(notSureSerializableRateAccumulator.ToArray());
-            var deadlockRateMeanAndSd = ArrayStatistics.MeanStandardDeviation(deadlockRateAccumulator.ToArray());
-            var ioThroughputMeanAndSd = ArrayStatistics.MeanStandardDeviation(ioThroughputAccumulator.ToArray());
+            var pact_dist_tp_meanAndSd = ArrayStatistics.MeanStandardDeviation(pact_dist_tp.ToArray());
+            var pact_non_dist_tp_meanAndSd = ArrayStatistics.MeanStandardDeviation(pact_non_dist_tp.ToArray());
+
+            var act_dist_tp_meanAndSd = ArrayStatistics.MeanStandardDeviation(act_dist_tp.ToArray());
+            var act_non_dist_tp_meanAndSd = ArrayStatistics.MeanStandardDeviation(act_non_dist_tp.ToArray());
+
             using (file = new StreamWriter(filePath, true))
             {
-                //file.Write($"numWarehouse={Constants.NUM_W_PER_SILO} siloCPU={Constants.numCPUPerSilo} distribution={workload.distribution} benchmark={workload.benchmark} ");
-                //file.Write($"{workload.pactPercent}% ");
-                if (pactPercent > 0) file.Write($"{detThroughputMeanAndSd.Item1:0} {detThroughputMeanAndSd.Item2:0} ");
-                if (pactPercent < 100)
-                {
-                    file.Write($"{nonDetThroughputMeanAndSd.Item1:0} {nonDetThroughputMeanAndSd.Item2:0} ");
-                    file.Write($"{ChangeFormat(abortRateMeanAndSd.Item1)}% ");
-                    if (pactPercent > 0)
-                    {
-                        var abortRWConflict = 100 - deadlockRateMeanAndSd.Item1 - notSerializableRateMeanAndSd.Item1 - notSureSerializableRateMeanAndSd.Item1;
-                        file.Write($"{ChangeFormat(abortRWConflict)}% {ChangeFormat(deadlockRateMeanAndSd.Item1)}% {ChangeFormat(notSerializableRateMeanAndSd.Item1)}% {ChangeFormat(notSureSerializableRateMeanAndSd.Item1)}% ");
-                    }
-                }
-                if (Constants.implementationType == ImplementationType.SNAPPER)
-                {
-                    //file.Write($"{ioThroughputMeanAndSd.Item1} {ioThroughputMeanAndSd.Item2} ");   // number of IOs per second
-                }
-                if (pactPercent > 0)
-                {
-                    if (aggResult.dist_latencies.Count != 0)
-                    {
-                        foreach (var percentile in percentilesToCalculate)
-                        {
-                            var lat = ArrayStatistics.PercentileInplace(aggResult.dist_latencies.ToArray(), percentile);
-                            file.Write($"{ChangeFormat(lat)} ");
-                        }
+                file.Write($"{ChangeFormat(pact_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(pact_dist_tp_meanAndSd.StandardDeviation, 0)} ");
+                file.Write($"{ChangeFormat(pact_non_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(pact_non_dist_tp_meanAndSd.StandardDeviation, 0)} ");
 
-                        file.Write($"{ChangeFormat(aggResult.dist_prepareTxnTime.Mean())} ");
-                        file.Write($"{ChangeFormat(aggResult.dist_executeTxnTime.Mean())} ");
-                        file.Write($"{ChangeFormat(aggResult.dist_commitTxnTime.Mean())} ");
-                    }
-                    
-                    if (aggResult.non_dist_latencies.Count != 0)
-                    {
-                        foreach (var percentile in percentilesToCalculate)
-                        {
-                            var lat = ArrayStatistics.PercentileInplace(aggResult.non_dist_latencies.ToArray(), percentile);
-                            file.Write($"{ChangeFormat(lat)} ");
-                        }
+                file.Write($"{ChangeFormat(act_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(act_dist_tp_meanAndSd.StandardDeviation, 0)} ");
+                file.Write($"{ChangeFormat(act_non_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(act_non_dist_tp_meanAndSd.StandardDeviation, 0)} ");
 
-                        file.Write($"{ChangeFormat(aggResult.non_dist_prepareTxnTime.Mean())} ");
-                        file.Write($"{ChangeFormat(aggResult.non_dist_executeTxnTime.Mean())} ");
-                        file.Write($"{ChangeFormat(aggResult.non_dist_commitTxnTime.Mean())} ");
-                    }
-                }
-                if (pactPercent < 100)
+                var act_dist_abort_rw = 100.0 - act_dist_abort_deadlock.Mean() - act_dist_abort_notSerializable.Mean() - act_dist_abort_notSureSerializable.Mean();
+                file.Write($"{ChangeFormat(act_dist_abort.Mean(), 2)}% " +
+                           $"{ChangeFormat(act_dist_abort_rw, 2)}% " +
+                           $"{ChangeFormat(act_dist_abort_deadlock.Mean(), 2)}% " +
+                           $"{ChangeFormat(act_dist_abort_notSerializable.Mean(), 2)}% " +
+                           $"{ChangeFormat(act_dist_abort_notSureSerializable.Mean(), 2)}% ");
+
+                var act_non_dist_abort_rw = 100.0 - act_non_dist_abort_deadlock.Mean() - act_non_dist_abort_notSerializable.Mean() - act_non_dist_abort_notSureSerializable.Mean();
+                file.Write($"{ChangeFormat(act_non_dist_abort.Mean(), 2)}% " +
+                           $"{ChangeFormat(act_non_dist_abort_rw, 2)}% " +
+                           $"{ChangeFormat(act_non_dist_abort_deadlock.Mean(), 2)}% " +
+                           $"{ChangeFormat(act_non_dist_abort_notSerializable.Mean(), 2)}% " +
+                           $"{ChangeFormat(act_non_dist_abort_notSureSerializable.Mean(), 2)}% ");
+
+                foreach (var percentile in percentilesToCalculate)
                 {
-                    foreach (var percentile in percentilesToCalculate)
-                    {
-                        var lat = ArrayStatistics.PercentileInplace(aggResult.latencies.ToArray(), percentile);
-                        file.Write($"{ChangeFormat(lat)} ");
-                    }
+                    var latency = ArrayStatistics.PercentileInplace(pact_dist_latencies.latency.ToArray(), percentile);
+                    file.Write($"{ChangeFormat(latency, 1)} ");
                 }
+
+                file.Write($"{ChangeFormat(pact_dist_latencies.prepareTxnTime.Mean(), 1)} ");
+                file.Write($"{ChangeFormat(pact_dist_latencies.executeTxnTime.Mean(), 1)} ");
+                file.Write($"{ChangeFormat(pact_dist_latencies.commitTxnTime.Mean(), 1)} ");
+
+                foreach (var percentile in percentilesToCalculate)
+                {
+                    var latency = ArrayStatistics.PercentileInplace(pact_non_dist_latencies.latency.ToArray(), percentile);
+                    file.Write($"{ChangeFormat(latency, 1)} ");
+                }
+
+                file.Write($"{ChangeFormat(pact_non_dist_latencies.prepareTxnTime.Mean(), 1)} ");
+                file.Write($"{ChangeFormat(pact_non_dist_latencies.executeTxnTime.Mean(), 1)} ");
+                file.Write($"{ChangeFormat(pact_non_dist_latencies.commitTxnTime.Mean(), 1)} ");
+
+                foreach (var percentile in percentilesToCalculate)
+                {
+                    var latency = ArrayStatistics.PercentileInplace(act_dist_latencies.latency.ToArray(), percentile);
+                    file.Write($"{ChangeFormat(latency, 1)} ");
+                }
+
+                file.Write($"{ChangeFormat(act_dist_latencies.prepareTxnTime.Mean(), 1)} ");
+                file.Write($"{ChangeFormat(act_dist_latencies.executeTxnTime.Mean(), 1)} ");
+                file.Write($"{ChangeFormat(act_dist_latencies.commitTxnTime.Mean(), 1)} ");
+
+                foreach (var percentile in percentilesToCalculate)
+                {
+                    var latency = ArrayStatistics.PercentileInplace(act_non_dist_latencies.latency.ToArray(), percentile);
+                    file.Write($"{ChangeFormat(latency, 1)} ");
+                }
+
+                file.Write($"{ChangeFormat(act_non_dist_latencies.prepareTxnTime.Mean(), 1)} ");
+                file.Write($"{ChangeFormat(act_non_dist_latencies.executeTxnTime.Mean(), 1)} ");
+                file.Write($"{ChangeFormat(act_non_dist_latencies.commitTxnTime.Mean(), 1)} ");
+
+
+
                 file.WriteLine();
             }
-            /*
-            if (workload.pactPercent == 100) filePath = Constants.dataPath + $"PACT_{workload.numAccountsMultiTransfer}.txt";
-            if (workload.pactPercent == 0)
-            {
-                if (nonDetCCType == ConcurrencyType.TIMESTAMP) filePath = Constants.dataPath + $"TS_{workload.numAccountsMultiTransfer}.txt";
-                if (nonDetCCType == ConcurrencyType.S2PL) filePath = Constants.dataPath + $"2PL_{workload.numAccountsMultiTransfer}.txt";
-            } 
-            using (file = new System.IO.StreamWriter(filePath, true))
-            {
-                Console.WriteLine($"aggLatencies.count = {aggLatencies.Count}, aggDetLatencies.count = {aggDetLatencies.Count}");
-                foreach (var latency in aggLatencies) file.WriteLine(latency);
-                foreach (var latency in aggDetLatencies) file.WriteLine(latency);
-            }*/
         }
 
-        static string ChangeFormat(double n)
+        static string ChangeFormat(double n, int num)
         {
-            return Math.Round(n, 2).ToString().Replace(',', '.');
+            return Math.Round(n, num).ToString().Replace(',', '.');
         }
     }
 }

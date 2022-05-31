@@ -67,25 +67,29 @@ namespace SnapperExperimentProcess
             Console.WriteLine($"thread = {threadIndex}, isDet = {isDet}, pipe = {pipeSize}");
             for (int eIndex = 0; eIndex < workload.numEpochs; eIndex++)
             {
-                var dist_latencies = new List<double>();
+                int dist_numEmit = 0;
+                int dist_numCommit = 0;
+                var dist_latency = new List<double>();
                 var dist_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
                 var dist_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
                 var dist_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
 
-                var non_dist_latencies = new List<double>();
+                int non_dist_numEmit = 0;
+                int non_dist_numCommit = 0;
+                var non_dist_latency = new List<double>();
                 var non_dist_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
                 var non_dist_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
                 var non_dist_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
 
-                int numEmit = 0;
-                int numDetCommit = 0;
-                int numNonDetCommit = 0;
-                int numOrleansTxnEmit = 0;
-                int numNonDetTransaction = 0;
-                int numDeadlock = 0;
-                int numNotSerializable = 0;
-                int numNotSureSerializable = 0;
-                var latencies = new List<double>();
+                // only for ACT
+                int dist_numDeadlock = 0;
+                int dist_numNotSerializable = 0;
+                int dist_numNotSureSerializable = 0;
+
+                int non_dist_numDeadlock = 0;
+                int non_dist_numNotSerializable = 0;
+                int non_dist_numNotSureSerializable = 0;
+
                 var tasks = new List<Task<TransactionResult>>();
                 var reqs = new Dictionary<Task<TransactionResult>, Tuple<DateTime, bool>>();
                 var queue = thread_requests[eIndex][threadIndex];
@@ -102,7 +106,10 @@ namespace SnapperExperimentProcess
                     {
                         var startTxnTime = DateTime.Now;
                         var newTask = benchmark.NewTransaction(client, txn);
-                        numEmit++;
+
+                        if (txn.isDistTxn) dist_numEmit++;
+                        else non_dist_numEmit++;
+
                         reqs.Add(newTask, new Tuple<DateTime, bool>(startTxnTime, txn.isDistTxn));
                         tasks.Add(newTask);
                     }
@@ -110,7 +117,7 @@ namespace SnapperExperimentProcess
                     {
                         var task = await Task.WhenAny(tasks);
                         var endTxnTime = DateTime.Now;
-                        bool noException = true;
+                        var noException = true;
                         try
                         {
                             //Needed to catch exception of individual task (not caught by Snapper's exception) which would not be thrown by WhenAny
@@ -121,41 +128,43 @@ namespace SnapperExperimentProcess
                             Console.WriteLine($"Exception:{e.Message}, {e.StackTrace}");
                             noException = false;
                         }
-                        numOrleansTxnEmit++;
                         if (noException)
                         {
-                            if (isDet)   // for det
+                            var isDistTxn = reqs[task].Item2;
+                            if (isDistTxn)
                             {
-                                if (workload.benchmark == BenchmarkType.SMALLBANK) Debug.Assert(!task.Result.exception);
-                                numDetCommit++;
-
-                                if (reqs[task].Item2)
-                                {
-                                    dist_latencies.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
-                                    dist_prepareTxnTime.Add(task.Result.prepareTime);
-                                    dist_executeTxnTime.Add(task.Result.executeTime);
-                                    dist_commitTxnTime.Add(task.Result.commitTime);
-                                }
-                                else
-                                {
-                                    non_dist_latencies.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
-                                    non_dist_prepareTxnTime.Add(task.Result.prepareTime);
-                                    non_dist_executeTxnTime.Add(task.Result.executeTime);
-                                    non_dist_commitTxnTime.Add(task.Result.commitTime);
-                                } 
+                                dist_numCommit++;
+                                dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                                dist_prepareTxnTime.Add(task.Result.prepareTime);
+                                dist_executeTxnTime.Add(task.Result.executeTime);
+                                dist_commitTxnTime.Add(task.Result.commitTime);
                             }
-                            else    // for non-det + eventual + orleans txn
+                            else
                             {
-                                numNonDetTransaction++;
-                                if (!task.Result.exception)
+                                non_dist_numCommit++;
+                                non_dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                                non_dist_prepareTxnTime.Add(task.Result.prepareTime);
+                                non_dist_executeTxnTime.Add(task.Result.executeTime);
+                                non_dist_commitTxnTime.Add(task.Result.commitTime);
+                            }
+
+                            if (isDet == false)    // for non-det + eventual + orleans txn
+                            {
+                                if (task.Result.exception)
                                 {
-                                    numNonDetCommit++;
-                                    var totalTime = (endTxnTime - reqs[task].Item1).TotalMilliseconds;
-                                    latencies.Add(totalTime);
+                                    if (isDistTxn)
+                                    {
+                                        if (task.Result.Exp_Serializable) dist_numNotSerializable++;
+                                        else if (task.Result.Exp_NotSureSerializable) dist_numNotSureSerializable++;
+                                        else if (task.Result.Exp_Deadlock) dist_numDeadlock++;
+                                    }
+                                    else
+                                    {
+                                        if (task.Result.Exp_Serializable) non_dist_numNotSerializable++;
+                                        else if (task.Result.Exp_NotSureSerializable) non_dist_numNotSureSerializable++;
+                                        else if (task.Result.Exp_Deadlock) non_dist_numDeadlock++;
+                                    }
                                 }
-                                else if (task.Result.Exp_Serializable) numNotSerializable++;
-                                else if (task.Result.Exp_NotSureSerializable) numNotSureSerializable++;
-                                else if (task.Result.Exp_Deadlock) numDeadlock++;
                             }
                         }
                         tasks.Remove(task);
@@ -180,41 +189,43 @@ namespace SnapperExperimentProcess
                         Console.WriteLine($"Exception: {e.Message}. ");
                         noException = false;
                     }
-                    numOrleansTxnEmit++;
                     if (noException)
                     {
-                        if (isDet)   // for det
+                        var isDistTxn = reqs[task].Item2;
+                        if (isDistTxn)
                         {
-                            if (workload.benchmark == BenchmarkType.SMALLBANK) Debug.Assert(!task.Result.exception);
-                            numDetCommit++;
-
-                            if (reqs[task].Item2)
-                            {
-                                dist_latencies.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
-                                dist_prepareTxnTime.Add(task.Result.prepareTime);
-                                dist_executeTxnTime.Add(task.Result.executeTime);
-                                dist_commitTxnTime.Add(task.Result.commitTime);
-                            }
-                            else
-                            {
-                                non_dist_latencies.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
-                                non_dist_prepareTxnTime.Add(task.Result.prepareTime);
-                                non_dist_executeTxnTime.Add(task.Result.executeTime);
-                                non_dist_commitTxnTime.Add(task.Result.commitTime);
-                            }
+                            dist_numCommit++;
+                            dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                            dist_prepareTxnTime.Add(task.Result.prepareTime);
+                            dist_executeTxnTime.Add(task.Result.executeTime);
+                            dist_commitTxnTime.Add(task.Result.commitTime);
                         }
-                        else    // for non-det + eventual + orleans txn
+                        else
                         {
-                            numNonDetTransaction++;
-                            if (!task.Result.exception)
+                            non_dist_numCommit++;
+                            non_dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                            non_dist_prepareTxnTime.Add(task.Result.prepareTime);
+                            non_dist_executeTxnTime.Add(task.Result.executeTime);
+                            non_dist_commitTxnTime.Add(task.Result.commitTime);
+                        }
+
+                        if (isDet == false)    // for non-det + eventual + orleans txn
+                        {
+                            if (task.Result.exception)
                             {
-                                numNonDetCommit++;
-                                var totalTime = (endTxnTime - reqs[task].Item1).TotalMilliseconds;
-                                latencies.Add(totalTime);
+                                if (isDistTxn)
+                                {
+                                    if (task.Result.Exp_Serializable) dist_numNotSerializable++;
+                                    else if (task.Result.Exp_NotSureSerializable) dist_numNotSureSerializable++;
+                                    else if (task.Result.Exp_Deadlock) dist_numDeadlock++;
+                                }
+                                else
+                                {
+                                    if (task.Result.Exp_Serializable) non_dist_numNotSerializable++;
+                                    else if (task.Result.Exp_NotSureSerializable) non_dist_numNotSureSerializable++;
+                                    else if (task.Result.Exp_Deadlock) non_dist_numDeadlock++;
+                                }
                             }
-                            else if (task.Result.Exp_Serializable) numNotSerializable++;
-                            else if (task.Result.Exp_NotSureSerializable) numNotSureSerializable++;
-                            else if (task.Result.Exp_Deadlock) numDeadlock++;
                         }
                     }
                     tasks.Remove(task);
@@ -223,19 +234,21 @@ namespace SnapperExperimentProcess
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
                 thread_requests[eIndex].Remove(threadIndex);
-                if (isDet) Console.WriteLine($"det-commit = {numDetCommit}, tp = {1000 * numDetCommit / (endTime - startTime)}. ");
-                else
-                {
-                    if (Constants.implementationType == ImplementationType.ORLEANSTXN) Console.WriteLine($"total_num_nondet = {numOrleansTxnEmit}, nondet-commit = {numNonDetCommit}");
-                    else Console.WriteLine($"total_num_nondet = {numNonDetTransaction}, nondet-commit = {numNonDetCommit}, tp = {1000 * numNonDetCommit / (endTime - startTime)}, Deadlock = {numDeadlock}, NotSerilizable = {numNotSerializable}, NotSureSerializable = {numNotSureSerializable}");
-                }
-                WorkloadResult res;
-                if (Constants.implementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResult(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
-                else res = new WorkloadResult(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
-                res.setLatency(latencies, dist_latencies, non_dist_latencies);
-                res.setBreakdownLatency(
-                    dist_prepareTxnTime, dist_executeTxnTime, dist_commitTxnTime,
-                    non_dist_prepareTxnTime, non_dist_executeTxnTime, non_dist_commitTxnTime);
+                
+                if (isDet) 
+                    Console.WriteLine($"PACT: dist_tp = {1000 * dist_numCommit / (endTime - startTime)}, " +
+                                            $"non_dist_tp = {1000 * non_dist_numCommit / (endTime - startTime)}");
+                else Console.WriteLine($"ACT: dist_tp = {1000 * dist_numCommit / (endTime - startTime)}, " +
+                                            $"dist_abort = {dist_numEmit - dist_numCommit}, dist_numDeadlock = {dist_numDeadlock}, dist_numNotSerializable = {dist_numNotSerializable}, dist_numNotSureSerializable = {dist_numNotSureSerializable}, " +
+                                            $"non_dist_tp = {1000 * non_dist_numCommit / (endTime - startTime)} " +
+                                            $"non_dist_abort = {non_dist_numEmit - non_dist_numCommit}, non_dist_numDeadlock = {non_dist_numDeadlock}, non_dist_numNotSerializable = {non_dist_numNotSerializable}, non_dist_numNotSureSerializable = {non_dist_numNotSureSerializable}");
+
+                var res = new WorkloadResult();
+                res.SetTime(startTime, endTime);
+                res.SetNumber(isDet, true, dist_numCommit, dist_numEmit, dist_numDeadlock, dist_numNotSerializable, dist_numNotSureSerializable);
+                res.SetNumber(isDet, false, non_dist_numCommit, non_dist_numEmit, non_dist_numDeadlock, non_dist_numNotSerializable, non_dist_numNotSureSerializable);
+                res.SetLatency(isDet, true, dist_latency, dist_prepareTxnTime, dist_executeTxnTime, dist_commitTxnTime);
+                res.SetLatency(isDet, false, non_dist_latency, non_dist_prepareTxnTime, non_dist_executeTxnTime, non_dist_commitTxnTime);
                 results[threadIndex] = res;
                 threadAcks[eIndex].Signal();  // Signal the completion of epoch
             }
@@ -296,8 +309,8 @@ namespace SnapperExperimentProcess
         static async void Initialize()
         {
             numProducer = 1;
-            numDetConsumer = Constants.numCPUPerSilo / Constants.numCPUBasic;
-            numNonDetConsumer = Constants.numCPUPerSilo / Constants.numCPUBasic;
+            numDetConsumer = Constants.numCPUPerSilo;
+            numNonDetConsumer = Constants.numCPUPerSilo;
             if (workload.pactPercent == 100) numNonDetConsumer = 0;
             else if (workload.pactPercent == 0) numDetConsumer = 0;
 
