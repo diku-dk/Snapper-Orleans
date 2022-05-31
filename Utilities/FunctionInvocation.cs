@@ -15,6 +15,11 @@ namespace Utilities
         public bool Exp_Serializable = false;
         public bool Exp_NotSureSerializable = false;
 
+        // investigate PACT breakdown latency
+        public double prepareTime;    // receive txn request ==> start execute txn
+        public double executeTime;    // start execute txn   ==> finish execute txn
+        public double commitTime;     // finish execute txn  ==> batch has committed
+
         public TransactionResult(object resultObj = null)
         {
             this.resultObj = resultObj;

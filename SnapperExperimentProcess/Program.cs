@@ -67,6 +67,10 @@ namespace SnapperExperimentProcess
             Console.WriteLine($"thread = {threadIndex}, isDet = {isDet}, pipe = {pipeSize}");
             for (int eIndex = 0; eIndex < workload.numEpochs; eIndex++)
             {
+                var det_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
+                var det_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
+                var det_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
+
                 int numEmit = 0;
                 int numDetCommit = 0;
                 int numNonDetCommit = 0;
@@ -78,7 +82,7 @@ namespace SnapperExperimentProcess
                 var latencies = new List<double>();
                 var det_latencies = new List<double>();
                 var tasks = new List<Task<TransactionResult>>();
-                var reqs = new Dictionary<Task<TransactionResult>, TimeSpan>();
+                var reqs = new Dictionary<Task<TransactionResult>, DateTime>();
                 var queue = thread_requests[eIndex][threadIndex];
                 RequestData txn;
                 await Task.Delay(TimeSpan.FromMilliseconds(500));   // give some time for producer to populate the buffer
@@ -91,16 +95,16 @@ namespace SnapperExperimentProcess
                 {
                     while (tasks.Count < pipeSize && queue.TryDequeue(out txn))
                     {
-                        var asyncReqStartTime = globalWatch.Elapsed;
+                        var startTxnTime = DateTime.Now;
                         var newTask = benchmark.NewTransaction(client, txn);
                         numEmit++;
-                        reqs.Add(newTask, asyncReqStartTime);
+                        reqs.Add(newTask, startTxnTime);
                         tasks.Add(newTask);
                     }
                     if (tasks.Count != 0)
                     {
                         var task = await Task.WhenAny(tasks);
-                        var asyncReqEndTime = globalWatch.Elapsed;
+                        var endTxnTime = DateTime.Now;
                         bool noException = true;
                         try
                         {
@@ -119,7 +123,14 @@ namespace SnapperExperimentProcess
                             {
                                 if (workload.benchmark == BenchmarkType.SMALLBANK) Debug.Assert(!task.Result.exception);
                                 numDetCommit++;
-                                det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+
+                                det_latencies.Add((endTxnTime - reqs[task]).TotalMilliseconds);
+
+                                // calculate breaakdown latencies
+                                det_prepareTxnTime.Add(task.Result.prepareTime);
+                                det_executeTxnTime.Add(task.Result.executeTime);
+                                det_commitTxnTime.Add(task.Result.commitTime);
+
                             }
                             else    // for non-det + eventual + orleans txn
                             {
@@ -127,7 +138,7 @@ namespace SnapperExperimentProcess
                                 if (!task.Result.exception)
                                 {
                                     numNonDetCommit++;
-                                    var totalTime = (asyncReqEndTime - reqs[task]).TotalMilliseconds;
+                                    var totalTime = (endTxnTime - reqs[task]).TotalMilliseconds;
                                     latencies.Add(totalTime);
                                 }
                                 else if (task.Result.Exp_Serializable) numNotSerializable++;
@@ -139,7 +150,6 @@ namespace SnapperExperimentProcess
                         reqs.Remove(task);
                     }
                 }
-                //while (numEmit < numTxn);
                 while (globalWatch.ElapsedMilliseconds < workload.epochDurationMSecs && (queue.Count != 0 || !isProducerFinish[eIndex]));
                 isEpochFinish[eIndex] = true;   // which means producer doesn't need to produce more requests
 
@@ -147,7 +157,7 @@ namespace SnapperExperimentProcess
                 while (tasks.Count != 0)
                 {
                     var task = await Task.WhenAny(tasks);
-                    var asyncReqEndTime = globalWatch.Elapsed;
+                    var endTxnTime = DateTime.Now;
                     bool noException = true;
                     try
                     {
@@ -163,9 +173,16 @@ namespace SnapperExperimentProcess
                     {
                         if (isDet)   // for det
                         {
-                            Debug.Assert(!task.Result.exception);
+                            if (workload.benchmark == BenchmarkType.SMALLBANK) Debug.Assert(!task.Result.exception);
                             numDetCommit++;
-                            det_latencies.Add((asyncReqEndTime - reqs[task]).TotalMilliseconds);
+
+                            det_latencies.Add((endTxnTime - reqs[task]).TotalMilliseconds);
+
+                            // calculate breaakdown latencies
+                            det_prepareTxnTime.Add(task.Result.prepareTime);
+                            det_executeTxnTime.Add(task.Result.executeTime);
+                            det_commitTxnTime.Add(task.Result.commitTime);
+
                         }
                         else    // for non-det + eventual + orleans txn
                         {
@@ -173,7 +190,7 @@ namespace SnapperExperimentProcess
                             if (!task.Result.exception)
                             {
                                 numNonDetCommit++;
-                                var totalTime = (asyncReqEndTime - reqs[task]).TotalMilliseconds;
+                                var totalTime = (endTxnTime - reqs[task]).TotalMilliseconds;
                                 latencies.Add(totalTime);
                             }
                             else if (task.Result.Exp_Serializable) numNotSerializable++;
@@ -197,6 +214,7 @@ namespace SnapperExperimentProcess
                 if (Constants.implementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResult(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
                 else res = new WorkloadResult(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
                 res.setLatency(latencies, det_latencies);
+                res.setBreakdownLatency(det_prepareTxnTime, det_executeTxnTime, det_commitTxnTime);
                 results[threadIndex] = res;
                 threadAcks[eIndex].Signal();  // Signal the completion of epoch
             }

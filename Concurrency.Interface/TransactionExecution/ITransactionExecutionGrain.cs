@@ -1,6 +1,7 @@
 ﻿using Utilities;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System;
 
 namespace Concurrency.Interface.TransactionExecution
 {
@@ -8,7 +9,7 @@ namespace Concurrency.Interface.TransactionExecution
     {
         // PACT
         Task<TransactionResult> StartTransaction(string startFunc, object funcInput, List<int> grainAccessInfo, List<string> grainClassName);
-        Task<object> ExecuteDet(FunctionCall call, TransactionContext ctx);
+        Task<Tuple<object, DateTime>> ExecuteDet(FunctionCall call, TransactionContext ctx);
         Task ReceiveBatchSchedule(LocalSubBatch batch);
         Task AckBatchCommit(int bid);
 

@@ -62,6 +62,13 @@ namespace Utilities
         [Key(10)]
         public List<double> det_latencies = new List<double>();
 
+        [Key(11)]
+        public List<double> det_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
+        [Key(12)]
+        public List<double> det_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
+        [Key(13)]
+        public List<double> det_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
+
         public WorkloadResult(int numDetTxn, int numNonDetTxn, int numDetCommitted, int numNonDetCommitted, long startTime, long endTime, int numNotSerializable, int numNotSureSerializable, int numDeadlock)
         {
             this.numDetTxn = numDetTxn;
@@ -79,6 +86,13 @@ namespace Utilities
         {
             this.latencies = latencies;
             this.det_latencies = det_latencies;
+        }
+
+        public void setBreakdownLatency(List<double> det_prepareTxnTime, List<double> det_executeTxnTime, List<double> det_commitTxnTime)
+        {
+            this.det_prepareTxnTime = det_prepareTxnTime;
+            this.det_executeTxnTime = det_executeTxnTime;
+            this.det_commitTxnTime = det_commitTxnTime;
         }
     }
 }

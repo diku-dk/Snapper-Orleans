@@ -59,6 +59,13 @@ namespace SnapperExperimentProcess
             aggLatencies.AddRange(result[0].latencies);
             aggDetLatencies.AddRange(result[0].det_latencies);
 
+            var aggDet_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
+            var aggDet_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
+            var aggDet_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
+            aggDet_prepareTxnTime.AddRange(result[0].det_prepareTxnTime);
+            aggDet_executeTxnTime.AddRange(result[0].det_executeTxnTime);
+            aggDet_commitTxnTime.AddRange(result[0].det_commitTxnTime);
+
             for (int i = 1; i < result.Length; i++)    // reach thread has a result
             {
                 aggNumDetCommitted += result[i].numDetCommitted;
@@ -72,9 +79,14 @@ namespace SnapperExperimentProcess
                 aggEndTime = (result[i].endTime < aggEndTime) ? result[i].endTime : aggEndTime;
                 aggLatencies.AddRange(result[i].latencies);
                 aggDetLatencies.AddRange(result[i].det_latencies);
+
+                aggDet_prepareTxnTime.AddRange(result[i].det_prepareTxnTime);
+                aggDet_executeTxnTime.AddRange(result[i].det_executeTxnTime);
+                aggDet_commitTxnTime.AddRange(result[i].det_commitTxnTime);
             }
             var res = new WorkloadResult(aggNumDetTransactions, aggNumNonDetTransactions, aggNumDetCommitted, aggNumNonDetCommitted, aggStartTime, aggEndTime, aggNumNotSerializable, aggNumNotSureSerializable, aggNumDeadlock);
             res.setLatency(aggLatencies, aggDetLatencies);
+            res.setBreakdownLatency(aggDet_prepareTxnTime, aggDet_executeTxnTime, aggDet_commitTxnTime);
             return res;
         }
 
@@ -143,11 +155,11 @@ namespace SnapperExperimentProcess
                 if (pactPercent < 100)
                 {
                     file.Write($"{nonDetThroughputMeanAndSd.Item1:0} {nonDetThroughputMeanAndSd.Item2:0} ");
-                    file.Write($"{Math.Round(abortRateMeanAndSd.Item1, 2).ToString().Replace(',', '.')}% ");
+                    file.Write($"{ChangeFormat(abortRateMeanAndSd.Item1)}% ");
                     if (pactPercent > 0)
                     {
                         var abortRWConflict = 100 - deadlockRateMeanAndSd.Item1 - notSerializableRateMeanAndSd.Item1 - notSureSerializableRateMeanAndSd.Item1;
-                        file.Write($"{Math.Round(abortRWConflict, 2).ToString().Replace(',', '.')}% {Math.Round(deadlockRateMeanAndSd.Item1, 2).ToString().Replace(',', '.')}% {Math.Round(notSerializableRateMeanAndSd.Item1, 2).ToString().Replace(',', '.')}% {Math.Round(notSureSerializableRateMeanAndSd.Item1, 2).ToString().Replace(',', '.')}% ");
+                        file.Write($"{ChangeFormat(abortRWConflict)}% {ChangeFormat(deadlockRateMeanAndSd.Item1)}% {ChangeFormat(notSerializableRateMeanAndSd.Item1)}% {ChangeFormat(notSureSerializableRateMeanAndSd.Item1)}% ");
                     }
                 }
                 if (Constants.implementationType == ImplementationType.SNAPPER)
@@ -159,15 +171,19 @@ namespace SnapperExperimentProcess
                     foreach (var percentile in percentilesToCalculate)
                     {
                         var lat = ArrayStatistics.PercentileInplace(aggResult.det_latencies.ToArray(), percentile);
-                        file.Write($"{Math.Round(lat, 2).ToString().Replace(',', '.')} ");
+                        file.Write($"{ChangeFormat(lat)} ");
                     }
+
+                    file.Write($"{ChangeFormat(aggResult.det_prepareTxnTime.Mean())} ");
+                    file.Write($"{ChangeFormat(aggResult.det_executeTxnTime.Mean())} ");
+                    file.Write($"{ChangeFormat(aggResult.det_commitTxnTime.Mean())} ");
                 }
                 if (pactPercent < 100)
                 {
                     foreach (var percentile in percentilesToCalculate)
                     {
                         var lat = ArrayStatistics.PercentileInplace(aggResult.latencies.ToArray(), percentile);
-                        file.Write($"{Math.Round(lat, 2).ToString().Replace(',', '.')} ");
+                        file.Write($"{ChangeFormat(lat)} ");
                     }
                 }
                 file.WriteLine();
@@ -185,6 +201,11 @@ namespace SnapperExperimentProcess
                 foreach (var latency in aggLatencies) file.WriteLine(latency);
                 foreach (var latency in aggDetLatencies) file.WriteLine(latency);
             }*/
+        }
+
+        static string ChangeFormat(double n)
+        {
+            return Math.Round(n, 2).ToString().Replace(',', '.');
         }
     }
 }

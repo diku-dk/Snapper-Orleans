@@ -138,6 +138,7 @@ namespace Concurrency.Implementation.TransactionExecution
         // Notice: the current implementation assumes each actor will be accessed at most once
         public async Task<TransactionResult> StartTransaction(string startFunc, object funcInput, List<int> grainAccessInfo, List<string> grainClassName)
         {
+            var receiveTxnTime = DateTime.Now;
             var cxtInfo = await detTxnExecutor.GetDetContext(grainAccessInfo, grainClassName);
             var cxt = cxtInfo.Item2;
 
@@ -149,12 +150,19 @@ namespace Concurrency.Implementation.TransactionExecution
 
             // execute PACT
             var call = new FunctionCall(startFunc, funcInput, GetType());
-            var resultObj = await ExecuteDet(call, cxt);
+            var res = await ExecuteDet(call, cxt);
+            var finishExeTime = DateTime.Now;
+            var startExeTime = res.Item2;
+            var resultObj = res.Item1;
 
             // wait for this batch to commit
             await WaitForBatchCommit(cxt.localBid);
 
+            var commitTime = DateTime.Now;
             var txnResult = new TransactionResult(resultObj);
+            txnResult.prepareTime = (startExeTime - receiveTxnTime).TotalMilliseconds;
+            txnResult.executeTime = (finishExeTime - startExeTime).TotalMilliseconds;
+            txnResult.commitTime = (commitTime - finishExeTime).TotalMilliseconds;
             return txnResult;
         }
 
@@ -262,13 +270,14 @@ namespace Concurrency.Implementation.TransactionExecution
             else return await nonDetTxnExecutor.GetState(cxt.globalTid, mode);
         }
 
-        public async Task<object> ExecuteDet(FunctionCall call, TransactionContext cxt)
+        public async Task<Tuple<object, DateTime>> ExecuteDet(FunctionCall call, TransactionContext cxt)
         {
             await detTxnExecutor.WaitForTurn(cxt);
+            var time = DateTime.Now;
             var txnRes = await InvokeFunction(call, cxt);   // execute the function call;
             await detTxnExecutor.FinishExecuteDetTxn(cxt);
             detTxnExecutor.CleanUp(cxt.localTid);
-            return txnRes.resultObj;
+            return new Tuple<object, DateTime>(txnRes.resultObj, time);
         }
 
         public async Task<NonDetFuncResult> ExecuteNonDet(FunctionCall call, TransactionContext cxt)

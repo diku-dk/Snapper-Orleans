@@ -226,7 +226,7 @@ namespace Concurrency.Implementation.TransactionExecution
 
         public async Task<TransactionResult> CallGrain(TransactionContext cxt, FunctionCall call, ITransactionExecutionGrain grain)
         {
-            var resultObj = await grain.ExecuteDet(call, cxt);
+            var resultObj = (await grain.ExecuteDet(call, cxt)).Item1;
             return new TransactionResult(resultObj);
         }
 
