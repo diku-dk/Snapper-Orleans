@@ -162,29 +162,6 @@ namespace SnapperExperimentProcess
             for (int epoch = 0; epoch < workload.numEpochs; epoch++) GenerateNewOrder(epoch);
         }
 
-        private void InitializeGetBalanceWorkload()
-        {
-            var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * 4 * Constants.numCPUPerSilo / Constants.numCPUBasic;
-            if (Constants.implementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
-            switch (workload.distribution)
-            {
-                case Distribution.UNIFORM:
-                    var dist = new DiscreteUniform(0, Constants.numGrainPerSilo - 1, new Random());
-                    for (int epoch = 0; epoch < workload.numEpochs; epoch++)
-                    {
-                        for (int txn = 0; txn < numTxnPerEpoch; txn++)
-                        {
-                            var grainsPerTxn = new List<int>();
-                            grainsPerTxn.Add(dist.Sample());
-                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
-                        }
-                    }
-                    break;
-                default:
-                    throw new Exception("Exception: SnapperExperimentProcess only support Uniform for GetBalance. ");
-            }
-        }
-
         private  int SelectNumSilo(int txnSize)
         {
             if (Constants.multiSilo == false) return 1;
@@ -244,7 +221,7 @@ namespace SnapperExperimentProcess
                                     flag++;*/
                                 }
                                 Debug.Assert(grainsPerTxn.Count == workload.txnSize);
-                                shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
+                                shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(numSiloAccess > 1, grainsPerTxn)));
                             }
                         }
                     }
@@ -292,7 +269,7 @@ namespace SnapperExperimentProcess
                                 }
                             }
 
-                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
+                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(numSiloAccess > 1, grainsPerTxn)));
                         }
                     }
                     break;
@@ -316,7 +293,7 @@ namespace SnapperExperimentProcess
                                 var id = int.Parse(line);
                                 grainsPerTxn.Add(id);
                             }
-                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(grainsPerTxn)));
+                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(false, grainsPerTxn)));
                         }
                         file.Close();
                     }

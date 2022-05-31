@@ -67,9 +67,15 @@ namespace SnapperExperimentProcess
             Console.WriteLine($"thread = {threadIndex}, isDet = {isDet}, pipe = {pipeSize}");
             for (int eIndex = 0; eIndex < workload.numEpochs; eIndex++)
             {
-                var det_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
-                var det_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
-                var det_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
+                var dist_latencies = new List<double>();
+                var dist_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
+                var dist_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
+                var dist_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
+
+                var non_dist_latencies = new List<double>();
+                var non_dist_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
+                var non_dist_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
+                var non_dist_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
 
                 int numEmit = 0;
                 int numDetCommit = 0;
@@ -80,9 +86,8 @@ namespace SnapperExperimentProcess
                 int numNotSerializable = 0;
                 int numNotSureSerializable = 0;
                 var latencies = new List<double>();
-                var det_latencies = new List<double>();
                 var tasks = new List<Task<TransactionResult>>();
-                var reqs = new Dictionary<Task<TransactionResult>, DateTime>();
+                var reqs = new Dictionary<Task<TransactionResult>, Tuple<DateTime, bool>>();
                 var queue = thread_requests[eIndex][threadIndex];
                 RequestData txn;
                 await Task.Delay(TimeSpan.FromMilliseconds(500));   // give some time for producer to populate the buffer
@@ -98,7 +103,7 @@ namespace SnapperExperimentProcess
                         var startTxnTime = DateTime.Now;
                         var newTask = benchmark.NewTransaction(client, txn);
                         numEmit++;
-                        reqs.Add(newTask, startTxnTime);
+                        reqs.Add(newTask, new Tuple<DateTime, bool>(startTxnTime, txn.isDistTxn));
                         tasks.Add(newTask);
                     }
                     if (tasks.Count != 0)
@@ -124,13 +129,20 @@ namespace SnapperExperimentProcess
                                 if (workload.benchmark == BenchmarkType.SMALLBANK) Debug.Assert(!task.Result.exception);
                                 numDetCommit++;
 
-                                det_latencies.Add((endTxnTime - reqs[task]).TotalMilliseconds);
-
-                                // calculate breaakdown latencies
-                                det_prepareTxnTime.Add(task.Result.prepareTime);
-                                det_executeTxnTime.Add(task.Result.executeTime);
-                                det_commitTxnTime.Add(task.Result.commitTime);
-
+                                if (reqs[task].Item2)
+                                {
+                                    dist_latencies.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                                    dist_prepareTxnTime.Add(task.Result.prepareTime);
+                                    dist_executeTxnTime.Add(task.Result.executeTime);
+                                    dist_commitTxnTime.Add(task.Result.commitTime);
+                                }
+                                else
+                                {
+                                    non_dist_latencies.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                                    non_dist_prepareTxnTime.Add(task.Result.prepareTime);
+                                    non_dist_executeTxnTime.Add(task.Result.executeTime);
+                                    non_dist_commitTxnTime.Add(task.Result.commitTime);
+                                } 
                             }
                             else    // for non-det + eventual + orleans txn
                             {
@@ -138,7 +150,7 @@ namespace SnapperExperimentProcess
                                 if (!task.Result.exception)
                                 {
                                     numNonDetCommit++;
-                                    var totalTime = (endTxnTime - reqs[task]).TotalMilliseconds;
+                                    var totalTime = (endTxnTime - reqs[task].Item1).TotalMilliseconds;
                                     latencies.Add(totalTime);
                                 }
                                 else if (task.Result.Exp_Serializable) numNotSerializable++;
@@ -176,13 +188,20 @@ namespace SnapperExperimentProcess
                             if (workload.benchmark == BenchmarkType.SMALLBANK) Debug.Assert(!task.Result.exception);
                             numDetCommit++;
 
-                            det_latencies.Add((endTxnTime - reqs[task]).TotalMilliseconds);
-
-                            // calculate breaakdown latencies
-                            det_prepareTxnTime.Add(task.Result.prepareTime);
-                            det_executeTxnTime.Add(task.Result.executeTime);
-                            det_commitTxnTime.Add(task.Result.commitTime);
-
+                            if (reqs[task].Item2)
+                            {
+                                dist_latencies.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                                dist_prepareTxnTime.Add(task.Result.prepareTime);
+                                dist_executeTxnTime.Add(task.Result.executeTime);
+                                dist_commitTxnTime.Add(task.Result.commitTime);
+                            }
+                            else
+                            {
+                                non_dist_latencies.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                                non_dist_prepareTxnTime.Add(task.Result.prepareTime);
+                                non_dist_executeTxnTime.Add(task.Result.executeTime);
+                                non_dist_commitTxnTime.Add(task.Result.commitTime);
+                            }
                         }
                         else    // for non-det + eventual + orleans txn
                         {
@@ -190,7 +209,7 @@ namespace SnapperExperimentProcess
                             if (!task.Result.exception)
                             {
                                 numNonDetCommit++;
-                                var totalTime = (endTxnTime - reqs[task]).TotalMilliseconds;
+                                var totalTime = (endTxnTime - reqs[task].Item1).TotalMilliseconds;
                                 latencies.Add(totalTime);
                             }
                             else if (task.Result.Exp_Serializable) numNotSerializable++;
@@ -213,8 +232,10 @@ namespace SnapperExperimentProcess
                 WorkloadResult res;
                 if (Constants.implementationType == ImplementationType.ORLEANSTXN) res = new WorkloadResult(numDetCommit, numOrleansTxnEmit, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
                 else res = new WorkloadResult(numDetCommit, numNonDetTransaction, numDetCommit, numNonDetCommit, startTime, endTime, numNotSerializable, numNotSureSerializable, numDeadlock);
-                res.setLatency(latencies, det_latencies);
-                res.setBreakdownLatency(det_prepareTxnTime, det_executeTxnTime, det_commitTxnTime);
+                res.setLatency(latencies, dist_latencies, non_dist_latencies);
+                res.setBreakdownLatency(
+                    dist_prepareTxnTime, dist_executeTxnTime, dist_commitTxnTime,
+                    non_dist_prepareTxnTime, non_dist_executeTxnTime, non_dist_commitTxnTime);
                 results[threadIndex] = res;
                 threadAcks[eIndex].Signal();  // Signal the completion of epoch
             }

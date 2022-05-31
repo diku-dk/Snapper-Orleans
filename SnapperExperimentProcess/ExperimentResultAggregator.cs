@@ -55,16 +55,26 @@ namespace SnapperExperimentProcess
             long aggStartTime = result[0].startTime;
             long aggEndTime = result[0].endTime;
             var aggLatencies = new List<double>();
-            var aggDetLatencies = new List<double>();
             aggLatencies.AddRange(result[0].latencies);
-            aggDetLatencies.AddRange(result[0].det_latencies);
 
-            var aggDet_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
-            var aggDet_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
-            var aggDet_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
-            aggDet_prepareTxnTime.AddRange(result[0].det_prepareTxnTime);
-            aggDet_executeTxnTime.AddRange(result[0].det_executeTxnTime);
-            aggDet_commitTxnTime.AddRange(result[0].det_commitTxnTime);
+            var aggDistLatencies = new List<double>();
+            var aggNonDistLatencies = new List<double>();
+            aggDistLatencies.AddRange(result[0].dist_latencies);
+            aggNonDistLatencies.AddRange(result[0].non_dist_latencies);
+
+            var aggDist_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
+            var aggDist_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
+            var aggDist_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
+            aggDist_prepareTxnTime.AddRange(result[0].dist_prepareTxnTime);
+            aggDist_executeTxnTime.AddRange(result[0].dist_executeTxnTime);
+            aggDist_commitTxnTime.AddRange(result[0].dist_commitTxnTime);
+
+            var aggNonDist_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
+            var aggNonDist_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
+            var aggNonDist_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
+            aggNonDist_prepareTxnTime.AddRange(result[0].non_dist_prepareTxnTime);
+            aggNonDist_executeTxnTime.AddRange(result[0].non_dist_executeTxnTime);
+            aggNonDist_commitTxnTime.AddRange(result[0].non_dist_commitTxnTime);
 
             for (int i = 1; i < result.Length; i++)    // reach thread has a result
             {
@@ -78,15 +88,23 @@ namespace SnapperExperimentProcess
                 aggStartTime = (result[i].startTime < aggStartTime) ? result[i].startTime : aggStartTime;
                 aggEndTime = (result[i].endTime < aggEndTime) ? result[i].endTime : aggEndTime;
                 aggLatencies.AddRange(result[i].latencies);
-                aggDetLatencies.AddRange(result[i].det_latencies);
 
-                aggDet_prepareTxnTime.AddRange(result[i].det_prepareTxnTime);
-                aggDet_executeTxnTime.AddRange(result[i].det_executeTxnTime);
-                aggDet_commitTxnTime.AddRange(result[i].det_commitTxnTime);
+                aggDistLatencies.AddRange(result[i].dist_latencies);
+                aggNonDistLatencies.AddRange(result[i].non_dist_latencies);
+
+                aggDist_prepareTxnTime.AddRange(result[i].dist_prepareTxnTime);
+                aggDist_executeTxnTime.AddRange(result[i].dist_executeTxnTime);
+                aggDist_commitTxnTime.AddRange(result[i].dist_commitTxnTime);
+
+                aggNonDist_prepareTxnTime.AddRange(result[i].non_dist_prepareTxnTime);
+                aggNonDist_executeTxnTime.AddRange(result[i].non_dist_executeTxnTime);
+                aggNonDist_commitTxnTime.AddRange(result[i].non_dist_commitTxnTime);
             }
             var res = new WorkloadResult(aggNumDetTransactions, aggNumNonDetTransactions, aggNumDetCommitted, aggNumNonDetCommitted, aggStartTime, aggEndTime, aggNumNotSerializable, aggNumNotSureSerializable, aggNumDeadlock);
-            res.setLatency(aggLatencies, aggDetLatencies);
-            res.setBreakdownLatency(aggDet_prepareTxnTime, aggDet_executeTxnTime, aggDet_commitTxnTime);
+            res.setLatency(aggLatencies, aggDistLatencies, aggNonDistLatencies);
+            res.setBreakdownLatency(
+                aggDist_prepareTxnTime, aggDist_executeTxnTime, aggDist_commitTxnTime,
+                aggNonDist_prepareTxnTime, aggNonDist_executeTxnTime, aggNonDist_commitTxnTime);
             return res;
         }
 
@@ -168,15 +186,31 @@ namespace SnapperExperimentProcess
                 }
                 if (pactPercent > 0)
                 {
-                    foreach (var percentile in percentilesToCalculate)
+                    if (aggResult.dist_latencies.Count != 0)
                     {
-                        var lat = ArrayStatistics.PercentileInplace(aggResult.det_latencies.ToArray(), percentile);
-                        file.Write($"{ChangeFormat(lat)} ");
-                    }
+                        foreach (var percentile in percentilesToCalculate)
+                        {
+                            var lat = ArrayStatistics.PercentileInplace(aggResult.dist_latencies.ToArray(), percentile);
+                            file.Write($"{ChangeFormat(lat)} ");
+                        }
 
-                    file.Write($"{ChangeFormat(aggResult.det_prepareTxnTime.Mean())} ");
-                    file.Write($"{ChangeFormat(aggResult.det_executeTxnTime.Mean())} ");
-                    file.Write($"{ChangeFormat(aggResult.det_commitTxnTime.Mean())} ");
+                        file.Write($"{ChangeFormat(aggResult.dist_prepareTxnTime.Mean())} ");
+                        file.Write($"{ChangeFormat(aggResult.dist_executeTxnTime.Mean())} ");
+                        file.Write($"{ChangeFormat(aggResult.dist_commitTxnTime.Mean())} ");
+                    }
+                    
+                    if (aggResult.non_dist_latencies.Count != 0)
+                    {
+                        foreach (var percentile in percentilesToCalculate)
+                        {
+                            var lat = ArrayStatistics.PercentileInplace(aggResult.non_dist_latencies.ToArray(), percentile);
+                            file.Write($"{ChangeFormat(lat)} ");
+                        }
+
+                        file.Write($"{ChangeFormat(aggResult.non_dist_prepareTxnTime.Mean())} ");
+                        file.Write($"{ChangeFormat(aggResult.non_dist_executeTxnTime.Mean())} ");
+                        file.Write($"{ChangeFormat(aggResult.non_dist_commitTxnTime.Mean())} ");
+                    }
                 }
                 if (pactPercent < 100)
                 {

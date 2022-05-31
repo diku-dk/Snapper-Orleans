@@ -60,14 +60,23 @@ namespace Utilities
         [Key(9)]
         public List<double> latencies = new List<double>();
         [Key(10)]
-        public List<double> det_latencies = new List<double>();
-
+        public List<double> dist_latencies = new List<double>();
         [Key(11)]
-        public List<double> det_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
+        public List<double> non_dist_latencies = new List<double>();
+
         [Key(12)]
-        public List<double> det_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
+        public List<double> dist_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
         [Key(13)]
-        public List<double> det_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
+        public List<double> dist_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
+        [Key(14)]
+        public List<double> dist_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
+
+        [Key(15)]
+        public List<double> non_dist_prepareTxnTime = new List<double>();     // grain receive txn  ==>  start execute txn
+        [Key(16)]
+        public List<double> non_dist_executeTxnTime = new List<double>();     // start execute txn  ==>  finish execute txn
+        [Key(17)]
+        public List<double> non_dist_commitTxnTime = new List<double>();      // finish execute txn ==>  batch committed
 
         public WorkloadResult(int numDetTxn, int numNonDetTxn, int numDetCommitted, int numNonDetCommitted, long startTime, long endTime, int numNotSerializable, int numNotSureSerializable, int numDeadlock)
         {
@@ -82,17 +91,27 @@ namespace Utilities
             this.numDeadlock = numDeadlock;
         }
 
-        public void setLatency(List<double> latencies, List<double> det_latencies)
+        public void setLatency(List<double> latencies, List<double> dist_latencies, List<double> non_dist_latencies)
         {
             this.latencies = latencies;
-            this.det_latencies = det_latencies;
+            this.dist_latencies = dist_latencies;
+            this.non_dist_latencies = non_dist_latencies;
         }
 
-        public void setBreakdownLatency(List<double> det_prepareTxnTime, List<double> det_executeTxnTime, List<double> det_commitTxnTime)
+        public void setBreakdownLatency(
+            List<double> dist_prepareTxnTime,
+            List<double> dist_executeTxnTime,
+            List<double> dist_commitTxnTime,
+            List<double> non_dist_prepareTxnTime,
+            List<double> non_dist_executeTxnTime,
+            List<double> non_dist_commitTxnTime)
         {
-            this.det_prepareTxnTime = det_prepareTxnTime;
-            this.det_executeTxnTime = det_executeTxnTime;
-            this.det_commitTxnTime = det_commitTxnTime;
+            this.dist_prepareTxnTime = dist_prepareTxnTime;
+            this.dist_executeTxnTime = dist_executeTxnTime;
+            this.dist_commitTxnTime = dist_commitTxnTime;
+            this.non_dist_prepareTxnTime = non_dist_prepareTxnTime;
+            this.non_dist_executeTxnTime = non_dist_executeTxnTime;
+            this.non_dist_commitTxnTime = non_dist_commitTxnTime;
         }
     }
 }

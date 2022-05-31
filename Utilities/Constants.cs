@@ -11,8 +11,8 @@
 
     public class Constants
     {
-        public const bool LocalTest = true;
-        public const bool LocalCluster = true;
+        public const bool LocalTest = false;
+        public const bool LocalCluster = false;
         public const string LocalSilo = "dev";
         public const string ClusterSilo = "ec2";
         public const string ServiceID = "Snapper";
@@ -50,7 +50,7 @@
         public const int numLocalCoordPerSilo = numCPUPerSilo / numCPUBasic * 4;
         public const int loggingBatchSize = 1;
         public const bool loggingBatching = false;
-        public const int numGlobalLogger = 1;
+        public const int numGlobalLogger = numGlobalCoord;
         public const int numLoggerPerSilo = numCPUPerSilo / numCPUBasic * 4;
         // for SmallBank
         public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
