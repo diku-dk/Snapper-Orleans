@@ -120,8 +120,8 @@ namespace Concurrency.Implementation.TransactionExecution
         public async Task<TransactionResult> CallGrain(TransactionContext cxt, FunctionCall call, ITransactionExecutionGrain grain)
         {
             var funcResult = await grain.ExecuteNonDet(call, cxt);
-            nonDetFuncResults[cxt.globalTid].MergeFuncResult(funcResult);
-            return new TransactionResult(funcResult.resultObj);
+            nonDetFuncResults[cxt.globalTid].MergeFuncResult(funcResult.Item1);
+            return new TransactionResult(funcResult.Item1.resultObj);
         }
 
         // Update the metadata of the execution results, including accessed grains, before/after set, etc.

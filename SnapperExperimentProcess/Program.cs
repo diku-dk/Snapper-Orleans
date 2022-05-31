@@ -131,39 +131,39 @@ namespace SnapperExperimentProcess
                         if (noException)
                         {
                             var isDistTxn = reqs[task].Item2;
-                            if (isDistTxn)
+
+                            if (task.Result.exception == false)
                             {
-                                dist_numCommit++;
-                                dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
-                                dist_prepareTxnTime.Add(task.Result.prepareTime);
-                                dist_executeTxnTime.Add(task.Result.executeTime);
-                                dist_commitTxnTime.Add(task.Result.commitTime);
+                                if (isDistTxn)
+                                {
+                                    dist_numCommit++;
+                                    dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                                    dist_prepareTxnTime.Add(task.Result.prepareTime);
+                                    dist_executeTxnTime.Add(task.Result.executeTime);
+                                    dist_commitTxnTime.Add(task.Result.commitTime);
+                                }
+                                else
+                                {
+                                    non_dist_numCommit++;
+                                    non_dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                                    non_dist_prepareTxnTime.Add(task.Result.prepareTime);
+                                    non_dist_executeTxnTime.Add(task.Result.executeTime);
+                                    non_dist_commitTxnTime.Add(task.Result.commitTime);
+                                }
                             }
                             else
                             {
-                                non_dist_numCommit++;
-                                non_dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
-                                non_dist_prepareTxnTime.Add(task.Result.prepareTime);
-                                non_dist_executeTxnTime.Add(task.Result.executeTime);
-                                non_dist_commitTxnTime.Add(task.Result.commitTime);
-                            }
-
-                            if (isDet == false)    // for non-det + eventual + orleans txn
-                            {
-                                if (task.Result.exception)
+                                if (isDistTxn)
                                 {
-                                    if (isDistTxn)
-                                    {
-                                        if (task.Result.Exp_Serializable) dist_numNotSerializable++;
-                                        else if (task.Result.Exp_NotSureSerializable) dist_numNotSureSerializable++;
-                                        else if (task.Result.Exp_Deadlock) dist_numDeadlock++;
-                                    }
-                                    else
-                                    {
-                                        if (task.Result.Exp_Serializable) non_dist_numNotSerializable++;
-                                        else if (task.Result.Exp_NotSureSerializable) non_dist_numNotSureSerializable++;
-                                        else if (task.Result.Exp_Deadlock) non_dist_numDeadlock++;
-                                    }
+                                    if (task.Result.Exp_Serializable) dist_numNotSerializable++;
+                                    else if (task.Result.Exp_NotSureSerializable) dist_numNotSureSerializable++;
+                                    else if (task.Result.Exp_Deadlock) dist_numDeadlock++;
+                                }
+                                else
+                                {
+                                    if (task.Result.Exp_Serializable) non_dist_numNotSerializable++;
+                                    else if (task.Result.Exp_NotSureSerializable) non_dist_numNotSureSerializable++;
+                                    else if (task.Result.Exp_Deadlock) non_dist_numDeadlock++;
                                 }
                             }
                         }
@@ -192,39 +192,39 @@ namespace SnapperExperimentProcess
                     if (noException)
                     {
                         var isDistTxn = reqs[task].Item2;
-                        if (isDistTxn)
+
+                        if (task.Result.exception == false)
                         {
-                            dist_numCommit++;
-                            dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
-                            dist_prepareTxnTime.Add(task.Result.prepareTime);
-                            dist_executeTxnTime.Add(task.Result.executeTime);
-                            dist_commitTxnTime.Add(task.Result.commitTime);
+                            if (isDistTxn)
+                            {
+                                dist_numCommit++;
+                                dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                                dist_prepareTxnTime.Add(task.Result.prepareTime);
+                                dist_executeTxnTime.Add(task.Result.executeTime);
+                                dist_commitTxnTime.Add(task.Result.commitTime);
+                            }
+                            else
+                            {
+                                non_dist_numCommit++;
+                                non_dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
+                                non_dist_prepareTxnTime.Add(task.Result.prepareTime);
+                                non_dist_executeTxnTime.Add(task.Result.executeTime);
+                                non_dist_commitTxnTime.Add(task.Result.commitTime);
+                            }
                         }
                         else
                         {
-                            non_dist_numCommit++;
-                            non_dist_latency.Add((endTxnTime - reqs[task].Item1).TotalMilliseconds);
-                            non_dist_prepareTxnTime.Add(task.Result.prepareTime);
-                            non_dist_executeTxnTime.Add(task.Result.executeTime);
-                            non_dist_commitTxnTime.Add(task.Result.commitTime);
-                        }
-
-                        if (isDet == false)    // for non-det + eventual + orleans txn
-                        {
-                            if (task.Result.exception)
+                            if (isDistTxn)
                             {
-                                if (isDistTxn)
-                                {
-                                    if (task.Result.Exp_Serializable) dist_numNotSerializable++;
-                                    else if (task.Result.Exp_NotSureSerializable) dist_numNotSureSerializable++;
-                                    else if (task.Result.Exp_Deadlock) dist_numDeadlock++;
-                                }
-                                else
-                                {
-                                    if (task.Result.Exp_Serializable) non_dist_numNotSerializable++;
-                                    else if (task.Result.Exp_NotSureSerializable) non_dist_numNotSureSerializable++;
-                                    else if (task.Result.Exp_Deadlock) non_dist_numDeadlock++;
-                                }
+                                if (task.Result.Exp_Serializable) dist_numNotSerializable++;
+                                else if (task.Result.Exp_NotSureSerializable) dist_numNotSureSerializable++;
+                                else if (task.Result.Exp_Deadlock) dist_numDeadlock++;
+                            }
+                            else
+                            {
+                                if (task.Result.Exp_Serializable) non_dist_numNotSerializable++;
+                                else if (task.Result.Exp_NotSureSerializable) non_dist_numNotSureSerializable++;
+                                else if (task.Result.Exp_Deadlock) non_dist_numDeadlock++;
                             }
                         }
                     }

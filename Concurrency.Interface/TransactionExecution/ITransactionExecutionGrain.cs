@@ -15,7 +15,7 @@ namespace Concurrency.Interface.TransactionExecution
 
         // ACT
         Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
-        Task<NonDetFuncResult> ExecuteNonDet(FunctionCall call, TransactionContext ctx);
+        Task<Tuple<NonDetFuncResult, DateTime>> ExecuteNonDet(FunctionCall call, TransactionContext ctx);
         Task<bool> Prepare(int tid, bool isReader);
         Task Commit(int tid, int maxBeforeLocalBid, int maxBeforeGlobalBid);
         Task Abort(int tid);

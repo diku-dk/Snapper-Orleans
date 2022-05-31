@@ -168,6 +168,7 @@ namespace Concurrency.Implementation.TransactionExecution
 
         public async Task<TransactionResult> StartTransaction(string startFunc, object funcInput)
         {
+            var receiveTxnTime = DateTime.Now;
             var cxtInfo = await nonDetTxnExecutor.GetNonDetContext();
             if (highestCommittedLocalBid < cxtInfo.Item1)
             {
@@ -178,7 +179,10 @@ namespace Concurrency.Implementation.TransactionExecution
 
             // execute ACT
             var call = new FunctionCall(startFunc, funcInput, GetType());
-            var funcResult = await ExecuteNonDet(call, cxt);
+            var res1 = await ExecuteNonDet(call, cxt);
+            var finishExeTime = DateTime.Now;
+            var startExeTime = res1.Item2;
+            var funcResult = res1.Item1;
 
             // check serializability and do 2PC
             var canCommit = !funcResult.exception;
@@ -219,7 +223,10 @@ namespace Concurrency.Implementation.TransactionExecution
                     await grain.WaitForBatchCommit(funcResult.scheduleInfoPerSilo[siloID].maxBeforeBid);
                 }
             }
-
+            var commitTime = DateTime.Now;
+            res.prepareTime = (startExeTime - receiveTxnTime).TotalMilliseconds;
+            res.executeTime = (finishExeTime - startExeTime).TotalMilliseconds;
+            res.commitTime = (commitTime - finishExeTime).TotalMilliseconds;
             return res;
         }
 
@@ -280,16 +287,17 @@ namespace Concurrency.Implementation.TransactionExecution
             return new Tuple<object, DateTime>(txnRes.resultObj, time);
         }
 
-        public async Task<NonDetFuncResult> ExecuteNonDet(FunctionCall call, TransactionContext cxt)
+        public async Task<Tuple<NonDetFuncResult, DateTime>> ExecuteNonDet(FunctionCall call, TransactionContext cxt)
         {
             var canExecute = await nonDetTxnExecutor.WaitForTurn(cxt.globalTid);
+            var time = DateTime.Now;
             if (canExecute == false)
             {
                 var funcResult = new NonDetFuncResult();
                 funcResult.Exp_Deadlock = true;
                 funcResult.exception = true;
                 nonDetTxnExecutor.CleanUp(cxt.globalTid);
-                return funcResult;
+                return new Tuple<NonDetFuncResult, DateTime>(funcResult, time);
             }
             else
             {
@@ -309,7 +317,7 @@ namespace Concurrency.Implementation.TransactionExecution
                 if (resultObj != null) funcResult.SetResultObj(resultObj);
                 nonDetTxnExecutor.CleanUp(cxt.globalTid);
                 if (exception) CleanUp(cxt.globalTid);
-                return funcResult;
+                return new Tuple<NonDetFuncResult, DateTime>(funcResult, time);
             }
         }
 
