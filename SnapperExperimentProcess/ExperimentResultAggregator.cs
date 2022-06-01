@@ -1,7 +1,6 @@
 ﻿using MathNet.Numerics.Statistics;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using Utilities;
 
@@ -9,30 +8,16 @@ namespace SnapperExperimentProcess
 {
     public class ExperimentResultAggregator
     {
-        int pactPercent;
-        int numEpochs;
-        int numWarmupEpoch;
-        readonly long[] IOCount;
-
-        string filePath;
+        readonly WorkloadConfiguration workload;
+        readonly string filePath;
         StreamWriter file;
         WorkloadResult[,] results;
-        int[] percentilesToCalculate;
+        readonly int[] percentilesToCalculate;
 
-        public ExperimentResultAggregator()
+        public ExperimentResultAggregator(WorkloadConfiguration workload)
         {
-        }
-
-        public ExperimentResultAggregator(int pactPercent, int numEpochs, int numWarmupEpoch, long[] IOCount)
-        {
-            Debug.Assert(numEpochs >= 1);
-            Debug.Assert(Constants.numWorker >= 1);
-
-            this.pactPercent = pactPercent;
-            this.numEpochs = numEpochs;
-            this.numWarmupEpoch = numWarmupEpoch;
-            this.IOCount = IOCount;
-            results = new WorkloadResult[numEpochs, Constants.numWorker];
+            this.workload = workload;
+            results = new WorkloadResult[Constants.numEpoch, Constants.numWorker];
             percentilesToCalculate = new int[] { 25, 50, 75, 90, 99 };
             filePath = Constants.resultPath;
         }
@@ -75,7 +60,7 @@ namespace SnapperExperimentProcess
             var act_dist_latencies = new BasicLatencyInfo();
             var act_non_dist_latencies = new BasicLatencyInfo();
 
-            for (int e = numWarmupEpoch; e < numEpochs; e++) 
+            for (int e = Constants.numWarmupEpoch; e < Constants.numEpoch; e++) 
             {
                 var result = new WorkloadResult[Constants.numWorker];
                 for (int i = 0; i < Constants.numWorker; i++) result[i] = results[e, i];
@@ -111,13 +96,17 @@ namespace SnapperExperimentProcess
 
             using (file = new StreamWriter(filePath, true))
             {
-                if (pactPercent > 0)
+                file.Write($"{workload.pactPipeSize} {workload.actPipeSize} " +
+                           $"{ChangeFormat(workload.grainSkewness * 100, 1)}% " + 
+                           $"{workload.pactPercent}% {workload.distPercent}% ");
+
+                if (workload.pactPercent > 0)
                 {
                     file.Write($"{ChangeFormat(pact_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(pact_dist_tp_meanAndSd.StandardDeviation, 0)} ");
                     file.Write($"{ChangeFormat(pact_non_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(pact_non_dist_tp_meanAndSd.StandardDeviation, 0)} ");
                 }
 
-                if (pactPercent < 100)
+                if (workload.pactPercent < 100)
                 {
                     file.Write($"{ChangeFormat(act_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(act_dist_tp_meanAndSd.StandardDeviation, 0)} ");
                     file.Write($"{ChangeFormat(act_non_dist_tp_meanAndSd.Mean, 0)} {ChangeFormat(act_non_dist_tp_meanAndSd.StandardDeviation, 0)} ");
@@ -137,7 +126,7 @@ namespace SnapperExperimentProcess
                                $"{ChangeFormat(act_non_dist_abort_notSureSerializable.Mean(), 2)}% ");
                 }
 
-                if (pactPercent > 0)
+                if (workload.pactPercent > 0)
                 {
                     foreach (var percentile in percentilesToCalculate)
                     {
@@ -160,7 +149,7 @@ namespace SnapperExperimentProcess
                     file.Write($"{ChangeFormat(pact_non_dist_latencies.commitTxnTime.Mean(), 1)} ");
                 }
 
-                if (pactPercent < 100)
+                if (workload.pactPercent < 100)
                 {
                     foreach (var percentile in percentilesToCalculate)
                     {

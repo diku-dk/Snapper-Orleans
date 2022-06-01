@@ -28,8 +28,8 @@ namespace SnapperExperimentProcess
 
         public void GenerateWorkload()
         {
-            if (workload.benchmark == BenchmarkType.SMALLBANK) InitializeSmallBankWorkload();
-            else if (workload.benchmark == BenchmarkType.TPCC) InitializeTPCCWorkload();
+            if (Constants.benchmark == BenchmarkType.SMALLBANK) InitializeSmallBankWorkload();
+            else if (Constants.benchmark == BenchmarkType.TPCC) InitializeTPCCWorkload();
         }
 
         private bool isDet()
@@ -58,7 +58,7 @@ namespace SnapperExperimentProcess
                 DiscreteUniform district_dist = null;
                 DiscreteUniform hot_district_dist = null;
                 var all_wh_dist = new DiscreteUniform(0, Constants.NUM_W_PER_SILO - 1, new Random());
-                if (workload.distribution == Distribution.HOTRECORD)
+                if (Constants.distribution == Distribution.HOTRECORD)
                 {
                     // hot set
                     var num_hot_wh = (int)(0.5 * Constants.NUM_W_PER_SILO);
@@ -71,7 +71,7 @@ namespace SnapperExperimentProcess
                 }
                 else
                 {
-                    Debug.Assert(workload.distribution == Distribution.UNIFORM);
+                    Debug.Assert(Constants.distribution == Distribution.UNIFORM);
                     wh_dist = new DiscreteUniform(0, Constants.NUM_W_PER_SILO - 1, new Random());
                     district_dist = new DiscreteUniform(0, Constants.NUM_D_PER_W - 1, new Random());
                 }
@@ -84,7 +84,7 @@ namespace SnapperExperimentProcess
                 {
                     int W_ID;
                     int D_ID;
-                    if (workload.distribution == Distribution.HOTRECORD)
+                    if (Constants.distribution == Distribution.HOTRECORD)
                     {
                         var p = hot.Sample();
                         if (p < 75)    // 75% choose from hot set
@@ -160,9 +160,9 @@ namespace SnapperExperimentProcess
 
         private void InitializeTPCCWorkload()
         {
-            Debug.Assert(workload.distribution != Distribution.ZIPFIAN);
-            Console.WriteLine($"Generate {workload.distribution} data for TPCC. ");
-            for (int epoch = 0; epoch < workload.numEpochs; epoch++) GenerateNewOrder(epoch);
+            Debug.Assert(Constants.distribution != Distribution.ZIPFIAN);
+            Console.WriteLine($"Generate {Constants.distribution} data for TPCC. ");
+            for (int epoch = 0; epoch < Constants.numEpoch; epoch++) GenerateNewOrder(epoch);
         }
 
         private  int SelectNumSilo(int txnSize)
@@ -179,122 +179,121 @@ namespace SnapperExperimentProcess
             var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * 10 * Constants.numCPUPerSilo / Constants.numCPUBasic;
             if (Constants.implementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
 
+            // this worker will only generate transactions access those 2 silos (for the scale out experiment)
             var firstSiloID = 2 * (workerID / 2);
             var siloDist = new DiscreteUniform(firstSiloID, firstSiloID + 1, new Random());           // [firstSiloID, firstSiloID + 1]
-            switch (workload.distribution)
+
+            if (Constants.distribution == Distribution.UNIFORM || (Constants.distribution == Distribution.HOTRECORD && workload.grainSkewness == 1))
             {
-                case Distribution.UNIFORM:
-                    Console.WriteLine($"Generate UNIFORM data for SmallBank, txnSize = {workload.txnSize}");
+                Console.WriteLine($"Generate workload for UNIFORM...");
+                var grainDist = new DiscreteUniform(0, Constants.numGrainPerSilo - 1, new Random());  // [0, numGrainPerSilo - 1]
+                for (int epoch = 0; epoch < Constants.numEpoch; epoch++)
+                {
+                    for (int txn = 0; txn < numTxnPerEpoch; txn++)
                     {
-                        var grainDist = new DiscreteUniform(0, Constants.numGrainPerSilo - 1, new Random());  // [0, numGrainPerSilo - 1]
-                        for (int epoch = 0; epoch < workload.numEpochs; epoch++)
+                        var grainsPerTxn = new List<int>();
+                        var numSiloAccess = SelectNumSilo(workload.txnSize);
+                        Debug.Assert(numSiloAccess <= workload.txnSize);
+                        var siloList = new List<int>();
+                        for (int j = 0; j < numSiloAccess; j++)   // how many silos the txn will access
                         {
-                            for (int txn = 0; txn < numTxnPerEpoch; txn++)
-                            {
-                                var grainsPerTxn = new List<int>();
-                                var numSiloAccess = SelectNumSilo(workload.txnSize);
-                                Debug.Assert(numSiloAccess <= workload.txnSize);
-                                var siloList = new List<int>();
-                                for (int j = 0; j < numSiloAccess; j++)   // how many silos the txn will access
-                                {
-                                    var silo = siloDist.Sample();
-                                    while (siloList.Contains(silo)) silo = siloDist.Sample();
-                                    siloList.Add(silo);
-                                }
-                                Debug.Assert(siloList.Count == numSiloAccess);
+                            var silo = siloDist.Sample();
+                            while (siloList.Contains(silo)) silo = siloDist.Sample();
+                            siloList.Add(silo);
+                        }
+                        Debug.Assert(siloList.Count == numSiloAccess);
 
-                                for (int k = 0; k < workload.txnSize; k++)
-                                {
-                                    var silo = siloList[k % numSiloAccess];
-                                    var grainInSilo = grainDist.Sample();
-                                    var grainID = silo * Constants.numGrainPerSilo + grainInSilo;
-                                    while (grainsPerTxn.Contains(grainID))
-                                    {
-                                        grainInSilo = grainDist.Sample();
-                                        grainID = silo * Constants.numGrainPerSilo + grainInSilo;
-                                    }
-                                    grainsPerTxn.Add(grainID);
-                                }
-                                Debug.Assert(grainsPerTxn.Count == workload.txnSize);
-                                shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(numSiloAccess > 1, grainsPerTxn)));
+                        for (int k = 0; k < workload.txnSize; k++)
+                        {
+                            var silo = siloList[k % numSiloAccess];
+                            var grainInSilo = grainDist.Sample();
+                            var grainID = silo * Constants.numGrainPerSilo + grainInSilo;
+                            while (grainsPerTxn.Contains(grainID))
+                            {
+                                grainInSilo = grainDist.Sample();
+                                grainID = silo * Constants.numGrainPerSilo + grainInSilo;
+                            }
+                            grainsPerTxn.Add(grainID);
+                        }
+                        Debug.Assert(grainsPerTxn.Count == workload.txnSize);
+                        shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(numSiloAccess > 1, grainsPerTxn)));
+                    }
+                }
+            }
+            else if (Constants.distribution == Distribution.HOTRECORD)
+            {
+                int numHotGrain = (int)(workload.grainSkewness * Constants.numGrainPerSilo);
+                var numHotGrainPerTxn = Constants.txnSkewness * workload.txnSize;
+                Console.WriteLine($"Generate workload for HOTRECORD, {numHotGrain} hot grains, {numHotGrainPerTxn} hot grain per txn...");
+                var normal_dist = new DiscreteUniform(numHotGrain, Constants.numGrainPerSilo - 1, new Random());
+                DiscreteUniform hot_dist = null;
+                if (numHotGrain > 0) hot_dist = new DiscreteUniform(0, numHotGrain - 1, new Random());
+                for (int epoch = 0; epoch < Constants.numEpoch; epoch++)
+                {
+                    for (int txn = 0; txn < numTxnPerEpoch; txn++)
+                    {
+                        var grainsPerTxn = new List<int>();
+
+                        // get the list of silos
+                        var numSiloAccess = SelectNumSilo(workload.txnSize);
+                        Debug.Assert(numSiloAccess <= workload.txnSize);
+                        var siloList = new List<int>();
+                        for (int j = 0; j < numSiloAccess; j++)   // how many silos the txn will access
+                        {
+                            var silo = siloDist.Sample();
+                            while (siloList.Contains(silo)) silo = siloDist.Sample();
+                            siloList.Add(silo);
+                        }
+                        Debug.Assert(siloList.Count == numSiloAccess);
+
+                        for (int i = 0; i < workload.txnSize; i++)
+                        {
+                            if (i < numHotGrainPerTxn)   // those grains are selected from hot set
+                            {
+                                var silo = siloList[i % numSiloAccess];
+                                var hotGrain = hot_dist.Sample() + silo * Constants.numGrainPerSilo;
+                                while (grainsPerTxn.Contains(hotGrain)) hotGrain = hot_dist.Sample() + silo * Constants.numGrainPerSilo;
+                                grainsPerTxn.Add(hotGrain);
+                            }
+                            else   // those grains are selected from non-hot set
+                            {
+                                var silo = siloList[i % numSiloAccess];
+                                var normalGrain = normal_dist.Sample() + silo * Constants.numGrainPerSilo;
+                                while (grainsPerTxn.Contains(normalGrain)) normalGrain = normal_dist.Sample() + silo * Constants.numGrainPerSilo;
+                                grainsPerTxn.Add(normalGrain);
                             }
                         }
+
+                        shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(numSiloAccess > 1, grainsPerTxn)));
                     }
-                    break;
-                case Distribution.HOTRECORD:
-                    int numHotGrain = (int)(workload.grainSkewness * Constants.numGrainPerSilo);
-                    var numHotGrainPerTxn = workload.txnSkewness * workload.txnSize;
-                    Console.WriteLine($"Generate data for HOTRECORD, {numHotGrain} hot grains, {numHotGrainPerTxn} hot grain per txn...");
-                    var normal_dist = new DiscreteUniform(numHotGrain, Constants.numGrainPerSilo - 1, new Random());
-                    DiscreteUniform hot_dist = null;
-                    if (numHotGrain > 0) hot_dist = new DiscreteUniform(0, numHotGrain - 1, new Random());
-                    for (int epoch = 0; epoch < workload.numEpochs; epoch++)
+                }
+            }
+            else
+            {
+                Debug.Assert(Constants.distribution == Distribution.ZIPFIAN);
+                var zipf = Constants.zipfianConstant;
+                Console.WriteLine($"Generate workload for ZIPFIAN, zipf = {zipf}");
+                var prefix = Constants.dataPath + $@"MultiTransfer\{workload.txnSize}\zipf{zipf}_";
+
+                // read data from files
+                for (int epoch = 0; epoch < Constants.numEpoch; epoch++)
+                {
+                    string line;
+                    var path = prefix + $@"epoch{epoch}.txt";
+                    var file = new StreamReader(path);
+                    while ((line = file.ReadLine()) != null)
                     {
-                        for (int txn = 0; txn < numTxnPerEpoch; txn++)
+                        var grainsPerTxn = new List<int>();
+                        for (int i = 0; i < workload.txnSize; i++)
                         {
-                            var grainsPerTxn = new List<int>();
-
-                            // get the list of silos
-                            var numSiloAccess = SelectNumSilo(workload.txnSize);
-                            Debug.Assert(numSiloAccess <= workload.txnSize);
-                            var siloList = new List<int>();
-                            for (int j = 0; j < numSiloAccess; j++)   // how many silos the txn will access
-                            {
-                                var silo = siloDist.Sample();
-                                while (siloList.Contains(silo)) silo = siloDist.Sample();
-                                siloList.Add(silo);
-                            }
-                            Debug.Assert(siloList.Count == numSiloAccess);
-
-                            for (int i = 0; i < workload.txnSize; i++)
-                            {
-                                if (i < numHotGrainPerTxn)   // those grains are selected from hot set
-                                {
-                                    var silo = siloList[i % numSiloAccess];
-                                    var hotGrain = hot_dist.Sample() + silo * Constants.numGrainPerSilo;
-                                    while (grainsPerTxn.Contains(hotGrain)) hotGrain = hot_dist.Sample() + silo * Constants.numGrainPerSilo;
-                                    grainsPerTxn.Add(hotGrain);
-                                }
-                                else   // those grains are selected from non-hot set
-                                {
-                                    var silo = siloList[i % numSiloAccess];
-                                    var normalGrain = normal_dist.Sample() + silo * Constants.numGrainPerSilo;
-                                    while (grainsPerTxn.Contains(normalGrain)) normalGrain = normal_dist.Sample() + silo * Constants.numGrainPerSilo;
-                                    grainsPerTxn.Add(normalGrain);
-                                }
-                            }
-
-                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(numSiloAccess > 1, grainsPerTxn)));
+                            if (i > 0) line = file.ReadLine();  // the 0th line has been read by while() loop
+                            var id = int.Parse(line);
+                            grainsPerTxn.Add(id);
                         }
+                        shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(false, grainsPerTxn)));
                     }
-                    break;
-                case Distribution.ZIPFIAN:    // read data from file
-                    var zipf = workload.zipfianConstant;
-                    Console.WriteLine($"read data from files, txnsize = {workload.txnSize}, zipf = {zipf}");
-                    var prefix = Constants.dataPath + $@"MultiTransfer\{workload.txnSize}\zipf{zipf}_";
-
-                    // read data from files
-                    for (int epoch = 0; epoch < workload.numEpochs; epoch++)
-                    {
-                        string line;
-                        var path = prefix + $@"epoch{epoch}.txt";
-                        var file = new StreamReader(path);
-                        while ((line = file.ReadLine()) != null)
-                        {
-                            var grainsPerTxn = new List<int>();
-                            for (int i = 0; i < workload.txnSize; i++)
-                            {
-                                if (i > 0) line = file.ReadLine();  // the 0th line has been read by while() loop
-                                var id = int.Parse(line);
-                                grainsPerTxn.Add(id);
-                            }
-                            shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(false, grainsPerTxn)));
-                        }
-                        file.Close();
-                    }
-                    break;
-                default:
-                    throw new Exception("Exception: Unknown distribution. ");
+                    file.Close();
+                }
             }
         }
     }

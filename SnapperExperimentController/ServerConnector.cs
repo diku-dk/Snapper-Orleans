@@ -15,25 +15,19 @@ namespace SnapperExperimentController
     public class ServerConnector
     {
         IClusterClient client;
-        volatile bool loadingDone = false;
         IGlobalConfigGrain globalConfigGrain;
-        volatile bool initializationFinish = false;
-        BenchmarkType benchmark;
 
-        long[] IOcount;
-        bool enableIOCount;
-        bool setCountFinish = false;
-        bool getCountFinish = false;
-        bool resetFinish = false;
-        bool checkGCFinish = false;
+        bool loadingDone;
+        bool initializationFinish;
+        bool resetFinish;
+        bool checkGCFinish;
 
-        public ServerConnector(int numEpochs, BenchmarkType benchmark, long[] IOCount)
+        public ServerConnector()
         {
-            enableIOCount = Constants.implementationType == ImplementationType.SNAPPER
-                                 && Constants.loggingType == LoggingType.LOGGER;
-            if (enableIOCount) IOcount = new long[numEpochs];
-            this.benchmark = benchmark;
-            this.IOcount = IOCount;
+            loadingDone = false;
+            initializationFinish = false;
+            resetFinish = false;
+            checkGCFinish = false;
         }
 
         public void InitiateClientAndServer()
@@ -44,8 +38,8 @@ namespace SnapperExperimentController
 
         public void LoadGrains()
         {
-            if (benchmark == BenchmarkType.SMALLBANK) LoadSmallBankGrains();
-            else if (benchmark == BenchmarkType.TPCC) LoadTPCCGrains();
+            if (Constants.benchmark == BenchmarkType.SMALLBANK) LoadSmallBankGrains();
+            else if (Constants.benchmark == BenchmarkType.TPCC) LoadTPCCGrains();
             while (!loadingDone) Thread.Sleep(100);
         }
 
@@ -73,7 +67,7 @@ namespace SnapperExperimentController
         async void CheckGCAsync()
         {
             if (Constants.implementationType != ImplementationType.SNAPPER) return;
-            if (benchmark != BenchmarkType.SMALLBANK) return;
+            if (Constants.benchmark != BenchmarkType.SMALLBANK) return;
 
             // check all global & local coordinators
             var tasks = new List<Task>();
@@ -90,37 +84,9 @@ namespace SnapperExperimentController
             checkGCFinish = true;
         }
 
-        public void SetIOCount()
-        {
-            if (enableIOCount == false) return;
-            SetIOCountAsync();
-            while (!setCountFinish) Thread.Sleep(100);
-            setCountFinish = false;
-        }
-
-        public void GetIOCount(int epoch)
-        {
-            if (enableIOCount == false) return;
-            GetIOCountAsync(epoch);
-            while (!getCountFinish) Thread.Sleep(100);
-            getCountFinish = false;
-        }
-
-        async void SetIOCountAsync()
-        {
-            await globalConfigGrain.SetIOCount();
-            setCountFinish = true;
-        }
-
-        async void GetIOCountAsync(int epoch)
-        {
-            IOcount[epoch] = await globalConfigGrain.GetIOCount();
-            getCountFinish = true;
-        }
-
         public void ResetOrderGrain()
         {
-            if (benchmark != BenchmarkType.TPCC) return;
+            if (Constants.benchmark != BenchmarkType.TPCC) return;
             ResetOrderGrainAsync();
             while (!resetFinish) Thread.Sleep(100);
             resetFinish = false;

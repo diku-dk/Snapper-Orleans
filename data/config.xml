@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<root>
+	<txnSize> 4 </txnSize>
+
+	<grainSkewness>  1.000, 0.010, 0.002, 0.001 </grainSkewness>
+	<actPipeSize>    32,    32,    32,    32    </actPipeSize>
+	<pactPipeSize>   32,    32,    32,    32    </pactPipeSize>
+	
+	<pactPercent> 100, 99, 90, 75, 50, 25, 0 </pactPercent>
+	
+	<distPercent> 100, 99, 90, 75, 50, 25, 0 </distPercent>
+</root>

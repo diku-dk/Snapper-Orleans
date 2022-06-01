@@ -4,10 +4,10 @@ using Utilities;
 using NetMQ.Sockets;
 using System.Threading;
 using System.Diagnostics;
-using System.Configuration;
-using System.Collections.Specialized;
 using SnapperExperimentProcess;
 using MessagePack;
+using System.Xml;
+using System.Collections.Generic;
 
 namespace SnapperExperimentController
 {
@@ -18,83 +18,111 @@ namespace SnapperExperimentController
         static PublisherSocket outputSocket;
         static CountdownEvent ackedWorkers;
 
-        static WorkloadConfiguration workload;
+        static List<WorkloadConfiguration> workloadGroup;
 
-        static long[] IOCount;
         static ServerConnector serverConnector;
         static ExperimentResultAggregator resultAggregator;
 
         static void Main()
         {
-            GenerateWorkLoadFromSettingsFile();
-            Console.WriteLine($"silo CPU = {Constants.numCPUPerSilo}, detPercent = {workload.pactPercent}%");
+            GenerateWorkLoadFromXMLFile();
 
-            IOCount = new long[workload.numEpochs];
-            serverConnector = new ServerConnector(
-                workload.numEpochs,
-                workload.benchmark,
-                IOCount);
-            resultAggregator = new ExperimentResultAggregator(
-                workload.pactPercent,
-                workload.numEpochs,
-                workload.numWarmupEpoch,
-                IOCount);
+            // initialize silo
+            serverConnector = new ServerConnector();
+            serverConnector.InitiateClientAndServer();
+            serverConnector.LoadGrains();
 
+            // set up processor affinity
             if (Constants.LocalCluster == false && Constants.LocalTest == false)
                 Helper.SetCPU(Constants.numWorker, "SnapperExperimentController");
 
-            serverConnector.InitiateClientAndServer();
-            serverConnector.LoadGrains();
+            // build connection between the controller and workers
+            ConnectWorkers(workloadGroup.Count);
             
-            SetUpExpProcessCommunication();
-            //Start the controller thread
-            var outputThread = new Thread(PushToWorkers);
-            outputThread.Start();
+            // start running experiments
+            foreach (var workload in workloadGroup)
+            {
+                Console.WriteLine($"Runexperiment: grainSkewness = {workload.grainSkewness}, pactPercent = {workload.pactPercent}%, distPercent = {workload.distPercent}%");
+                resultAggregator = new ExperimentResultAggregator(workload);
 
-            //Start the sink thread
-            var inputThread = new Thread(PullFromWorkers);
-            inputThread.Start();
+                //Start the controller thread
+                var outputThread = new Thread(PushToWorkers);
+                outputThread.Start(workload);
 
-            //Wait for the threads to exit
-            inputThread.Join();
-            outputThread.Join();
+                //Start the sink thread
+                var inputThread = new Thread(PullFromWorkers);
+                inputThread.Start();
 
-            resultAggregator.AggregateResultsAndPrint();
+                //Wait for the threads to exit
+                inputThread.Join();
+                outputThread.Join();
 
-            Console.WriteLine("Finished running experiment. Press Enter to exit");
-            //Console.ReadLine();
+                resultAggregator.AggregateResultsAndPrint();
+
+                Console.WriteLine("Finished running experiment.");
+            }
         }
 
-        static void GenerateWorkLoadFromSettingsFile()
+        static void GenerateWorkLoadFromXMLFile()
         {
-            workload = new WorkloadConfiguration();
+            var path = Constants.dataPath + "config.xml";
+            var xmlDoc = new XmlDocument();
+            xmlDoc.Load(path);
+            var rootNode = xmlDoc.DocumentElement;
 
-            // Parse and initialize benchmarkframework section
-            var benchmarkFrameWorkSection = ConfigurationManager.GetSection("BenchmarkFrameworkConfig") as NameValueCollection;
-            workload.numEpochs = int.Parse(benchmarkFrameWorkSection["numEpoch"]);
-            workload.numWarmupEpoch = int.Parse(benchmarkFrameWorkSection["numWarmupEpoch"]);
-            workload.epochDurationMSecs = int.Parse(benchmarkFrameWorkSection["epochDurationMSecs"]);
+            var txnSizeGroup = Array.ConvertAll(rootNode.SelectSingleNode("txnSize").FirstChild.Value.Split(","), x => int.Parse(x));
+            
+            var grainSkewnessGroup = Array.ConvertAll(rootNode.SelectSingleNode("grainSkewness").FirstChild.Value.Split(","), x => double.Parse(x));
+            var actPipeSizeGroup = Array.ConvertAll(rootNode.SelectSingleNode("actPipeSize").FirstChild.Value.Split(","), x => int.Parse(x));
+            var pactPipeSizeGroup = Array.ConvertAll(rootNode.SelectSingleNode("pactPipeSize").FirstChild.Value.Split(","), x => int.Parse(x));
 
-            // Parse workload specific configuration, assumes only one defined in file
-            var benchmarkConfigSection = ConfigurationManager.GetSection("BenchmarkConfig") as NameValueCollection;
-            workload.benchmark = Enum.Parse<BenchmarkType>(benchmarkConfigSection["benchmark"]);
-            workload.txnSize = int.Parse(benchmarkConfigSection["txnSize"]);
-            workload.actPipeSize = int.Parse(benchmarkConfigSection["actPipeSize"]);
-            workload.pactPipeSize = int.Parse(benchmarkConfigSection["pactPipeSize"]);
-            workload.distribution = Enum.Parse<Distribution>(benchmarkConfigSection["distribution"]);
-            workload.txnSkewness = float.Parse(benchmarkConfigSection["txnSkewness"]);
-            workload.grainSkewness = float.Parse(benchmarkConfigSection["grainSkewness"]);
-            workload.zipfianConstant = float.Parse(benchmarkConfigSection["zipfianConstant"]);
-            workload.pactPercent = int.Parse(benchmarkConfigSection["pactPercent"]);
-            Console.WriteLine("Generated workload configuration");
+            var pactPercentGroup = Array.ConvertAll(rootNode.SelectSingleNode("pactPercent").FirstChild.Value.Split(","), x => int.Parse(x));
+            
+            var distPercentGroup = Array.ConvertAll(rootNode.SelectSingleNode("distPercent").FirstChild.Value.Split(","), x => int.Parse(x));
+
+            workloadGroup = new List<WorkloadConfiguration>();
+            for (int i = 0; i < txnSizeGroup.Length; i++)
+            {
+                var txnSize = txnSizeGroup[i];
+                for (int j = 0; j < grainSkewnessGroup.Length; j++)
+                {
+                    var grainSkewness = grainSkewnessGroup[j];
+                    var actPipeSize = actPipeSizeGroup[j];
+                    var pactPipeSize = pactPipeSizeGroup[j];
+                    for (int k = 0; k < pactPercentGroup.Length; k++)
+                    {
+                        var pactPercent = pactPercentGroup[k];
+                        if (pactPercent == 0) pactPipeSize = 0;
+                        else if (pactPercent == 100) actPipeSize = 0;
+                        for (int m = 0; m < distPercentGroup.Length; m++)
+                        {
+                            var distPercent = distPercentGroup[m];
+                            var workload = new WorkloadConfiguration(txnSize, grainSkewness, actPipeSize, pactPipeSize, pactPercent, distPercent);
+                            workloadGroup.Add(workload);
+                        }
+                    }
+                }
+            }
         }
 
-        static void SetUpExpProcessCommunication()
+        static void ConnectWorkers(int numExperiment)
         {
             inputSocket = new PullSocket(Constants.controller_InputAddress);
             outputSocket = new PublisherSocket(Constants.controller_OutputAddress);
-
             ackedWorkers = new CountdownEvent(Constants.numWorker);
+
+            Console.WriteLine("Wait for workers to connect...");
+            NetworkMessage msg;
+            for (int i = 0; i < Constants.numWorker; i++)
+            {
+                msg = MessagePackSerializer.Deserialize<NetworkMessage>(inputSocket.ReceiveFrameBytes());
+                Trace.Assert(msg.msgType == Utilities.MsgType.WORKER_CONNECT);
+                Console.WriteLine($"Receive WORKER_CONNECT from worker {i}");
+            }
+
+            msg = new NetworkMessage(Utilities.MsgType.CONFIRM, MessagePackSerializer.Serialize(numExperiment));
+            outputSocket.SendMoreFrame("CONFIRM").SendFrame(MessagePackSerializer.Serialize(msg));
+            Console.WriteLine($"Publish confirmation to all workers.");
         }
 
         static void WaitForWorkerAcksAndReset()
@@ -103,13 +131,10 @@ namespace SnapperExperimentController
             ackedWorkers.Reset(Constants.numWorker); //Reset for next ack, not thread-safe but provides visibility, ok for us to use due to lock-stepped (distributed producer/consumer) usage pattern i.e., Reset will never called concurrently with other functions (Signal/Wait)            
         }
 
-        static void PushToWorkers()
+        static void PushToWorkers(object obj)
         {
-            Console.WriteLine($"wait for worker to connect");
-            WaitForWorkerAcksAndReset();
-            Console.WriteLine($"{Constants.numWorker} worker nodes have connected to Controller");
-
             Console.WriteLine($"Sent workload configuration to {Constants.numWorker} worker nodes");
+            var workload = (WorkloadConfiguration)obj;
             var msg = new NetworkMessage(Utilities.MsgType.WORKLOAD_INIT, MessagePackSerializer.Serialize(workload));
             outputSocket.SendMoreFrame("WORKLOAD_INIT").SendFrame(MessagePackSerializer.Serialize(msg));
 
@@ -117,10 +142,8 @@ namespace SnapperExperimentController
             WaitForWorkerAcksAndReset();
             Console.WriteLine($"Receive workload configuration ack from {Constants.numWorker} worker nodes");
 
-            for (int i = 0; i < workload.numEpochs; i++)
+            for (int i = 0; i < Constants.numEpoch; i++)
             {
-                serverConnector.SetIOCount();
-
                 //Send the command to run an epoch
                 Console.WriteLine($"Running Epoch {i} on {Constants.numWorker} worker nodes");
                 msg = new NetworkMessage(Utilities.MsgType.RUN_EPOCH);
@@ -128,7 +151,6 @@ namespace SnapperExperimentController
                 WaitForWorkerAcksAndReset();
                 Console.WriteLine($"Finished running epoch {i} on {Constants.numWorker} worker nodes");
 
-                serverConnector.GetIOCount(i);
                 serverConnector.ResetOrderGrain();
                 serverConnector.CheckGC();
             }
@@ -139,21 +161,13 @@ namespace SnapperExperimentController
             for (int i = 0; i < Constants.numWorker; i++)
             {
                 var msg = MessagePackSerializer.Deserialize<NetworkMessage>(inputSocket.ReceiveFrameBytes());
-                Trace.Assert(msg.msgType == Utilities.MsgType.WORKER_CONNECT);
-                Console.WriteLine($"Receive WORKER_CONNECT from worker {i}");
-                ackedWorkers.Signal();
-            }
-
-            for (int i = 0; i < Constants.numWorker; i++)
-            {
-                var msg = MessagePackSerializer.Deserialize<NetworkMessage>(inputSocket.ReceiveFrameBytes());
                 Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT_ACK);
                 Console.WriteLine($"Receive WORKLOAD_INIT_ACT from worker {i}");
                 ackedWorkers.Signal();
             }
 
             //Wait for epoch acks
-            for (int i = 0; i < workload.numEpochs; i++)
+            for (int i = 0; i < Constants.numEpoch; i++)
             {
                 for (int j = 0; j < Constants.numWorker; j++)
                 {

@@ -7,33 +7,34 @@ namespace Utilities
     [MessagePackObject]
     public class WorkloadConfiguration
     {
-        // benchmark setting
         [Key(0)]
-        public int numEpochs;
-        [Key(1)]
-        public int numWarmupEpoch;
-        [Key(2)]
-        public int epochDurationMSecs;
-
-        // workload config
-        [Key(3)]
-        public BenchmarkType benchmark;
-        [Key(4)]
         public int txnSize;
-        [Key(5)]
+
+        [Key(2)]
+        public double grainSkewness;
+        [Key(3)]
         public int actPipeSize;
-        [Key(6)]
+        [Key(4)]
         public int pactPipeSize;
-        [Key(7)]
-        public Distribution distribution;
-        [Key(8)]
-        public float txnSkewness;
-        [Key(9)]
-        public float grainSkewness;
-        [Key(10)]
-        public float zipfianConstant;
-        [Key(11)]
+        
+        [Key(5)]
         public int pactPercent;
+
+        [Key(6)]
+        public int distPercent;
+
+        public WorkloadConfiguration(int txnSize, 
+            double grainSkewness, int actPipeSize, int pactPipeSize,
+            int pactPercent,
+            int distPercent)
+        { 
+            this.txnSize = txnSize;
+            this.grainSkewness = grainSkewness;
+            this.actPipeSize = actPipeSize;
+            this.pactPipeSize = pactPipeSize;
+            this.pactPercent = pactPercent;
+            this.distPercent = distPercent;
+        }
     }
 
     [MessagePackObject]

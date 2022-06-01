@@ -11,8 +11,8 @@
 
     public class Constants
     {
-        public const bool LocalTest = true;
-        public const bool LocalCluster = true;
+        public const bool LocalTest = false;
+        public const bool LocalCluster = false;
         public const string LocalSilo = "dev";
         public const string ClusterSilo = "ec2";
         public const string ServiceID = "Snapper";
@@ -43,7 +43,9 @@
         public const int numCPUPerSilo = 4;
         public const bool multiSilo = numSilo > 1;
         public const CCType ccType = CCType.S2PL;
+        public const Distribution distribution = Distribution.HOTRECORD;
         public const ImplementationType implementationType = ImplementationType.SNAPPER;
+        public const BenchmarkType benchmark = BenchmarkType.SMALLBANK;
         public const LoggingType loggingType = LoggingType.LOGGER;
         public const StorageType storageType = StorageType.FILESYSTEM;
         public const int numGlobalCoord = numSilo * 1;
@@ -52,7 +54,13 @@
         public const bool loggingBatching = false;
         public const int numGlobalLogger = numGlobalCoord;
         public const int numLoggerPerSilo = numCPUPerSilo / numCPUBasic * 4;
+
+        public const int numEpoch = 6;
+        public const int numWarmupEpoch = 2;
+        public const int epochDurationMSecs = 10000;
+        public const double zipfianConstant = 0.0;
         // for SmallBank
+        public const double txnSkewness = 0.75;     // 3 out of 4 grains are chosen from the hot set
         public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
         // for TPCC
         public const int NUM_W_PER_SILO = 2 * numCPUPerSilo / numCPUBasic;

@@ -1,13 +1,12 @@
-# First build the Orleans vNext nuget packages locally
-if((Test-Path "..\..\vNext\Binaries\Debug\") -eq $false) {
-     # this will only work in Windows.
-     # Alternatively build the nuget packages and place them in the <root>/vNext/Binaries/Debug folder
-     # (or make sure there is a package source available with the Orleans 2.0 TP nugets)
-    #..\..\Build.cmd netstandard
-}
 
-# Uncomment the following to clear the nuget cache if rebuilding the packages doesn't seem to take effect.
-#dotnet nuget locals all --clear
+function RunExperiment 
+{
+    param ( [int] $experimentID, [int] $numCPU, [string] $implementation, [string] $benchmark, [string] $loggingEnabled, [int] $numOrderGrainPerDistrict)
+    Start-Process "dotnet" -ArgumentList "run --project SnapperSiloHost $numCPU $implementation $loggingEnabled"
+    Start-Sleep 30
+    Wait-Process -Name "SnapperSiloHost"
+    Start-Sleep 5
+}
 
 dotnet restore
 if ($LastExitCode -ne 0) { return; }
@@ -40,3 +39,4 @@ for ($j = 0; $j -le 0; $j++)
         }
     }
 }
+
