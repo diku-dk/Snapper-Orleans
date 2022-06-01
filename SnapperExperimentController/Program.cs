@@ -34,7 +34,7 @@ namespace SnapperExperimentController
 
             // set up processor affinity
             if (Constants.LocalCluster == false && Constants.LocalTest == false)
-                Helper.SetCPU(Constants.numWorker, "SnapperExperimentController");
+                Helper.SetCPU(Constants.numWorker, "SnapperExperimentController", Constants.numCPUPerSilo);
 
             // build connection between the controller and workers
             ConnectWorkers(workloadGroup.Count);

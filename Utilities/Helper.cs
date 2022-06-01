@@ -52,13 +52,12 @@ namespace Utilities
             return (((part1 | part2) + C) % (y - x + 1)) + x;
         }
 
-        public static void SetCPU(int processID, string processName)
+        // this can only be used for workers and normal silos
+        public static void SetCPU(int processID, string processName, int numCPU)
         {
             Console.WriteLine($"Set processor affinity for {processName}...");
             var processes = Process.GetProcessesByName(processName);
 
-            var numCPU = Constants.numCPUPerSilo;
-            if (processName == "SnapperSiloHost" && processID == Constants.numSilo) numCPU /= 2; 
             var str = GetSiloProcessorAffinity(processID, numCPU);
             var serverProcessorAffinity = Convert.ToInt64(str, 2);     // server uses the highest n bits
 

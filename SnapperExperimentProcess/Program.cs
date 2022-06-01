@@ -46,7 +46,7 @@ namespace SnapperExperimentProcess
             if (Constants.LocalCluster == false && Constants.LocalTest == false)
             {
                 Debug.Assert(Environment.ProcessorCount >= (Constants.numWorker + 1) * Constants.numCPUPerSilo);
-                Helper.SetCPU(workerID, "SnapperExperimentProcess");
+                Helper.SetCPU(workerID, "SnapperExperimentProcess", Constants.numCPUPerSilo);
             }
 
             ConnectController();

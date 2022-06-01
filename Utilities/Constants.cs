@@ -11,7 +11,7 @@
 
     public class Constants
     {
-        public const bool LocalTest = false;
+        public const bool LocalTest = true;
         public const bool LocalCluster = false;
         public const string LocalSilo = "dev";
         public const string ClusterSilo = "ec2";
@@ -21,7 +21,7 @@
         public const string SiloMembershipTable = "SnapperMembershipTable";
 
         // Client config
-        public const int numWorker = 8;
+        public const int numWorker = 2;
 
         // architecture 1: single silo
         //                 local coordinators (num = numLocalCoordPerSilo)
@@ -37,28 +37,32 @@
         //                 1 local config grain per silo
         public const bool hierarchicalCoord = true;
 
-        // Silo config
-        public const int numSilo = 8;
+        // general silo config
+        public const int loggingBatchSize = 1;
+        public const bool loggingBatching = false;
+        public const LoggingType loggingType = LoggingType.LOGGER;
+        public const StorageType storageType = StorageType.FILESYSTEM;
+        public const ImplementationType implementationType = ImplementationType.SNAPPER;
+        // local silo config
+        public const int numSilo = 2;
         public const int numCPUBasic = 4;
         public const int numCPUPerSilo = 4;
         public const bool multiSilo = numSilo > 1;
         public const CCType ccType = CCType.S2PL;
-        public const Distribution distribution = Distribution.HOTRECORD;
-        public const ImplementationType implementationType = ImplementationType.SNAPPER;
-        public const BenchmarkType benchmark = BenchmarkType.SMALLBANK;
-        public const LoggingType loggingType = LoggingType.LOGGER;
-        public const StorageType storageType = StorageType.FILESYSTEM;
-        public const int numGlobalCoord = numSilo * 1;
         public const int numLocalCoordPerSilo = numCPUPerSilo / numCPUBasic * 4;
-        public const int loggingBatchSize = 1;
-        public const bool loggingBatching = false;
-        public const int numGlobalLogger = numGlobalCoord;
         public const int numLoggerPerSilo = numCPUPerSilo / numCPUBasic * 4;
+        // global silo config
+        public const int numCPUForGlobal = numSilo;
+        public const int numGlobalCoord = numSilo;
+        public const int numGlobalLogger = numSilo;
 
+        // benchmark config
         public const int numEpoch = 6;
         public const int numWarmupEpoch = 2;
         public const int epochDurationMSecs = 10000;
         public const double zipfianConstant = 0.0;
+        public const Distribution distribution = Distribution.HOTRECORD;
+        public const BenchmarkType benchmark = BenchmarkType.SMALLBANK;
         // for SmallBank
         public const double txnSkewness = 0.75;     // 3 out of 4 grains are chosen from the hot set
         public const int numGrainPerSilo = 10000 * numCPUPerSilo / numCPUBasic;   // 10000 * ...
@@ -70,9 +74,6 @@
         public const int NUM_OrderGrain_PER_D = 1;
         public const int NUM_StockGrain_PER_W = 10000;
         public const int NUM_GRAIN_PER_W = 1 + 1 + 2 * NUM_D_PER_W + NUM_StockGrain_PER_W + NUM_D_PER_W * NUM_OrderGrain_PER_D;
-
-        public const bool enableAzureClustering = false;
-        public const string connectionString = "";                               // primary connection string
 
         public const string TPCC_namespace = "TPCC.Grain.";
         public const string SmallBank_namespace = "SmallBank.Grain.";

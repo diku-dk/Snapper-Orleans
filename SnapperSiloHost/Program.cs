@@ -119,8 +119,18 @@ namespace SnapperSiloHost
 
             if (Constants.LocalCluster == false && Constants.LocalTest == false)
             {
-                Debug.Assert(Environment.ProcessorCount >= (Constants.numSilo + 1) * Constants.numCPUPerSilo);
-                Helper.SetCPU(siloID, "SnapperSiloHost");
+                if (siloID < Constants.numSilo)
+                {
+                    // this is the normal silo
+                    Debug.Assert(Environment.ProcessorCount >= Constants.numSilo * Constants.numCPUPerSilo);
+                    Helper.SetCPU(siloID, "SnapperSiloHost", Constants.numCPUPerSilo);
+                }
+                else
+                {
+                    // this is the global coordinator silo
+                    Debug.Assert(siloID == Constants.numSilo && Environment.ProcessorCount >= Constants.numCPUForGlobal);
+                    Helper.SetCPU(0, "SnapperSiloHost", Constants.numCPUForGlobal);
+                }
             }
             
             Console.WriteLine("Press Enter to terminate...");
