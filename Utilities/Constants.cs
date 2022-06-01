@@ -21,7 +21,7 @@
         public const string SiloMembershipTable = "SnapperMembershipTable";
 
         // Client config
-        public const int numWorker = 2;
+        public const int numWorker = 8;
 
         // architecture 1: single silo
         //                 local coordinators (num = numLocalCoordPerSilo)
@@ -38,7 +38,7 @@
         public const bool hierarchicalCoord = true;
 
         // Silo config
-        public const int numSilo = 2;
+        public const int numSilo = 8;
         public const int numCPUBasic = 4;
         public const int numCPUPerSilo = 4;
         public const bool multiSilo = numSilo > 1;
