@@ -170,7 +170,7 @@ namespace SnapperExperimentProcess
             if (Constants.multiSilo == false) return 1;
             
             var sample = numSiloDist.Sample(); // sample = [0, 100)
-            if (sample < 100) return 2;
+            if (sample < workload.distPercent) return 2;
             else return 1;
         }
 
