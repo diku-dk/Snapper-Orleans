@@ -87,13 +87,16 @@ namespace SnapperExperimentController
                 for (int j = 0; j < grainSkewnessGroup.Length; j++)
                 {
                     var grainSkewness = grainSkewnessGroup[j];
-                    var actPipeSize = actPipeSizeGroup[j];
-                    var pactPipeSize = pactPipeSizeGroup[j];
+                    
                     for (int k = 0; k < pactPercentGroup.Length; k++)
                     {
                         var pactPercent = pactPercentGroup[k];
+
+                        var actPipeSize = actPipeSizeGroup[j];
+                        var pactPipeSize = pactPipeSizeGroup[j];
                         if (pactPercent == 0) pactPipeSize = 0;
                         else if (pactPercent == 100) actPipeSize = 0;
+
                         for (int m = 0; m < distPercentGroup.Length; m++)
                         {
                             var distPercent = distPercentGroup[m];

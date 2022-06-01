@@ -12,7 +12,7 @@ namespace Concurrency.Implementation.Logging
     [Reentrant]
     public class LoggerGroup : ILoggerGroup
     {
-        private ILogger[] loggers = null;
+        ILogger[] loggers = null;
 
         public void Init(int numLogger, string loggerName)
         {
