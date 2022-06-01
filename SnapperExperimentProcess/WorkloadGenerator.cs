@@ -10,15 +10,18 @@ namespace SnapperExperimentProcess
 {
     public class WorkloadGenerator
     {
+        readonly int workerID;
         readonly WorkloadConfiguration workload;
         readonly IDiscreteDistribution numSiloDist = new DiscreteUniform(0, 99, new Random());
         readonly IDiscreteDistribution detDistribution = new DiscreteUniform(0, 99, new Random());
         Dictionary<int, Queue<Tuple<bool, RequestData>>> shared_requests;  // <epoch, <isDet, grainIDs>>
 
         public WorkloadGenerator(
+            int workerID,
             WorkloadConfiguration workload,
             Dictionary<int, Queue<Tuple<bool, RequestData>>> shared_requests)
         {
+            this.workerID = workerID;
             this.workload = workload;
             this.shared_requests = shared_requests;
         }
@@ -173,20 +176,16 @@ namespace SnapperExperimentProcess
 
         private  void InitializeSmallBankWorkload()
         {
-            /*
-            InitializeGetBalanceWorkload();
-            return;*/
-
             var numTxnPerEpoch = Constants.BASE_NUM_MULTITRANSFER * 10 * Constants.numCPUPerSilo / Constants.numCPUBasic;
             if (Constants.implementationType == ImplementationType.ORLEANSEVENTUAL) numTxnPerEpoch *= 2;
-            var siloDist = new DiscreteUniform(0, Constants.numSilo - 1, new Random());           // [0, numSilo - 1]
+
+            var firstSiloID = 2 * (workerID / 2);
+            var siloDist = new DiscreteUniform(firstSiloID, firstSiloID + 1, new Random());           // [firstSiloID, firstSiloID + 1]
             switch (workload.distribution)
             {
                 case Distribution.UNIFORM:
                     Console.WriteLine($"Generate UNIFORM data for SmallBank, txnSize = {workload.txnSize}");
                     {
-                        var flag = 0;
-
                         var grainDist = new DiscreteUniform(0, Constants.numGrainPerSilo - 1, new Random());  // [0, numGrainPerSilo - 1]
                         for (int epoch = 0; epoch < workload.numEpochs; epoch++)
                         {
@@ -215,10 +214,6 @@ namespace SnapperExperimentProcess
                                         grainID = silo * Constants.numGrainPerSilo + grainInSilo;
                                     }
                                     grainsPerTxn.Add(grainID);
-                                    /*
-                                    if (flag == Constants.numGrainPerSilo) flag = 0;
-                                    grainsPerTxn.Add(flag);
-                                    flag++;*/
                                 }
                                 Debug.Assert(grainsPerTxn.Count == workload.txnSize);
                                 shared_requests[epoch].Enqueue(new Tuple<bool, RequestData>(isDet(), new RequestData(numSiloAccess > 1, grainsPerTxn)));

@@ -344,7 +344,7 @@ namespace SnapperExperimentProcess
             shared_requests = new Dictionary<int, Queue<Tuple<bool, RequestData>>>();   // <epoch, <producerID, <isDet, grainIDs>>>
             for (int epoch = 0; epoch < workload.numEpochs; epoch++) shared_requests.Add(epoch, new Queue<Tuple<bool, RequestData>>());
 
-            workloadGenerator = new WorkloadGenerator(workload, shared_requests);
+            workloadGenerator = new WorkloadGenerator(workerID, workload, shared_requests);
             workloadGenerator.GenerateWorkload();
 
             InitializeProducerThread();
