@@ -1,3 +1,3 @@
 # run silo
-$numSilo = 2
+$numSilo = 8
 Start-Process "dotnet" -ArgumentList "run --project SnapperSiloHost $numSilo"

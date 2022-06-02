@@ -38,7 +38,7 @@ namespace SnapperExperimentController
             // start running experiments
             foreach (var workload in workloadGroup)
             {
-                Console.WriteLine($"Runexperiment: grainSkewness = {workload.grainSkewness}, pactPercent = {workload.pactPercent}%, distPercent = {workload.distPercent}%");
+                Console.WriteLine($"Runexperiment: grainSkewness = {workload.grainSkewness * 100.0}%, pactPercent = {workload.pactPercent}%, distPercent = {workload.distPercent}%");
                 resultAggregator = new ExperimentResultAggregator(workload);
 
                 //Start the controller thread

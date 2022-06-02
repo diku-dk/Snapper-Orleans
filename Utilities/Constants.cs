@@ -41,7 +41,7 @@
         public const StorageType storageType = StorageType.FILESYSTEM;
         public const ImplementationType implementationType = ImplementationType.SNAPPER;
         // local silo config
-        public const int numSilo = 2;
+        public const int numSilo = 8;
         public const int numCPUBasic = 4;
         public const int numCPUPerSilo = 4;
         public const bool multiSilo = numSilo > 1;

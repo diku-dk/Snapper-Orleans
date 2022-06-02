@@ -85,7 +85,7 @@ namespace SnapperExperimentProcess
             var msg = MessagePackSerializer.Deserialize<NetworkMessage>(inputSocket.ReceiveFrameBytes());
             Trace.Assert(msg.msgType == Utilities.MsgType.WORKLOAD_INIT);
             workload = MessagePackSerializer.Deserialize<WorkloadConfiguration>(msg.content);
-            Console.WriteLine($"Receive workload configuration, grainSkewness = {workload.grainSkewness}, pactPercent = {workload.pactPercent}%, distPercent = {workload.distPercent}%.");
+            Console.WriteLine($"Receive workload configuration, grainSkewness = {workload.grainSkewness * 100.0}%, pactPercent = {workload.pactPercent}%, distPercent = {workload.distPercent}%.");
 
             inputSocket.Unsubscribe("WORKLOAD_INIT");
             inputSocket.Subscribe("RUN_EPOCH");
