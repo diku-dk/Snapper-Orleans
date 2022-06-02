@@ -45,7 +45,7 @@ namespace SnapperExperimentProcess
             workerID = int.Parse(args[0]);
             if (Constants.LocalCluster == false && Constants.LocalTest == false)
             {
-                Debug.Assert(Environment.ProcessorCount >= (Constants.numWorker + 1) * Constants.numCPUPerSilo);
+                Debug.Assert(Environment.ProcessorCount >= Constants.numWorker * Constants.numCPUPerSilo);
                 Helper.SetCPU(workerID, "SnapperExperimentProcess", Constants.numCPUPerSilo);
             }
 
