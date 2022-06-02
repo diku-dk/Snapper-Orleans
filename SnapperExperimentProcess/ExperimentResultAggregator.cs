@@ -178,7 +178,8 @@ namespace SnapperExperimentProcess
 
         static string ChangeFormat(double n, int num)
         {
-            return Math.Round(n, num).ToString().Replace(',', '.');
+            if (n != double.NaN) return Math.Round(n, num).ToString().Replace(',', '.');
+            else return "x";
         }
     }
 }

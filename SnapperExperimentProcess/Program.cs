@@ -21,14 +21,15 @@ namespace SnapperExperimentProcess
         static PushSocket outputSocket;
         static CountdownEvent[] threadAcks;
         static WorkloadConfiguration workload;
-        static bool initializationDone = false;
+        static bool initializationDone;
 
-        static int numProducer;
         static int numDetConsumer;
         static int numNonDetConsumer;
         static int detBufferSize;
         static int nonDetBufferSize;
-        static Thread[] threads;         // used to submit transaction requests
+
+        static Thread producerThread;
+        static Thread[] concumerThreads;         // used to submit transaction requests
         static Barrier[] barriers;
         static IClusterClient[] clients;
         static IBenchmark[] benchmarks;
@@ -79,6 +80,7 @@ namespace SnapperExperimentProcess
         {
             Console.WriteLine($"Run experiment {experimentID}...");
 
+            initializationDone = false;
             inputSocket.Subscribe("WORKLOAD_INIT");
             inputSocket.Options.ReceiveHighWatermark = 1000;
             inputSocket.ReceiveFrameString();
@@ -114,7 +116,8 @@ namespace SnapperExperimentProcess
             }
 
             Console.WriteLine("Finished running epochs, exiting");
-            foreach (var thread in threads) thread.Join();
+            foreach (var thread in concumerThreads) thread.Join();
+            producerThread.Join();
         }
 
         static async void ThreadWorkAsync(object obj)
@@ -296,14 +299,25 @@ namespace SnapperExperimentProcess
                 long endTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 globalWatch.Stop();
                 thread_requests[eIndex].Remove(threadIndex);
-                
-                if (isDet) 
+
+                if (isDet)
                     Console.WriteLine($"PACT: dist_tp = {1000 * dist_numCommit / (endTime - startTime)}, " +
                                             $"non_dist_tp = {1000 * non_dist_numCommit / (endTime - startTime)}");
-                else Console.WriteLine($"ACT: dist_tp = {1000 * dist_numCommit / (endTime - startTime)}, " +
+                else
+                {
+                    if (workload.pactPercent > 0)
+                    {
+                        Console.WriteLine($"ACT: dist_tp = {1000 * dist_numCommit / (endTime - startTime)}, " +
                                             $"dist_abort = {dist_numEmit - dist_numCommit}, dist_numDeadlock = {dist_numDeadlock}, dist_numNotSerializable = {dist_numNotSerializable}, dist_numNotSureSerializable = {dist_numNotSureSerializable}, " +
                                             $"non_dist_tp = {1000 * non_dist_numCommit / (endTime - startTime)} " +
                                             $"non_dist_abort = {non_dist_numEmit - non_dist_numCommit}, non_dist_numDeadlock = {non_dist_numDeadlock}, non_dist_numNotSerializable = {non_dist_numNotSerializable}, non_dist_numNotSureSerializable = {non_dist_numNotSureSerializable}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"ACT: dist_tp = {1000 * dist_numCommit / (endTime - startTime)}, dist_abort% = {(dist_numEmit - dist_numCommit) * 100.0 / dist_numEmit}%, " +
+                                               $"non_dist_tp = {1000 * non_dist_numCommit / (endTime - startTime)}, non_dist_abort% = {(non_dist_numEmit - non_dist_numCommit) * 100.0 / non_dist_numEmit}%");
+                    }
+                } 
 
                 var res = new WorkloadResult();
                 res.SetTime(startTime, endTime);
@@ -318,7 +332,6 @@ namespace SnapperExperimentProcess
 
         static async void Initialize()
         {
-            numProducer = 1;
             numDetConsumer = Constants.numCPUPerSilo / 2;
             numNonDetConsumer = Constants.numCPUPerSilo / 2;
             if (workload.pactPercent == 100) numNonDetConsumer = 0;
@@ -363,7 +376,7 @@ namespace SnapperExperimentProcess
             initializationDone = true;
         }
 
-        static void ProducerThreadWork(object obj)
+        static void ProducerThreadWork()
         {
             isEpochFinish = new bool[Constants.numEpoch];
             isProducerFinish = new bool[Constants.numEpoch];
@@ -422,7 +435,7 @@ namespace SnapperExperimentProcess
                     if (txn.Item1) det++;
                     else nonDet++;
                 }
-                //Console.WriteLine($"end: shared_requests[{eIndex}].count = {start} --> {producer_queue.Count}, det = {det}, nondet = {nonDet}");
+
                 isProducerFinish[eIndex] = true;   // when Count == 0, set true
                 shared_requests.Remove(eIndex);
             }
@@ -444,11 +457,9 @@ namespace SnapperExperimentProcess
                 thread_requests.Add(epoch, new Dictionary<int, ConcurrentQueue<RequestData>>());
                 for (int t = 0; t < numDetConsumer + numNonDetConsumer; t++) thread_requests[epoch].Add(t, new ConcurrentQueue<RequestData>());
             }
-            for (int producer = 0; producer < numProducer; producer++)
-            {
-                var thread = new Thread(ProducerThreadWork);
-                thread.Start(producer);
-            }
+
+            producerThread = new Thread(ProducerThreadWork);
+            producerThread.Start();
         }
 
         static async Task InitializeClients()
@@ -462,11 +473,11 @@ namespace SnapperExperimentProcess
         static void InitializeConsumerThreads()
         {
             //Spawn Threads        
-            threads = new Thread[numDetConsumer + numNonDetConsumer];
+            concumerThreads = new Thread[numDetConsumer + numNonDetConsumer];
             for (int i = 0; i < numDetConsumer + numNonDetConsumer; i++)
             {
                 var thread = new Thread(ThreadWorkAsync);
-                threads[i] = thread;
+                concumerThreads[i] = thread;
                 if (i < numDetConsumer) thread.Start(new Tuple<int, bool>(i, true));
                 else thread.Start(new Tuple<int, bool>(i, false));
             }
