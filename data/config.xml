@@ -2,11 +2,11 @@
 <root>
 	<txnSize> 4 </txnSize>
 
-	<grainSkewness> 100, 1,  0.2, 0.1 </grainSkewness>
-	<actPipeSize>   16,  2,  1,   1   </actPipeSize>
-	<pactPipeSize>  32,  32, 32,  32  </pactPipeSize>
+	<grainSkewness> 100,  1,   0.2,  0.1 </grainSkewness>
+	<actPipeSize>   16,   2,   1,    1   </actPipeSize>
+	<pactPipeSize>  32,   32,  32,   32  </pactPipeSize>
 	
-	<pactPercent> 100, 99, 90, 75, 50, 25, 0 </pactPercent>
+	<pactPercent> 100, 0 </pactPercent>
 	
 	<distPercent> 100, 99, 90, 75, 50, 25, 0 </distPercent>
 </root>
