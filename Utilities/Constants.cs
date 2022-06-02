@@ -11,7 +11,7 @@
 
     public class Constants
     {
-        public const bool LocalTest = true;
+        public const bool LocalTest = false;
         public const bool LocalCluster = false;
         public const string LocalSilo = "dev";
         public const string ClusterSilo = "ec2";
@@ -19,9 +19,6 @@
         public const string LogTable = "SnapperLog";
         public const string GrainStateTable = "SnapperGrainStateTable";
         public const string SiloMembershipTable = "SnapperMembershipTable";
-
-        // Client config
-        public const int numWorker = 2;
 
         // architecture 1: single silo
         //                 local coordinators (num = numLocalCoordPerSilo)
@@ -56,6 +53,8 @@
         public const int numGlobalCoord = numSilo;
         public const int numGlobalLogger = numSilo;
 
+        // Client config
+        public const int numWorker = numSilo;
         // benchmark config
         public const int numEpoch = 6;
         public const int numWarmupEpoch = 2;

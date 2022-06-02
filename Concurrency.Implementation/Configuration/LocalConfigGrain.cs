@@ -8,6 +8,7 @@ using Concurrency.Interface.Logging;
 using Concurrency.Interface.Coordinator;
 using System.Diagnostics;
 using System;
+using System.IO;
 
 namespace Concurrency.Implementation.Configuration
 {
@@ -30,6 +31,10 @@ namespace Concurrency.Implementation.Configuration
         {
             this.loggerGroup = loggerGroup;
             this.coordMap = coordMap;
+
+            // create the log folder if not exists
+            if (Directory.Exists(Constants.logPath) == false)
+                Directory.CreateDirectory(Constants.logPath);
         }
 
         public Task SetIOCount()

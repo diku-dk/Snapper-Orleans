@@ -32,10 +32,6 @@ namespace SnapperExperimentController
             serverConnector.InitiateClientAndServer();
             serverConnector.LoadGrains();
 
-            // set up processor affinity
-            if (Constants.LocalCluster == false && Constants.LocalTest == false)
-                Helper.SetCPU(Constants.numWorker, "SnapperExperimentController", Constants.numCPUPerSilo);
-
             // build connection between the controller and workers
             ConnectWorkers(workloadGroup.Count);
             
@@ -72,7 +68,7 @@ namespace SnapperExperimentController
 
             var txnSizeGroup = Array.ConvertAll(rootNode.SelectSingleNode("txnSize").FirstChild.Value.Split(","), x => int.Parse(x));
             
-            var grainSkewnessGroup = Array.ConvertAll(rootNode.SelectSingleNode("grainSkewness").FirstChild.Value.Split(","), x => double.Parse(x));
+            var grainSkewnessGroup = Array.ConvertAll(rootNode.SelectSingleNode("grainSkewness").FirstChild.Value.Split(","), x => double.Parse(x) / 100.0);
             var actPipeSizeGroup = Array.ConvertAll(rootNode.SelectSingleNode("actPipeSize").FirstChild.Value.Split(","), x => int.Parse(x));
             var pactPipeSizeGroup = Array.ConvertAll(rootNode.SelectSingleNode("pactPipeSize").FirstChild.Value.Split(","), x => int.Parse(x));
 
@@ -87,16 +83,11 @@ namespace SnapperExperimentController
                 for (int j = 0; j < grainSkewnessGroup.Length; j++)
                 {
                     var grainSkewness = grainSkewnessGroup[j];
-                    
+                    var actPipeSize = actPipeSizeGroup[j];
+                    var pactPipeSize = pactPipeSizeGroup[j];
                     for (int k = 0; k < pactPercentGroup.Length; k++)
                     {
                         var pactPercent = pactPercentGroup[k];
-
-                        var actPipeSize = actPipeSizeGroup[j];
-                        var pactPipeSize = pactPipeSizeGroup[j];
-                        if (pactPercent == 0) pactPipeSize = 0;
-                        else if (pactPercent == 100) actPipeSize = 0;
-
                         for (int m = 0; m < distPercentGroup.Length; m++)
                         {
                             var distPercent = distPercentGroup[m];
