@@ -7,4 +7,5 @@ $numSilo = 8
 for ($workerID = 0; $workerID -le $numSilo - 1; $workerID++)
 {
     Start-Process "dotnet" -ArgumentList "run --project SnapperExperimentProcess $workerID"
+    Start-Sleep 5
 }
