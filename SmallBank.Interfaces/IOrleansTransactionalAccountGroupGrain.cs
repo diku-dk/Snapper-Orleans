@@ -1,13 +1,16 @@
-﻿using System;
-using Orleans;
-using Utilities;
+﻿using Orleans;
+using Orleans.Transactions;
 using System.Threading.Tasks;
+using Utilities;
 
 namespace SmallBank.Interfaces
 {
-    public interface IOrleansTransactionalAccountGroupGrain : Orleans.IGrainWithIntegerKey, Orleans.IGrainWithGuidKey
+    public interface IOrleansTransactionalAccountGroupGrain : IGrainWithIntegerKey
     {
         [Transaction(TransactionOption.CreateOrJoin)]
-        Task<FunctionResult> StartTransaction(String startFunction, FunctionInput inputs);
+        Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
+
+        Task SetIOCount();
+        Task<long> GetIOCount();
     }
 }

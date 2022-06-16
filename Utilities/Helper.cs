@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.IO;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 
@@ -10,50 +7,97 @@ namespace Utilities
 {
     public static class Helper
     {
-        public static Guid convertUInt32ToGuid(UInt32 value)
+        static string UseHighestProcessors(int numCPUPerSilo)
         {
-            var bytes = new byte[16];
-            //Copying into the first four bytes
-            BitConverter.GetBytes(value).CopyTo(bytes, 0);
-            return new Guid(bytes);
-        }
-
-        public static byte[] serializeToByteArray<T>(T obj)
-        {
-            if(obj == null)
+            var str = "";
+            var numCPU = Environment.ProcessorCount;
+            for (int i = 0; i < numCPU; i++)
             {
-                return null;
+                if (i < numCPUPerSilo) str += "1";    // use the highest n bits
+                else str += "0";
             }
-
-            var formatter = new BinaryFormatter();
-            var stream = new MemoryStream();
-            formatter.Serialize(stream, obj);
-            return stream.ToArray();
+            return str;
         }
 
-        public static T deserializeFromByteArray<T>(byte[] obj)
+        static string UseLowestProcessors(int numCPUPerSilo)
         {
-            var formatter = new BinaryFormatter();
-            var stream = new MemoryStream();
-            //Clean up 
-            stream.Write(obj, 0, obj.Length);
-            stream.Seek(0, SeekOrigin.Begin);
-            var result = (T) formatter.Deserialize(stream);
-            return result;
+            var str = "";
+            var numCPU = Environment.ProcessorCount;
+            for (int i = 0; i < numCPU; i++)
+            {
+                if (i >= numCPU - numCPUPerSilo) str += "1";    // use the lowest n bits
+                else str += "0";
+            }
+            return str;
+        }
+
+        public static string GetWorkerProcessorAffinity(int numCPUPerSilo)
+        {
+            if (Constants.LocalCluster)
+            {
+                Debug.Assert(Environment.ProcessorCount >= 2 * numCPUPerSilo);
+                return UseLowestProcessors(numCPUPerSilo);
+            }
+            else
+            {
+                Debug.Assert(Environment.ProcessorCount >= numCPUPerSilo);
+                return UseHighestProcessors(numCPUPerSilo);
+            } 
+        }
+
+        public static string GetSiloProcessorAffinity(int numCPUPerSilo)
+        {
+            if (Constants.LocalCluster) Debug.Assert(Environment.ProcessorCount >= 2 * numCPUPerSilo);
+            else Debug.Assert(Environment.ProcessorCount >= numCPUPerSilo);
+
+            return UseHighestProcessors(numCPUPerSilo);
+        }
+
+        public static int GetNumCoordPerSilo(int numCPUPerSilo)
+        {
+            return numCPUPerSilo / Constants.numCPUBasic * 8;
+        }
+
+        public static int GetNumPersistItemPerSilo(int numCPUPerSilo)
+        {
+            return numCPUPerSilo / Constants.numCPUBasic * 8;
+        }
+
+        public static int GetNumGrainPerSilo(int numCPUPerSilo)
+        {
+            return 10000 * numCPUPerSilo / Constants.numCPUBasic;
+        }
+
+        public static int GetNumWarehousePerSilo(int numCPUPerSilo)
+        {
+            return 2 * numCPUPerSilo / Constants.numCPUBasic;
+        }
+
+        public static int MapGrainIDToPersistItemID(int numPersistItem, int grainID)
+        {
+            return grainID % numPersistItem;
+        }
+
+        public static int NURand(int A, int x, int y, int C)
+        {
+            var rnd = new Random();
+            var part1 = rnd.Next(0, A + 1);
+            var part2 = rnd.Next(x, y + 1);
+            return (((part1 | part2) + C) % (y - x + 1)) + x;
         }
 
         public static string GetLocalIPAddress()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
             foreach (var ip in host.AddressList)
-            {
-                if (ip.AddressFamily == AddressFamily.InterNetwork)
-                {
-                    return ip.ToString();
-                }
-            }
+                if (ip.AddressFamily == AddressFamily.InterNetwork) return ip.ToString();
+            
             throw new Exception("No network adapters with an IPv4 address in the system!");
         }
 
+        public static string GetPublicIPAddress()
+        {
+            return new WebClient().DownloadString("https://ipv4.icanhazip.com/").TrimEnd();
+        }
     }
 }

@@ -1,17 +1,16 @@
-﻿using Orleans.Concurrency;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Utilities;
+using Orleans.Concurrency;
 using System.Threading.Tasks;
-using Utilities;
 
 namespace Concurrency.Interface
-{    
+{
     public interface ITransactionalState<TState>
     {
-        Task<TState> Read(TransactionContext ctx);
+        [AlwaysInterleave]
+        Task<TState> Read(MyTransactionContext ctx);
 
-        Task<TState> ReadWrite(TransactionContext ctx);
+        [AlwaysInterleave]
+        Task<TState> ReadWrite(MyTransactionContext ctx);
 
         [AlwaysInterleave]
         Task<bool> Prepare(int tid);
@@ -22,8 +21,10 @@ namespace Concurrency.Interface
         [AlwaysInterleave]
         Task Abort(int tid);
 
+        [AlwaysInterleave]
         TState GetPreparedState(int tid);
 
+        [AlwaysInterleave]
         TState GetCommittedState(int tid);
     }
 }

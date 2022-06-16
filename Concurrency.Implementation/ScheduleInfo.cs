@@ -1,53 +1,53 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Utilities;
 using System.Diagnostics;
-using System.Text;
 using System.Threading.Tasks;
-using Utilities;
+using System.Collections.Generic;
+using System;
 
 namespace Concurrency.Implementation
 {
     public class ScheduleInfo
     {
         public Dictionary<int, ScheduleNode> nodes;
-        public ScheduleNode tail; //Points to the last node in the doubly-linked list
         public Dictionary<int, NonDeterministicBatchSchedule> nonDetBatchScheduleMap;
-        public Dictionary<int, int> nonDetTxnToScheduleMap;        
-        
+        public Dictionary<int, int> nonDetTxnToScheduleMap;
+
         public ScheduleInfo()
         {
             nodes = new Dictionary<int, ScheduleNode>();
-            ScheduleNode node = new ScheduleNode(-1, true);
+            var node = new ScheduleNode(-1, true);
             nonDetBatchScheduleMap = new Dictionary<int, NonDeterministicBatchSchedule>();
             nonDetTxnToScheduleMap = new Dictionary<int, int>();
             node.executionPromise.SetResult(true);
-            tail = node;
             nodes.Add(-1, node);
         }
 
-        public ScheduleNode InsertNonDetTransaction(int tid)
+        ScheduleNode findTail()
         {
-            if(nonDetTxnToScheduleMap.ContainsKey(tid))
+            var node = nodes[-1];
+            while (node.next != null) node = node.next;
+            return node;
+        }
+
+        public ScheduleNode insertNonDetTransaction(int tid)
+        {
+            // if tid has accessed this grain before
+            if (nonDetTxnToScheduleMap.ContainsKey(tid)) return nodes[nonDetTxnToScheduleMap[tid]].prev;
+            var tail = findTail();
+            if (tail.isDet)
             {
-                return nodes[nonDetTxnToScheduleMap[tid]].prev;
-            }
-            
-            if (tail.isDet == true)
-            {
-                ScheduleNode node = new ScheduleNode(tid, false);
-                NonDeterministicBatchSchedule schedule = new NonDeterministicBatchSchedule(tid);                
-                nonDetBatchScheduleMap.Add(tid, schedule);                
-                nodes.Add(tid, node);                
+                var node = new ScheduleNode(tid, false);
+                var schedule = new NonDeterministicBatchSchedule(tid);
+                nonDetBatchScheduleMap.Add(tid, schedule);
+                nodes.Add(tid, node);
                 tail.next = node;
                 node.prev = tail;
-                tail = node;                
-            } else
+                tail = node;
+            }
+            else
             {
                 //Join the non-det tail, replace the promise
-                if(tail.executionPromise.Task.IsCompleted)
-                {
-                    tail.executionPromise = new TaskCompletionSource<bool>();
-                }
+                if (tail.executionPromise.Task.IsCompleted) tail.executionPromise = new TaskCompletionSource<bool>();
             }
             nonDetBatchScheduleMap[tail.id].AddTransaction(tid);
             nonDetTxnToScheduleMap.Add(tid, tail.id);
@@ -57,187 +57,103 @@ namespace Concurrency.Implementation
         public void insertDetBatch(DeterministicBatchSchedule schedule)
         {
             ScheduleNode node;
-            if (!nodes.ContainsKey(schedule.batchID))
+            if (!nodes.ContainsKey(schedule.bid))
             {
-                node = new ScheduleNode(schedule.batchID, true);
-                nodes.Add(schedule.batchID, node);
-                
-            } else
+                node = new ScheduleNode(schedule.bid, true);
+                nodes.Add(schedule.bid, node);
+            }
+            else node = nodes[schedule.bid];
+
+            if (nodes.ContainsKey(schedule.lastBid))
             {
-                node = nodes[schedule.batchID];
-            } 
-            
-            if (nodes.ContainsKey(schedule.lastBatchID))
-            {
-                ScheduleNode prevNode = nodes[schedule.lastBatchID];
-                if(prevNode.next == null)
+                var prevNode = nodes[schedule.lastBid];
+                if (prevNode.next == null)
                 {
                     prevNode.next = node;
                     node.prev = prevNode;
                 }
-                else if(prevNode.id != -1)
+                else
                 {
-                    //There could only be one non-det node between prevNode and the inserted Node
-                    Debug.Assert(prevNode.next.isDet == false);
-                    if (prevNode.next.executionPromise.Task.IsCompleted){
-                        nodes.Remove(prevNode.next.id);
+                    Debug.Assert(prevNode.next.isDet == false && prevNode.next.next == null);
+                    prevNode.next.next = node;
+                    node.prev = prevNode.next;
+                }
+            }
+            else
+            {
+                // last node is already deleted because it's committed
+                if (schedule.highestCommittedBid >= schedule.lastBid)
+                {
+                    var prevNode = nodes[-1];
+                    if (prevNode.next == null)
+                    {
                         prevNode.next = node;
                         node.prev = prevNode;
                     }
                     else
                     {
+                        Debug.Assert(prevNode.next.isDet == false && prevNode.next.next == null);
                         prevNode.next.next = node;
                         node.prev = prevNode.next;
                     }
                 }
-                else
+                else   // last node hasn't arrived yet
                 {
-                    ScheduleNode toConnect = prevNode.next;
-                    while(toConnect != null)
-                    {
-                        if (toConnect.isDet || toConnect.executionPromise.Task.IsCompleted)
-                        {
-                            Debug.Assert(!(toConnect.isDet == false && toConnect.executionPromise.Task.IsCompleted == false && toConnect.next != null));
-                            nodes.Remove(toConnect.id);
-                        }
-                        else
-                        {
-                            Debug.Assert(toConnect.next == null);
-                            break;
-                        }
-                        toConnect = toConnect.next;
-                    }
-                    if (toConnect == null)
-                        toConnect = prevNode;
-                    toConnect.next = node;
-                    node.prev = toConnect;
+                    var prevNode = new ScheduleNode(schedule.lastBid, true);
+                    nodes.Add(schedule.lastBid, prevNode);
+                    prevNode.next = node;
+                    node.prev = prevNode;
+                    Debug.Assert(prevNode.prev == null);
                 }
             }
-            else
-            {
-                ScheduleNode prevNode = new ScheduleNode(schedule.lastBatchID, true);
-                nodes.Add(schedule.lastBatchID, prevNode);
-                prevNode.next = node;
-                node.prev = prevNode;
-            }
-            if (node.id > tail.id)
-                tail = node;
-            
         }
 
-        public TaskCompletionSource<Boolean> getDependingPromise(int id)
+        public ScheduleNode getDependingNode(int id, bool isDet)
         {
-            Debug.Assert(nodes[id].prev != null);
-            return nodes[id].prev.executionPromise;
+            if (isDet) return nodes[id].prev;
+            else return nodes[nonDetTxnToScheduleMap[id]].prev;
         }
 
-        public HashSet<int> getBeforeSet(int tid, out int maxBeforeBid)
+        public Tuple<int, int, bool> getBeforeAfter(int tid)   // <max, min, isConsecutive>
         {
-            var result = new HashSet<int>();
-            var node = nodes[nonDetTxnToScheduleMap[tid]].prev;
-            maxBeforeBid = node.id == -1 ? int.MinValue : node.id;
-            while(node.id != -1 && !node.commitmentPromise.Task.IsCompleted)
-            {   
-                if (node.isDet)
-                    result.Add(node.id);
+            var node = nodes[nonDetTxnToScheduleMap[tid]];
+            var prevNode = node.prev;
+            var maxBeforeBid = prevNode.id;
 
-                node = node.prev;
-            }
-            return result;
-        }
-
-        public HashSet<int> getAfterSet(int tid, out int minAfterBid)
-        {
-            var result = new HashSet<int>();
-            var node = nodes[nonDetTxnToScheduleMap[tid]].next;
-            bool foundAll = false;
-            minAfterBid = node == null ? int.MaxValue : node.id;
-            while (node != null)
+            int minAfterBid;
+            if (node.next != null)
             {
-                if(node.isDet)
-                {
-                    result.Add(node.id);
-                }
-                if (node == tail)
-                {
-                    foundAll = true;
-                }
-                node = node.next;                
+                Debug.Assert(node.next.isDet);
+                minAfterBid = node.next.id;
+                return new Tuple<int, int, bool>(maxBeforeBid, minAfterBid, true);
             }
 
-            if(!foundAll)
+            minAfterBid = -1;
+            foreach (var key in nodes.Keys)
             {
-                minAfterBid = int.MaxValue;
-                foreach (var key in nodes.Keys) {
-                    if(key > tid && nodes[key].isDet)
-                    {
-                        result.Add(key);
-                        minAfterBid = minAfterBid > key ? key: minAfterBid;
-                    }
+                if (nodes[key].isDet && key > maxBeforeBid)
+                {
+                    if (minAfterBid == -1) minAfterBid = key;
+                    else minAfterBid = Math.Min(minAfterBid, key);
                 }
-            }
-            return result;
+            } 
+            return new Tuple<int, int, bool>(maxBeforeBid, minAfterBid, false);    // both may be -1
         }
 
         public void completeDeterministicBatch(int id)
         {
-            nodes[id].executionPromise.SetResult(true);            
+            nodes[id].executionPromise.SetResult(true);
         }
 
-        public void removePreviousNodes(int scheduleId)
+        public void completeTransaction(int tid)   // when commit/abort a non-det txn
         {
-            var node = nodes[scheduleId];
-            var endOfChainToBeRemoved = node.prev;            
-
-            while(endOfChainToBeRemoved.id != -1)
-            {
-                nodes.Remove(endOfChainToBeRemoved.id);
-                if(!endOfChainToBeRemoved.isDet)
-                {
-                    nonDetBatchScheduleMap.Remove(endOfChainToBeRemoved.id);                    
-                }
-                endOfChainToBeRemoved = endOfChainToBeRemoved.prev;
-            }
-            node.prev = endOfChainToBeRemoved;
-            endOfChainToBeRemoved.next = node;
-        }
-
-        /*
-        //IMPORTANT: Remove the node ahead of me since the next node still depends on me
-        private void removePreviousScheduleNode(int scheduleId)
-        {
-            if(!nodes.ContainsKey(scheduleId))
-            {
-                throw new Exception($"Schedule does not exist {scheduleId}");
-            }
-            var node = nodes[scheduleId];
-            var nodeToBeRemoved = node.prev;
-            if(nodeToBeRemoved.id == -1)
-            {
-                return;
-            } else
-            {
-                nodeToBeRemoved.prev.next = node;
-                node.prev = nodeToBeRemoved.prev;
-                nodes.Remove(nodeToBeRemoved.id);
-            }            
-        }
-        */
-
-
-        public void completeTransaction(int tid)
-        {
+            if (!nonDetTxnToScheduleMap.ContainsKey(tid)) return;
             var scheduleId = nonDetTxnToScheduleMap[tid];
             nonDetTxnToScheduleMap.Remove(tid);
             var schedule = nonDetBatchScheduleMap[scheduleId];
-            if(schedule.RemoveTransaction(tid))
-            {
-                //Schedule node is completed
-                nodes[scheduleId].executionPromise.SetResult(true);
-                //Only deterministic batches trigger garbage collection
-                //removePreviousScheduleNode(scheduleId);
-                //nonDetBatchScheduleMap.Remove(scheduleId);                
-            }
+
+            // return true if transaction list is empty
+            if (schedule.RemoveTransaction(tid)) nodes[scheduleId].executionPromise.SetResult(true);
         }
     }
 
@@ -245,9 +161,7 @@ namespace Concurrency.Implementation
     {
         public int id;
         public bool isDet = false;
-        public TaskCompletionSource<Boolean> commitmentPromise = new TaskCompletionSource<bool>(false);
-        public TaskCompletionSource<Boolean> executionPromise = new TaskCompletionSource<bool>(false);
-        //links
+        public TaskCompletionSource<bool> executionPromise = new TaskCompletionSource<bool>(false);
         public ScheduleNode prev;
         public ScheduleNode next;
 

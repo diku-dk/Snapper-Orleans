@@ -1,29 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace Utilities
 {
     [Serializable]
     public class BatchToken
     {
-        public int lastBatchID { get; set; }
-        public int lastTransactionID { get; set; }
-        public Dictionary<Guid, int> lastBatchPerGrain { get; set; }
-        public int highestCommittedBatchID = -1;
-        public bool idleToken;
-        public bool backoff;
-        public Guid markedIdleByCoordinator;
-        public int backOffProbeStartTime;
-
+        public int lastBid;
+        public int lastTid;
+        public int lastCoordID;
+        public int highestCommittedBid = -1;
+        public Dictionary<int, Tuple<string, int>> lastBidPerGrain;   // <actorID, namespace, bid>
 
         public BatchToken(int bid, int tid)
         {
-            this.lastBatchID = bid;
-            this.lastTransactionID = tid;
-            idleToken = false;
-            backoff = true;
-            lastBatchPerGrain = new Dictionary<Guid, int>();
+            lastBid = bid;
+            lastTid = tid;
+            lastBidPerGrain = new Dictionary<int, Tuple<string, int>>();
         }
     }
 }

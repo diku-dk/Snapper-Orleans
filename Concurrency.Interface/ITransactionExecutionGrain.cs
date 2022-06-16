@@ -1,50 +1,60 @@
-﻿using Utilities;
-using Orleans.Concurrency;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System;
+using Utilities;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace Concurrency.Interface
 {
-    public interface ITransactionExecutionGrain : Orleans.IGrainWithIntegerKey, Orleans.IGrainWithGuidKey
+    public interface ITransactionExecutionGrain : Orleans.IGrainWithIntegerKey
     {
+        /// <summary>
+        /// Use this interface to submit a PACT to Snapper.
+        /// </summary>
+        Task<TransactionResult> StartTransaction(string startFunc, object funcInput, Dictionary<int, Tuple<string, int>> grainAccessInfo);
 
-        /*
-         * Client calls this function to submit a determinictic transaction to the transaction coordinator.
-         */
-        [AlwaysInterleave]
-        Task<FunctionResult> StartTransaction(Dictionary<Guid, Tuple<String,int>> grainAccessInformation, String startFunction, FunctionInput inputs);
+        /// <summary>
+        /// Use this interface to submit an ACT to Snapper.
+        /// </summary>
+        Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
 
-        /*  
-         * Client calls this function to submit a non-determinictic transaction to the transaction coordinator.
-         */
-        [AlwaysInterleave]
-        Task<FunctionResult> StartTransaction(String startFunction, FunctionInput inputs);
+        /// <summary>
+        /// Use this interface to submit an ACT to Snapper. This interface is only used for getting breakdown transaction latency.
+        /// </summary>
+        Task<TransactionResult> StartTransactionAndGetTime(string startFunc, object funcInput);
 
-        /*
-         * Receive batch schedule from the coordinator.
-         */
-        [AlwaysInterleave]
+        /// <summary>
+        /// Use this interface to send a sub-batch from a coordinator to a grain.
+        /// </summary>
         Task ReceiveBatchSchedule(DeterministicBatchSchedule schedule);
 
-        /*
-         * Called by other grains to execute a function.
-         */
-        [AlwaysInterleave]
-        Task<FunctionResult> Execute(FunctionCall call);
+        /// <summary>
+        /// Use this interface to invoke a function on another grain.
+        /// </summary>
+        Task<FunctionResult> Execute(FunctionCall call, MyTransactionContext ctx);
 
-        [AlwaysInterleave]
-        Task<bool> Prepare(int tid);
+        /// <summary>
+        /// Use this interface to send a 2PC Prepare message to a participant grain.
+        /// </summary>
+        Task<bool> Prepare(int tid, bool doLogging);
 
-        [AlwaysInterleave]
-        Task Commit(int tid);
+        /// <summary>
+        /// Use this interface to send a 2PC Commit message to a participant grain.
+        /// </summary>
+        Task Commit(int tid, int maxBeforeBid, bool doLogging);
 
-        [AlwaysInterleave]
+        /// <summary>
+        /// Use this interface to send a 2PC Abort message to a participant grain.
+        /// </summary>
         Task Abort(int tid);
 
-        [AlwaysInterleave]
-        Task WaitForBatchCommit(int bid);
+        /// <summary>
+        /// Use this interface to wait for the commit of a specific batch. This interface is only used for hybrid execution.
+        /// </summary>
+        Task<int> WaitForBatchCommit(int bid);
 
+        /// <summary>
+        /// Use this interface to send a BatchCommit message from a coordinator to a grain.
+        /// </summary>
+        Task AckBatchCommit(int bid);
     }
 }

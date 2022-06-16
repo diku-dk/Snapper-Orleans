@@ -1,71 +1,76 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
-using Concurrency.Interface.Logging;
-using Amazon.DynamoDBv2;
-using Amazon.DynamoDBv2.Model;
-using Amazon.DynamoDBv2.DocumentModel;
 using System.IO;
-
+using Utilities;
+using Amazon.DynamoDBv2;
+using System.Threading.Tasks;
+using Amazon.DynamoDBv2.Model;
+using System.Collections.Generic;
+using Concurrency.Interface.Logging;
+using Amazon.DynamoDBv2.DocumentModel;
 
 namespace Concurrency.Implementation.Logging
 {
     class DynamoDBStorageWrapper : IKeyValueStorageWrapper
     {
-        AmazonDynamoDBClient client;        
-        String grainType;
+        AmazonDynamoDBClient client;
+        string grainType;
         byte[] grainKey;
-        String logName;
+        string logName;
         const string ATT_KEY_1 = "GRAIN_REFERENCE";
         const string ATT_KEY_2 = "SEQUENCE_NUMBER";
         const string ATT_VALUE = "VALUE";
-        const String DYNAMODB_ACCESS_KEY_ID = "";
-        const String DYNAMODB_ACCESS_KEY_VALUE = "";
         const int READ_CAPACITY_UNITS = 10;
         const int WRITE_CAPACITY_UNITS = 10;
-        
+
         bool singleTable = true;
         bool tableExists = false;
 
 
-        public DynamoDBStorageWrapper(String grainType, Guid grainKey)
+        public DynamoDBStorageWrapper(string grainType, int grainID)
         {
-            client = new AmazonDynamoDBClient(DYNAMODB_ACCESS_KEY_ID, DYNAMODB_ACCESS_KEY_VALUE, Amazon.RegionEndpoint.USWest2);
-            Console.WriteLine("Initialized dynamodb client");
+            string ServiceRegion;
+            string AccessKey;
+            string SecretKey;
+
+            using (var file = new StreamReader(Constants.credentialFile))
+            {
+                ServiceRegion = file.ReadLine();
+                AccessKey = file.ReadLine();
+                SecretKey = file.ReadLine();
+            }
+
+            client = new AmazonDynamoDBClient(AccessKey, SecretKey, Amazon.RegionEndpoint.USEast2);
+            //Console.WriteLine("Initialized dynamodb client");
             this.grainType = grainType;
-            this.grainKey = grainKey.ToByteArray();
-            if (singleTable)
-            {
-                logName = "XLibLog"; 
-            }
-            else
-            {
-                logName = grainType + grainKey;
-            }
+            this.grainKey = BitConverter.GetBytes(grainID);
+            if (singleTable) logName = Constants.ServiceID;
+            else logName = grainType + grainKey;
+
+
         }
-                
+
         async Task createTableIfNotExists()
         {
             var describeTableRequest = new DescribeTableRequest()
             {
                 TableName = logName
-            };        
+            };
             try
             {
-                DescribeTableResponse response;                
+                DescribeTableResponse response;
                 do
                 {
                     response = await client.DescribeTableAsync(describeTableRequest);
-                    Console.WriteLine("Current table status = {0}", response.Table.TableStatus);
+                    //Console.WriteLine($"Current table status = {response.Table.TableStatus}");
                     await Task.Delay(TimeSpan.FromSeconds(5));
                 } while (response.Table.TableStatus != TableStatus.ACTIVE);
                 tableExists = true;
-            } catch(ResourceNotFoundException)
+            }
+            catch (ResourceNotFoundException)
             {
                 tableExists = false;
             }
-            if(!tableExists)
+            if (!tableExists)
             {
                 var request = new CreateTableRequest()
                 {
@@ -103,16 +108,15 @@ namespace Concurrency.Implementation.Logging
                     }
                 };
                 await client.CreateTableAsync(request);
-                while(true)
-                {                    
+                while (true)
+                {
                     var response = await client.DescribeTableAsync(describeTableRequest);
-                    if (response.Table.TableStatus == TableStatus.ACTIVE)
-                        break;
-                    else
-                        await Task.Delay(TimeSpan.FromSeconds(5));
-                }                    
+                    if (response.Table.TableStatus == TableStatus.ACTIVE) break;
+                    else await Task.Delay(TimeSpan.FromSeconds(5));
+                }
             }
         }
+
         Task<byte[]> IKeyValueStorageWrapper.Read(byte[] key)
         {
             throw new NotImplementedException();
@@ -144,7 +148,7 @@ namespace Concurrency.Implementation.Logging
 
         async Task IKeyValueStorageWrapper.Write(byte[] key, byte[] value)
         {
-            if(!tableExists)
+            if (!tableExists)
             {
                 await createTableIfNotExists();
             }

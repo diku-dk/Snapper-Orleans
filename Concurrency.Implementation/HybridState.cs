@@ -1,35 +1,36 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using Utilities;
+using Concurrency.Interface;
 using System.Threading.Tasks;
 using Concurrency.Interface.Deterministic;
-using Concurrency.Interface;
 using Concurrency.Interface.Nondeterministic;
-using Utilities;
 
 namespace Concurrency.Implementation
-{    
+{
     public class HybridState<TState> : ITransactionalState<TState> where TState : ICloneable, new()
-    {        
+    {
         private IDetTransactionalState<TState> detStateManager;
         private INonDetTransactionalState<TState> nonDetStateManager;
         private CommittedState<TState> myState;
 
-        public HybridState(ConcurrencyType type=ConcurrencyType.TIMESTAMP) : this(new TState(), type)
+        // when execution grain is initialized, its hybrid state is initialized
+        public HybridState(CCType type = CCType.S2PL) : this(new TState(), type)
         {
             ;
         }
 
-        public HybridState(TState state, ConcurrencyType type = ConcurrencyType.TIMESTAMP)
+        public HybridState(TState state, CCType type = CCType.S2PL)
         {
             this.myState = new CommittedState<TState>(state);
+            // detStateManager: it's read and write operation will return the state directly
+            // nonDetStateManager: return the state under the locking protocol
             detStateManager = new Deterministic.DeterministicTransactionalState<TState>();
             switch (type)
             {
-                case ConcurrencyType.S2PL:
+                case CCType.S2PL:
                     nonDetStateManager = new Nondeterministic.S2PLTransactionalState<TState>();
                     break;
-                case ConcurrencyType.TIMESTAMP:
+                case CCType.TS:
                     nonDetStateManager = new Nondeterministic.TimestampTransactionalState<TState>();
                     break;
             }
@@ -40,7 +41,8 @@ namespace Concurrency.Implementation
             try
             {
                 nonDetStateManager.Abort(tid);
-            }catch(Exception e)
+            }
+            catch (Exception e)
             {
                 Console.WriteLine($"\n Exception(Abort)::transaction {tid} exception {e.Message}");
             }
@@ -51,7 +53,7 @@ namespace Concurrency.Implementation
         {
             try
             {
-                nonDetStateManager.Commit(tid, myState);                
+                nonDetStateManager.Commit(tid, myState);
             }
             catch (Exception e)
             {
@@ -66,38 +68,25 @@ namespace Concurrency.Implementation
         }
 
         TState ITransactionalState<TState>.GetPreparedState(int tid)
-        {            
+        {
             return nonDetStateManager.GetPreparedState(tid);
         }
 
         Task<bool> ITransactionalState<TState>.Prepare(int tid)
         {
-            return nonDetStateManager.Prepare(tid);            
+            return nonDetStateManager.Prepare(tid);
         }
 
-        Task<TState> ITransactionalState<TState>.Read(TransactionContext ctx)
+        Task<TState> ITransactionalState<TState>.Read(MyTransactionContext ctx)
         {
-            if (ctx.isDeterministic)
-            {
-                return detStateManager.Read(ctx, myState.GetState());
-            }
-            else
-            {
-                return nonDetStateManager.Read(ctx, myState);
-            }
-
+            if (ctx.isDet) return detStateManager.Read(ctx, myState.GetState());
+            else return nonDetStateManager.Read(ctx, myState);
         }
 
-        Task<TState> ITransactionalState<TState>.ReadWrite(TransactionContext ctx)
+        Task<TState> ITransactionalState<TState>.ReadWrite(MyTransactionContext ctx)
         {
-            if (ctx.isDeterministic)
-            {
-                return detStateManager.ReadWrite(ctx, myState.GetState());
-            }
-            else
-            {
-                return nonDetStateManager.ReadWrite(ctx, myState);
-            }
+            if (ctx.isDet) return detStateManager.ReadWrite(ctx, myState.GetState());
+            else return nonDetStateManager.ReadWrite(ctx, myState);
         }
     }
 }

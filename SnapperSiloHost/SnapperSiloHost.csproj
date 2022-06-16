@@ -1,0 +1,43 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <RuntimeIdentifiers>win</RuntimeIdentifiers>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <!--- Configure garbage collection "just right" for orleans: http://dotnet.github.io/orleans/Documentation/Deployment-and-Operations/Configuration-Guide/Configuring-.NET-Garbage-Collection.html -->
+  <PropertyGroup>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.Core" Version="3.7.1.3" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.0.48" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.20.1" />
+    <PackageReference Include="Microsoft.Azure.Cosmos.Table" Version="1.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.AzureStorage" Version="3.4.3" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.4.3" />
+    <PackageReference Include="Microsoft.Orleans.OrleansAWSUtils" Version="2.4.5" />
+    <PackageReference Include="Microsoft.Orleans.OrleansProviders" Version="3.4.3" />
+    <PackageReference Include="Microsoft.Orleans.OrleansRuntime" Version="3.4.3" />
+    <PackageReference Include="Microsoft.Orleans.Persistence.DynamoDB" Version="3.4.3" />
+    <PackageReference Include="Microsoft.Orleans.Transactions.AzureStorage" Version="3.4.3" />
+    <PackageReference Include="NetMQ" Version="4.0.1.8" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Concurrency.Implementation\Concurrency.Implementation.csproj" />
+    <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
+    <ProjectReference Include="..\Persist.Grains\Persist.Grains.csproj" />
+    <ProjectReference Include="..\Persist.Interfaces\Persist.Interfaces.csproj" />
+    <ProjectReference Include="..\SmallBank.Grains\SmallBank.Grains.csproj" />
+    <ProjectReference Include="..\SmallBank.Interfaces\SmallBank.Interfaces.csproj" />
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
+    <ProjectReference Include="..\TPCC.Grains\TPCC.Grains.csproj" />
+    <ProjectReference Include="..\TPCC.Interfaces\TPCC.Interfaces.csproj" />
+  </ItemGroup>
+</Project>

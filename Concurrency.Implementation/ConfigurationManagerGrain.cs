@@ -1,96 +1,86 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Orleans;
+﻿using Orleans;
+using Utilities;
+using Persist.Interfaces;
 using Concurrency.Interface;
 using System.Threading.Tasks;
-using Utilities;
+using System.Collections.Generic;
+using Orleans.Concurrency;
+using System;
 
 namespace Concurrency.Implementation
 {
+    [Reentrant]
     public class ConfigurationManagerGrain : Grain, IConfigurationManagerGrain
-    {        
-        Dictionary<Tuple<String, Guid>, ITransactionExecutionGrain> grainIndex;
-        Dictionary<Tuple<String, Guid>, ExecutionGrainConfiguration> executionGrainSpecificConfigs;
-        ExecutionGrainConfiguration executionGrainGlobalConfig;
-        CoordinatorGrainConfiguration coordinatorGrainGlobalConfig;
-        uint nextCoordinatorId = 0;
+    {
+        bool tokenEnabled;
+        int numCPUPerSilo;
+        bool loggingEnabled;
+        readonly IPersistSingletonGroup persistSingletonGroup;
+        readonly ITPCCManager tpccManager;
 
         public override Task OnActivateAsync()
-        {            
-            executionGrainGlobalConfig = null;
-            coordinatorGrainGlobalConfig = null;
-            grainIndex = new Dictionary<Tuple<string, Guid>, ITransactionExecutionGrain>();
-            executionGrainSpecificConfigs = new Dictionary<Tuple<string, Guid>, ExecutionGrainConfiguration>();
+        {
+            tokenEnabled = false;
             return base.OnActivateAsync();
         }
-        
-        async Task<Tuple<ExecutionGrainConfiguration, uint>> IConfigurationManagerGrain.GetConfiguration(string grainClassName, Guid grainId)
+
+        public ConfigurationManagerGrain(IPersistSingletonGroup persistSingletonGroup, ITPCCManager tpccManager)
         {
-            var tuple = new Tuple<string, Guid>(grainClassName, grainId);
-            if(!grainIndex.ContainsKey(tuple))
-            {
-                var grain = this.GrainFactory.GetGrain<ITransactionExecutionGrain>(grainId, grainClassName);
-                grainIndex.Add(tuple, grain);
-            }
-            if(coordinatorGrainGlobalConfig == null)
-            {
-                throw new Exception("No information about coordinators has been registered");
-            }
-            nextCoordinatorId = (nextCoordinatorId + 1) % coordinatorGrainGlobalConfig.numCoordinators;
-            return (executionGrainSpecificConfigs.ContainsKey(tuple)) ? new Tuple<ExecutionGrainConfiguration, uint>(executionGrainSpecificConfigs[tuple], nextCoordinatorId) : new Tuple<ExecutionGrainConfiguration, uint>(executionGrainGlobalConfig, nextCoordinatorId);
+            this.persistSingletonGroup = persistSingletonGroup;
+            this.tpccManager = tpccManager;
         }
 
-        async Task IConfigurationManagerGrain.UpdateNewConfiguration(CoordinatorGrainConfiguration config)
+        public Task SetIOCount()
         {
-            if (config == null)
-                throw new ArgumentNullException(nameof(config));
+            persistSingletonGroup.SetIOCount();
+            return Task.CompletedTask;
+        }
 
-            if (coordinatorGrainGlobalConfig == null)
+        public Task<long> GetIOCount()
+        {
+            return Task.FromResult(persistSingletonGroup.GetIOCount());
+        }
+
+        public Task<Tuple<int, bool>> GetSiloConfig()
+        {
+            return Task.FromResult(new Tuple<int ,bool>(numCPUPerSilo, loggingEnabled));
+        }
+
+        public async Task<string> Initialize(bool isSnapper, int numCPUPerSilo, bool loggingEnabled)
+        {
+            var siloPublicIPAddress = Helper.GetPublicIPAddress();
+            if (isSnapper == false) return siloPublicIPAddress;
+
+            this.numCPUPerSilo = numCPUPerSilo;
+            this.loggingEnabled = loggingEnabled;
+            if (loggingEnabled && Constants.loggingType == LoggingType.PERSISTSINGLETON) persistSingletonGroup.Init(numCPUPerSilo);
+
+            // initialize coordinators (single silo deployment)
+            var tasks = new List<Task>();
+            var numCoordPerSilo = Helper.GetNumCoordPerSilo(numCPUPerSilo);
+            for (int i = 0; i < numCoordPerSilo; i++)
             {
-                coordinatorGrainGlobalConfig = config;
-                //Only support one coordinator configuration injection for now
-                var tasks = new List<Task>();
-                for(uint i=0;i<config.numCoordinators;i++)
-                {
-                    var grain = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(i));
-                    tasks.Add(grain.SpawnCoordinator(i, config.numCoordinators, config.batchIntervalMSecs, config.backoffIntervalMSecs, config.idleIntervalTillBackOffSecs));
-                }
-                await Task.WhenAll(tasks);
-                //Inject token to coordinator 0
-                var coord0 = this.GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(Helper.convertUInt32ToGuid(0));
+                var grain = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(i);
+                tasks.Add(grain.SpawnCoordinator(numCPUPerSilo, loggingEnabled));
+            }
+            await Task.WhenAll(tasks);
+
+            //Inject token to coordinator 0
+            if (tokenEnabled == false)
+            {
+                var coord0 = GrainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(0);
                 BatchToken token = new BatchToken(-1, -1);
                 await coord0.PassToken(token);
-            } else
-            {
-                //Only support one coordinator configuration injection for now
-                throw new NotImplementedException("Cannot support multiple global coordinator configuration injection");
+                tokenEnabled = true;
             }
+
+            return siloPublicIPAddress;
         }
 
-        async Task IConfigurationManagerGrain.UpdateNewConfiguration(ExecutionGrainConfiguration config)
+        public Task InitializeTPCCManager(int NUM_OrderGrain_PER_D)
         {
-            if(config == null)
-            {
-                throw new ArgumentNullException(nameof(config));
-            }
-            //Support only single config changes for now
-            if (this.executionGrainGlobalConfig == null)
-            {
-                this.executionGrainGlobalConfig = config;
-            } else
-            {
-                throw new NotImplementedException("Cannot support multiple configuration updates for now");
-            }
-        }
-
-        async Task IConfigurationManagerGrain.UpdateNewConfiguration(Dictionary<Tuple<string, Guid>, ExecutionGrainConfiguration> grainSpecificConfigs)
-        {
-            //Insert or update the existing configuration
-            foreach(var entry in grainSpecificConfigs)
-            {
-                executionGrainSpecificConfigs[entry.Key] = entry.Value;
-            }
+            tpccManager.Init(numCPUPerSilo, NUM_OrderGrain_PER_D);
+            return Task.CompletedTask;
         }
     }
 }

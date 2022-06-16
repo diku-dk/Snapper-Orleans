@@ -1,147 +1,122 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Utilities
 {
     [Serializable]
-    public class FunctionInput
+    public class TransactionResult
     {
-        public Object inputObject;
-        public TransactionContext context;
+        public object resultObject;
 
-        public FunctionInput(FunctionInput input, Object data)
+        public bool exception = false;
+        public bool Exp_Deadlock = false;
+        public bool Exp_Serializable = false;
+        public bool Exp_NotSureSerializable = false;
+
+        public DateTime beforeGetTidTime = DateTime.MaxValue;
+        public DateTime afterGetTidTime = DateTime.MaxValue;
+        public DateTime beforeExeTime = DateTime.MaxValue;
+        public DateTime beforeUpdate1Time = DateTime.MaxValue;
+        public DateTime callGrainTime = DateTime.MaxValue;
+        public DateTime afterExeTime = DateTime.MaxValue;
+        public DateTime beforeResolveTime = DateTime.MaxValue;
+        public DateTime afterResolveTime = DateTime.MaxValue;
+
+        public TransactionResult(object res = null)
         {
-            context = input.context;
-            inputObject = data;
-        }
-        public FunctionInput(Object data)
-        {
-            inputObject = data;
+            resultObject = res;
         }
 
-        public FunctionInput()
+        public TransactionResult(bool exp, object res)
         {
+            resultObject = res;
+            exception = exp;
         }
     }
 
     [Serializable]
     public class FunctionResult
     {
-        public Object resultObject;
-        public Dictionary<Guid, String> grainsInNestedFunctions;
-        public Boolean exception = false;
-        public HashSet<int> beforeSet;
-        public HashSet<int> afterSet;
-        public int maxBeforeBid;
+        public bool exception;
         public int minAfterBid;
-        public Boolean isBeforeAfterConsecutive = false;
-        public Boolean readOnly = false;
-        public Tuple<Guid, String> grainWithHighestBeforeBid; 
+        public int maxBeforeBid;
+        public bool Exp_Deadlock;
+        public bool isNoOpOnGrain;
+        public object resultObject;
+        public bool isReadOnlyOnGrain;
+        public bool isBeforeAfterConsecutive;
+        public Tuple<int, string> grainWithHighestBeforeBid;
+        public Dictionary<int, Tuple<string, bool>> grainsInNestedFunctions;   // <grainID, namespace, isReadonly>
 
-        public FunctionResult(Object resultObject, FunctionResult r)
-        {
-            this.resultObject = resultObject;
-            this.grainsInNestedFunctions = new Dictionary<Guid, String>();
-            foreach (var entry in r.grainsInNestedFunctions)
-                this.grainsInNestedFunctions.Add(entry.Key, entry.Value);
-            this.exception = r.exception;
-            this.isBeforeAfterConsecutive = r.isBeforeAfterConsecutive;
-            this.beforeSet = new HashSet<int>();
-            this.afterSet = new HashSet<int>();
-        }
+        public DateTime beforeExeTime = DateTime.MaxValue;
+        public DateTime beforeUpdate1Time = DateTime.MaxValue;
+        public DateTime callGrainTime = DateTime.MaxValue;
+        public DateTime afterExeTime = DateTime.MaxValue;
 
-        public FunctionResult(Object resultObject=null)
+        public FunctionResult(object resultObject = null)
         {
+            minAfterBid = -1;
+            maxBeforeBid = -1;
+            exception = false;
+            Exp_Deadlock = false;
+            isReadOnlyOnGrain = false;
+            isBeforeAfterConsecutive = true;
             this.resultObject = resultObject;
-            this.grainsInNestedFunctions = new Dictionary<Guid, String>();
-            this.beforeSet = new HashSet<int>();
-            this.afterSet = new HashSet<int>();
-            this.maxBeforeBid = int.MinValue;
-            this.minAfterBid = int.MaxValue;
+            grainWithHighestBeforeBid = new Tuple<int, string>(-1, "");
+            grainsInNestedFunctions = new Dictionary<int, Tuple<string, bool>>();
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
         {
-            this.exception |= r.exception;
-            foreach (var entry in r.grainsInNestedFunctions)
-                if(this.grainsInNestedFunctions.ContainsKey(entry.Key) == false)
-                    this.grainsInNestedFunctions.Add(entry.Key,entry.Value);
-
-            if(this.beforeSet.Count == 0 && this.afterSet.Count == 0)
+            Exp_Deadlock |= r.Exp_Deadlock;
+            exception |= r.exception;
+            foreach (var item in r.grainsInNestedFunctions)
             {
-                this.grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
-                this.maxBeforeBid = r.maxBeforeBid;
-                this.minAfterBid = r.minAfterBid;
-                this.beforeSet = r.beforeSet;
-                this.afterSet = r.afterSet;
-            } else
-            {
-                this.beforeSet.UnionWith(r.beforeSet);
-                this.afterSet.UnionWith(r.afterSet);
-                if (this.maxBeforeBid < r.maxBeforeBid)
+                if (grainsInNestedFunctions.ContainsKey(item.Key) == false)
+                    grainsInNestedFunctions.Add(item.Key, item.Value);
+                else
                 {
-                    this.maxBeforeBid = r.maxBeforeBid;
-                    grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
+                    var grainClassName = item.Value.Item1;
+                    var isReadOnly = grainsInNestedFunctions[item.Key].Item2 && item.Value.Item2;
+                    grainsInNestedFunctions[item.Key] = new Tuple<string, bool>(grainClassName, isReadOnly);
                 }
-                this.minAfterBid = (this.minAfterBid > r.minAfterBid) ? r.minAfterBid : this.minAfterBid;
-                isBeforeAfterConsecutive &= r.isBeforeAfterConsecutive;
-            }            
+            }
+
+            if (maxBeforeBid < r.maxBeforeBid)   // r.maxBeforeBid != -1
+            {
+                maxBeforeBid = r.maxBeforeBid;
+                grainWithHighestBeforeBid = r.grainWithHighestBeforeBid;
+            }
+
+            if (r.minAfterBid != -1 || r.minAfterBid < minAfterBid) minAfterBid = r.minAfterBid;   // r.minAfterBid != -1
+            isBeforeAfterConsecutive &= r.isBeforeAfterConsecutive;
         }
 
-        public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, Boolean consecutive, Tuple<Guid, string>  tuple)
+        public void setSchedulingStatistics(int maxBeforeBid, int minAfterBid, bool consecutive, Tuple<int, string> id)
         {
-
-            if(this.maxBeforeBid < maxBeforeBid)
+            if (this.maxBeforeBid < maxBeforeBid)   // maxBeforeBid != -1
             {
                 this.maxBeforeBid = maxBeforeBid;
-                grainWithHighestBeforeBid = tuple;
+                grainWithHighestBeforeBid = id;
             }
-            minAfterBid = (this.minAfterBid > minAfterBid) ? minAfterBid : this.minAfterBid;
+            if (minAfterBid != -1 && minAfterBid < this.minAfterBid) this.minAfterBid = minAfterBid;
             isBeforeAfterConsecutive &= consecutive;
-        }
 
-        public void setResult(Object result)
-        {
-            resultObject = result;
         }
-
-        public void setException()
-        {
-            exception = true;
-        }
-
-        public Boolean hasException()
-        {
-            return (exception == true);
-        }
-
-        public void expandBeforeandAfterSet(HashSet<int> bSet, HashSet<int> aSet)
-        {
-            beforeSet.UnionWith(bSet);
-            afterSet.UnionWith(aSet);
-        }
-        
     }
 
     [Serializable]
     public class FunctionCall
     {
-        public FunctionInput funcInput;
-        public Type type;
-        public string func;
+        public readonly string funcName;
+        public readonly object funcInput;
+        public readonly Type grainClassName;
 
-        public FunctionCall(Type t, String func, FunctionInput funcInput)
-        {        
-            this.type = t;
-            this.func = func;
-            this.funcInput = funcInput;    
+        public FunctionCall(string funcName, object funcInput, Type grainClassName)
+        {
+            this.funcName = funcName;
+            this.funcInput = funcInput;
+            this.grainClassName = grainClassName;
         }
     }
-
-    
-
-    
 }

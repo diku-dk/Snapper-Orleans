@@ -1,218 +1,204 @@
-﻿using Concurrency.Interface.Nondeterministic;
-using Concurrency.Interface;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System;
 using Utilities;
+using System.Diagnostics;
+using Concurrency.Interface;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Concurrency.Interface.Nondeterministic;
 
 namespace Concurrency.Implementation.Nondeterministic
 {
+    // all RW transactions commit in timestamp order
     public class TimestampTransactionalState<TState> : INonDetTransactionalState<TState> where TState : ICloneable, new()
     {
-        
-        private int readTs;
-        private int writeTs;
-        private int commitTransactionId;
-
-        //The dependancy list of transactions, node_{i} depends on node_{i-1}.
-        private DLinkedList<TransactionStateInfo> transactionList;
-        //Key: transaction id
-        private Dictionary<int, Node<TransactionStateInfo>> transactionMap;
-        //Read Operations
-        private Dictionary<int, int> readDependencyMap;
-        
+        int lastCommitTid;
+        DLinkedList<TransactionStateInfo> transactionList;
+        Dictionary<int, Node<TransactionStateInfo>> transactionMap;
+        Dictionary<int, int> readDependencyMap;
 
         public TimestampTransactionalState()
         {
-            readTs = -1;
-            writeTs = -1;
-            commitTransactionId = -1;
-
+            lastCommitTid = -1;
             transactionList = new DLinkedList<TransactionStateInfo>();
             transactionMap = new Dictionary<int, Node<TransactionStateInfo>>();
             readDependencyMap = new Dictionary<int, int>();
-
         }
-        public Task<TState> ReadWrite(TransactionContext ctx, CommittedState<TState> committedState)
+
+        public Task<TState> ReadWrite(MyTransactionContext ctx, CommittedState<TState> committedState)
         {
-            
-            int rts, wts, depTid;
             TState state;
-            var tid = ctx.transactionID;
-            if(transactionMap.ContainsKey(tid))
+            TState copy;
+            TransactionStateInfo info;
+            Node<TransactionStateInfo> node;
+            var tid = ctx.tid;
+            if (transactionMap.ContainsKey(tid))  // if tid has written the state before
             {
+                Debug.Assert(transactionMap[tid].data.status.Equals(Status.Executing));
+                if (transactionMap[tid].data.rts > tid) throw new DeadlockAvoidanceException($"Transaction {tid} fail to write because a more recent transaction has read. ");
                 return Task.FromResult<TState>(transactionMap[tid].data.state);
             }
-            //Traverse the transaction list from the tail, find the first unaborted transaction and read its state.
-            Node<TransactionStateInfo> lastNode = findLastNonAbortedTransaction();
-            if (lastNode != null)
-            {
-                TransactionStateInfo dependState = lastNode.data;
-                state = dependState.state;
-                rts = dependState.rts;
-                wts = dependState.wts;
-                depTid = dependState.tid;
-            }
-            else
+            var lastNode = findLastNonAbortedTransaction();
+            if (lastNode == null)    // either the transactionMap is empty or all nodes have been aborted
             {
                 state = committedState.GetState();
-                rts = readTs;
-                wts = writeTs;
-                depTid = commitTransactionId;
+                copy = (TState)state.Clone();
+                info = new TransactionStateInfo(tid, -1, tid, Status.Executing, copy);
+                node = transactionList.Append(info);
+                transactionMap.Add(tid, node);
+                return Task.FromResult<TState>(copy);
             }
-            //check read timestamp
-            if (tid < wts)
-                throw new DeadlockAvoidanceException($"Transaction {tid} is aborted as its timestamp is smaller than write timestamp {wts}.");
-            //update read timestamp;
-            rts = Math.Max(rts, tid);
-
-            //check write timestamp
-            if (tid < rts)
-                throw new DeadlockAvoidanceException($"Transaction {tid} is aborted as its timestamp is smaller than read timestamp {rts}.");
-
-            //check the read operation map
-            if (readDependencyMap.ContainsKey(tid))
+            if (lastNode.data.status.Equals(Status.Committed))
             {
-                int prevReadTs = readDependencyMap[tid];
-                if (prevReadTs < wts)
-                    throw new DeadlockAvoidanceException($"Transaction {tid} is aborted as its read operion read version {prevReadTs}, which is smaller than write timestamp {wts}.");
+                if (lastNode.data.tid != transactionList.head.data.tid) Debug.Assert(transactionList.head.data.status.Equals(Status.Aborted));
             }
+            else Debug.Assert(lastNode.data.status.Equals(Status.Executing));
 
-            TState copy = (TState)state.Clone();
-            TransactionStateInfo info = new TransactionStateInfo(tid, depTid, rts, tid, Status.Executing, copy);
-            Node<TransactionStateInfo> node = transactionList.Append(info);
-            transactionMap.Add(tid, node);
+            if (tid < lastNode.data.tid) throw new DeadlockAvoidanceException($"Transaction {tid} fail to write because a more recent transaction has written. ");
+            if (tid < lastNode.data.rts) throw new DeadlockAvoidanceException($"Transaction {tid} fail to write because a more recent transaction has read. ");
+            if (readDependencyMap.ContainsKey(tid))    // if tid has read a version before
+            {
+                var prev = readDependencyMap[tid];
+                if (prev != lastNode.data.tid) throw new DeadlockAvoidanceException($"Transaction {tid} is aborted to enforce repeatable read. ");
+                Debug.Assert(lastNode.data.rts >= prev);
+            }
+            // If tid hasn't accessed this grain before
+            lastNode.data.rts = tid;
+            state = lastNode.data.state;
+            copy = (TState)state.Clone();
+            info = new TransactionStateInfo(tid, lastNode.data.tid, tid, Status.Executing, copy);
+            node = transactionList.Append(info);
+            transactionMap.Add(tid, node);  
             return Task.FromResult<TState>(copy);
         }
 
-        public Task<TState> Read(TransactionContext ctx, CommittedState<TState> committedState)
+        public Task<TState> Read(MyTransactionContext ctx, CommittedState<TState> committedState)
         {
-            //If there is a readwrite() from the same transaction before this read operation
-            if (transactionMap.ContainsKey(ctx.transactionID) == true)
+            TState state;
+            TState copy;
+            TransactionStateInfo info;
+            Node<TransactionStateInfo> node;
+            var tid = ctx.tid;
+            if (transactionMap.ContainsKey(tid))  // if tid has written the state before
             {
-                return Task.FromResult<TState>(transactionMap[ctx.transactionID].data.state);
+                Debug.Assert(transactionMap[tid].data.status.Equals(Status.Executing));
+                return Task.FromResult<TState>(transactionMap[tid].data.state);
             }
+            var lastNode = findLastNonAbortedTransaction();
+            if (lastNode == null)   // either the transactionMap is empty or all nodes have been aborted
+            {
+                state = committedState.GetState();
+                copy = (TState)state.Clone();
+                info = new TransactionStateInfo(-1, -1, tid, Status.Executing, copy);
+                node = transactionList.Append(info);
+                node.data.ExecutionPromise.SetResult(true);
+                node.data.status = Status.Committed;
+                readDependencyMap.Add(tid, -1);
+                return Task.FromResult<TState>(copy);
+            }
+            if (lastNode.data.status.Equals(Status.Committed))
+            {
+                if (lastNode.data.tid != transactionList.head.data.tid) Debug.Assert(transactionList.head.data.status.Equals(Status.Aborted));
+            }
+            else Debug.Assert(lastNode.data.status.Equals(Status.Executing));
 
-            if (readDependencyMap.ContainsKey(ctx.transactionID) == false)
+            if (tid < lastNode.data.tid) throw new DeadlockAvoidanceException($"Transaction {tid} fail to read because a more recent transaction has written. ");
+            if (readDependencyMap.ContainsKey(tid))   // if tid has read the state before
             {
-                Node<TransactionStateInfo> lastNode = findLastNonAbortedTransaction();
-                if (lastNode == null)
-                {
-                   if( ctx.transactionID < this.commitTransactionId)
-                    throw new DeadlockAvoidanceException($"Txn {ctx.transactionID} is aborted to since the tid of this Read operation is smaller than the committed tid {commitTransactionId}");
-                }
-                else if(ctx.transactionID < lastNode.data.tid)
-                    throw new DeadlockAvoidanceException($"Txn {ctx.transactionID} is aborted to since the tid of this Read operation is smaller than the last write {lastNode.data.tid}");
-                readDependencyMap.Add(ctx.transactionID, this.commitTransactionId);
+                var prev = readDependencyMap[tid];
+                if (prev != lastNode.data.tid) throw new DeadlockAvoidanceException($"Transaction {tid} fail to read to enforce repeatable read. ");
             }
-            else
-            {
-                if (readDependencyMap[ctx.transactionID] != this.commitTransactionId)
-                    throw new DeadlockAvoidanceException($"Txn {ctx.transactionID} is aborted to avoid reading inconsistent committed states");
-            }
-            return Task.FromResult<TState>(committedState.GetState());
+            else readDependencyMap.Add(tid, lastNode.data.tid);
+            lastNode.data.rts = Math.Max(lastNode.data.rts, tid);
+            return Task.FromResult<TState>(lastNode.data.state);
         }
 
-        public async Task<bool> Prepare(int tid)
-        {
-
-            if (readDependencyMap.ContainsKey(tid))
-                return true;
-            Debug.Assert(transactionMap.ContainsKey(tid));
-            //if (transactionMap.ContainsKey(tid) == false)
-                //return false;
-            //Vote "yes" if it depends commited state.
-            int depTid = transactionMap[tid].data.depTid;
-            if (depTid <= this.commitTransactionId)
-                return true;
-            else
-            {
-                TransactionStateInfo depTxInfo = transactionMap[depTid].data;
-                await depTxInfo.ExecutionPromise.Task;
-
-                if (depTxInfo.status.Equals(Status.Committed))
-                    return true;
-                else
-                    return false;
-            }            
-        }
-
-        private Node<TransactionStateInfo> findLastNonAbortedTransaction()
+        Node<TransactionStateInfo> findLastNonAbortedTransaction()
         {
             Node<TransactionStateInfo> lastNode = transactionList.tail;
             while (lastNode != null)
             {
-                if (lastNode.data.status.Equals(Status.Aborted))
-                    lastNode = lastNode.prev;
-                else
-                    break;
+                if (lastNode.data.status.Equals(Status.Aborted)) lastNode = lastNode.prev;
+                else break;
             }
             return lastNode;
         }
 
-        //Clean committed/aborted transactions before the committed transaction.
-        private void CleanUp(Node<TransactionStateInfo> node)
-        {   
-            Node<TransactionStateInfo> curNode = this.transactionList.head;
-            while (curNode != null)
-            {
-                if (curNode.data.tid == node.data.tid)
-                    return;
-                if (curNode.data.tid < node.data.tid && (curNode.data.status.Equals(Status.Aborted) || curNode.data.status.Equals(Status.Committed))) {
-                    transactionList.Remove(curNode);
-                    transactionMap.Remove(curNode.data.tid);
-                 }
-                curNode = curNode.next;
-            }
-        }
-
-        public TState GetPreparedState(int tid)
+        public async Task<bool> Prepare(int tid)   // check if the dependent transaction has committed
         {
-            return this.transactionMap[tid].data.state;
+            Debug.Assert(readDependencyMap.ContainsKey(tid) || transactionMap.ContainsKey(tid));
+            int depTid;
+            if (!transactionMap.ContainsKey(tid)) depTid = readDependencyMap[tid];   // tid is a read-only transaction
+            else depTid = transactionMap[tid].data.depTid;    // tid is a read-write transaction
+            if (depTid <= lastCommitTid) return true;
+            Debug.Assert(transactionMap.ContainsKey(depTid));
+            var info = transactionMap[depTid].data;
+            await info.ExecutionPromise.Task;
+            if (info.status.Equals(Status.Committed)) return true;
+            if (info.status.Equals(Status.Aborted)) return false;
+            Debug.Assert(false);    // this should not happen
+            return false;
         }
 
         public void Commit(int tid, CommittedState<TState> committedState)
         {
-            //Commit read-only transactions
+            Debug.Assert(readDependencyMap.ContainsKey(tid) || transactionMap.ContainsKey(tid));
+            lastCommitTid = Math.Max(lastCommitTid, tid);
             if (readDependencyMap.ContainsKey(tid))
             {
+                Debug.Assert(readDependencyMap[tid] <= lastCommitTid);
                 readDependencyMap.Remove(tid);
-                return;
-            }
+            } 
+            if (!transactionMap.ContainsKey(tid)) return;
 
-            //Commit read-write transactions
-            Node<TransactionStateInfo> node = transactionMap[tid];
+            // Commit read-write transactions (tid's all dependent transactions must have already committed)
+            var node = transactionMap[tid];
             node.data.status = Status.Committed;
-            //Set the promise of transaction tid, such that transactions depending on it can prepare.
+            // Set the promise of transaction tid, such that transactions depending on it can prepare.
             node.data.ExecutionPromise.SetResult(true);
-            
-            //Update commit information
-            this.commitTransactionId = tid;            
-            this.readTs = node.data.rts;
-            this.writeTs = node.data.wts;
 
-            //Clean the transaction list
+            // Clean the transaction list
             CleanUp(node);
             committedState.SetState(node.data.state);
         }
 
         public void Abort(int tid)
         {
-            //Abort read-only transactions
-            if (readDependencyMap.ContainsKey(tid)) {
-                readDependencyMap.Remove(tid);
-                return;
-            }
+            // It's possible that tid is not in readDependencyMap and transactionMap
+            if (readDependencyMap.ContainsKey(tid)) readDependencyMap.Remove(tid);
 
-            if (transactionMap.ContainsKey(tid))
+            // (1) tis is a read-only transaction
+            // (2) tid didn't succeed to write any version
+            if (!transactionMap.ContainsKey(tid)) return;
+
+            // Abort read-write transactions
+            var node = transactionMap[tid];
+            node.data.status = Status.Aborted;
+            //Set the promise of transaction tid, such that transactions depending on it can prepare.
+            node.data.ExecutionPromise.SetResult(true);
+        }
+
+        /// <summary>
+        /// Clean transactions that are before the committed transaction.
+        /// </summary>
+        void CleanUp(Node<TransactionStateInfo> node)   // node represents a newly committed transaction
+        {
+            var curNode = transactionList.head;
+            while (curNode != null)
             {
-                Node<TransactionStateInfo> node = transactionMap[tid];
-                node.data.status = Status.Aborted;
-                //Set the promise of transaction tid, such that transactions depending on it can prepare.
-                node.data.ExecutionPromise.SetResult(true);
+                if (curNode.data.tid == node.data.tid) return;
+                if (curNode.data.tid < node.data.tid && (curNode.data.status.Equals(Status.Aborted) || curNode.data.status.Equals(Status.Committed)))
+                {
+                    transactionList.Remove(curNode);
+                    transactionMap.Remove(curNode.data.tid);
+                }
+                curNode = curNode.next;
             }
+        }
+
+        public TState GetPreparedState(int tid)
+        {
+            // tid must be a read-write transaction
+            return transactionMap[tid].data.state;
         }
 
         public enum Status
@@ -230,28 +216,26 @@ namespace Concurrency.Implementation.Nondeterministic
 
             public TState state { get; set; }
             public int rts { get; set; }
-            public int wts { get; set; }
 
             public int depTid { get; set; }
 
-            public TaskCompletionSource<Boolean> ExecutionPromise { get; set; }
+            public TaskCompletionSource<bool> ExecutionPromise { get; set; }
 
-            public TransactionStateInfo(int tid, int depTid, int rts, int wts, Status status, TState copy)
+            public TransactionStateInfo(int tid, int depTid, int rts, Status status, TState copy)
             {
                 this.tid = tid;
                 this.depTid = depTid;
                 this.status = status;
                 this.state = copy;
                 this.rts = rts;
-                this.wts = wts;
-                ExecutionPromise = new TaskCompletionSource<Boolean>();
+                ExecutionPromise = new TaskCompletionSource<bool>();
             }
 
             public TransactionStateInfo(int tid, Status status)
             {
                 this.tid = tid;
                 this.status = status;
-                ExecutionPromise = new TaskCompletionSource<Boolean>();
+                ExecutionPromise = new TaskCompletionSource<bool>();
             }
         }
     }

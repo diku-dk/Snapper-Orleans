@@ -1,62 +1,46 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Utilities;
 using Orleans;
-using Orleans.Concurrency;
+using Utilities;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace Concurrency.Interface
 {
-    struct Message<T>
+    public interface IGlobalTransactionCoordinatorGrain : IGrainWithIntegerKey
     {
-    }
-    public interface IGlobalTransactionCoordinatorGrain : IGrainWithGuidKey
-    {
+        /// <summary>
+        /// Use this interface to submit a PACT to a coordinator.
+        /// </summary>
+        Task<MyTransactionContext> NewTransaction(Dictionary<int, Tuple<string, int>> grainAccessInfo);
 
         /// <summary>
-        /// Client calls this function to submit a new deterministic transaction
+        /// Use this interface to submit an ACT to a coordinator.
         /// </summary>
-        /// 
-        [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction(Dictionary<Guid, Tuple<String, int>> grainAccessInformation);
+        Task<MyTransactionContext> NewTransaction();
 
         /// <summary>
-        /// Client calls this function to submit a new non-deterministic transaction
-        /// TODO: should it be interleaved?
+        /// Use this interface to submit an ACT to a coordinator. This interface is only used for getting breakdown transaction latency.
         /// </summary>
-        /// 
-        [AlwaysInterleave]
-        Task<TransactionContext> NewTransaction();
+        Task<Tuple<MyTransactionContext, DateTime, DateTime>> NewTransactionAndGetTime();
 
         /// <summary>
-        /// Coordinators call this function to pass the emit token to its neighbour
-        /// Parameters:
-        ///     LastEmittedBatchID
-        ///     LastCommittedBatchID
-        ///     BatchDependencyPerActor: <Actor_ID : List of batch dependency>
-        ///     BatchDependency: <Batch_ID, (Transitive) batch dependency list>    
+        /// Use this interface to pass token to the neighbor coordinator.
         /// </summary>
-        /// 
-        [AlwaysInterleave]
         Task PassToken(BatchToken token);
 
-        Task SpawnCoordinator(uint myId, uint numOfCoordinators, int batchIntervalMSecs, int backOffIntervalMSecs, int idleIntervalTillBackOffSecs);
-
-        [AlwaysInterleave]
-        Task NotifyCommit(int bid);
-
-        [AlwaysInterleave]
-        Task<bool> checkBatchCompletion(int bid);
+        /// <summary>
+        /// Use this interface to initiate the coordinator.
+        /// </summary>
+        Task SpawnCoordinator(int numCPUPerSilo, bool loggingEnabled);
 
         /// <summary>
-        /// Actors call this function to notify coordinator that a transaction has been completed locally. 
+        /// Use this interface to notify the coordinator the completion of a batch on a grain.
         /// </summary>
-        [AlwaysInterleave]
-        Task AckBatchCompletion(int bid, Guid executor_id);
+        Task AckBatchCompletion(int bid);
 
-        [AlwaysInterleave]
-        Task<HashSet<int>> GetCompleteAfterSet(int tid, Dictionary<int, String> grains);
-       
-
+        /// <summary>
+        /// Use this interface to wait for a specific batch to commit so to make sure all batches commit in the order of bid.
+        /// </summary>
+        Task WaitBatchCommit(int bid);
     }
 }

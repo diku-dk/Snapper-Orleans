@@ -1,256 +1,175 @@
-﻿using Concurrency.Interface.Nondeterministic;
-using Concurrency.Interface;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System;
 using Utilities;
+using System.Linq;
+using System.Diagnostics;
+using Concurrency.Interface;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Concurrency.Interface.Nondeterministic;
 
 namespace Concurrency.Implementation.Nondeterministic
 {
     public class S2PLTransactionalState<TState> : INonDetTransactionalState<TState> where TState : ICloneable, new()
     {
-        // In-memory version of the persistent state.        
-        private TState activeState;
-        private bool writeLockTaken;        
-        private int writeLockTakenByTid;        
-        private SemaphoreSlim writeSemaphore;
-        private SemaphoreSlim readSemaphore;
-        private SortedSet<int> readers;
-        private SortedSet<int> writers;
-        private SortedSet<int> aborters;
+        TState activeState;     // In-memory version of the persistent state
 
+        SortedDictionary<int, Tuple<bool, TaskCompletionSource<bool>>> waitinglist;   // bool: isReader
+        SortedSet<int> concurrentReaders; // minWorkReader used to decide if a writer can be added after concurrent working readers
+        int maxWaitWriter;   // decide if a reader can be added before waiting writers
+
+        // transaction who gets the semophrore will only release it when aborts or commits
         public S2PLTransactionalState()
         {
-            writeLockTaken = false;
-            writeLockTakenByTid = -1;            
-            writeSemaphore = new SemaphoreSlim(1);
-            readSemaphore = new SemaphoreSlim(1);
-            readers = new SortedSet<int>();
-            writers = new SortedSet<int>();
-            aborters = new SortedSet<int>();
+            var descendingComparer = Comparer<int>.Create((x, y) => y.CompareTo(x));
+            waitinglist = new SortedDictionary<int, Tuple<bool, TaskCompletionSource<bool>>>(descendingComparer);
+            concurrentReaders = new SortedSet<int>();
+            maxWaitWriter = -1;
         }
 
-        private async Task<TState> AccessState(int tid, TState committedState)
+        public async Task<TState> Read(MyTransactionContext ctx, CommittedState<TState> committedState)
         {
-            if (writeLockTaken)
+            var tid = ctx.tid;
+            if (waitinglist.Count == 0)  // if nobody is reading or writing the grain
             {
-                if (writeLockTakenByTid == tid)
-                {
-                    //Do nothing since this is another interleaved execution;
-                }
-                else
-                {   //Check the wait-die protocol
-                    if (tid < writeLockTakenByTid)
-                    {
-                        //The following request is for queuing of transactions rather than a critical section
-                        await writeSemaphore.WaitAsync();
-                        writeLockTaken = true;
-                        writeLockTakenByTid = tid;
-                        activeState = (TState)committedState.Clone();
-                    }
-                    else
-                    {
-                        //abort the transaction
-                        aborters.Add(tid);
-                        throw new DeadlockAvoidanceException($"Txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the lock");                        
-                    }
-                }
-            }
-            else
-            {
-                await writeSemaphore.WaitAsync(); // This should never block but required to make subsequent waits block
-                writeLockTaken = true;
-                writeLockTakenByTid = tid;
-                activeState = (TState)committedState.Clone();
-            }
-            return activeState;
-        }
-
-        public async Task<TState> Read(TransactionContext ctx, CommittedState<TState> committedState)
-        {
-            var tid = ctx.transactionID;
-            if(aborters.Contains(tid))
-            {
-                throw new Exception($"{tid} has aborted, should go to abort phase");
-            }
-            if(writeLockTaken)
-            {                
-                if(writeLockTakenByTid == tid)
-                {
-                    //No lock downgrade, just return the active copy
-                    Debug.Assert(activeState != null);
-                    return activeState;
-                } else
-                {
-                    if (tid < writeLockTakenByTid)
-                    {
-                        readers.Add(tid);
-                        //Wait for writer
-                        await readSemaphore.WaitAsync();                        
-                        return committedState.GetState();
-                    } else
-                    {
-                        aborters.Add(tid);
-                        throw new DeadlockAvoidanceException($"Reader txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
-                    }                 
-                }
-            } else
-            {
-                readers.Add(tid);
-                Debug.Assert(writers.Count == 0);
-                if (readers.Count == 1)
-                {
-                    //First reader downs the semaphore if there are no writers waiting
-                    await writeSemaphore.WaitAsync(); //This should not block but is used to block subsequent writers                    
-                }                                
+                var mylock = new TaskCompletionSource<bool>();
+                mylock.SetResult(true);
+                waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(true, mylock));
+                Debug.Assert(concurrentReaders.Count == 0);
+                concurrentReaders.Add(tid);
                 return committedState.GetState();
             }
+            if (concurrentReaders.Count > 0)  // there are multiple readers reading the grain now
+            {
+                if (waitinglist.ContainsKey(tid))   // tid wants to read again
+                {
+                    Debug.Assert(waitinglist[tid].Item1 && waitinglist[tid].Item2.Task.IsCompleted);   // tid must be a reader
+                    return committedState.GetState();
+                }
+                var mylock = new TaskCompletionSource<bool>();
+                if (tid > maxWaitWriter)    // check if this reader can be put in front of the waiting writers
+                {
+                    mylock.SetResult(true);
+                    waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(true, mylock));
+                    concurrentReaders.Add(tid);
+                    return committedState.GetState();
+                }
+                // otherwise, the reader need to be added after the waiting writer
+                waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(true, mylock));
+                await mylock.Task;
+                return committedState.GetState();
+            }
+            // otherwise, right now there is only one writer working
+            Debug.Assert(!waitinglist.First().Value.Item1 && waitinglist.First().Value.Item2.Task.IsCompleted);
+            if (waitinglist.ContainsKey(tid))    // tid has been added as a writer before
+            {
+                Debug.Assert(tid == waitinglist.First().Key);
+                return activeState;
+            }
+            if (tid < waitinglist.First().Key)
+            {
+                var mylock = new TaskCompletionSource<bool>();
+                waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(true, mylock));
+                await mylock.Task;
+                return committedState.GetState();
+            }
+            throw new DeadlockAvoidanceException($"txn {tid} is aborted to avoid deadlock. ");
         }
 
-        public async Task<TState> ReadWrite(TransactionContext ctx, CommittedState<TState> committedState)
+        public async Task<TState> ReadWrite(MyTransactionContext ctx, CommittedState<TState> committedState)
         {
-            var tid = ctx.transactionID;
-            if (aborters.Contains(tid))
+            var tid = ctx.tid;
+            if (waitinglist.Count == 0)    // if nobody is reading or writing the grain
             {
-                throw new Exception($"{tid} has aborted, should go to abort phase");
-            }
-            else if (readers.Contains(tid))
-            {
-                aborters.Add(tid);
-                throw new NotImplementedException($"{tid} requests lock upgrade. Not supported in S2PL protocol.");
-            }
-            if (writeLockTaken)
-            {
-                if (writeLockTakenByTid == tid)
-                {
-                    //Do nothing since this is another interleaved execution;
-                    Debug.Assert(activeState != null);
-                }
-                else
-                {   //Check the wait-die protocol
-                    if (tid < writeLockTakenByTid)
-                    {
-                        writers.Add(tid);
-                        //Wait for other writer
-                        await writeSemaphore.WaitAsync();                        
-                        writeLockTaken = true;
-                        writeLockTakenByTid = tid;
-                        activeState = (TState)committedState.GetState().Clone();
-                    }
-                    else
-                    {
-                        //abort the transaction                        
-                        aborters.Add(tid);
-                        throw new DeadlockAvoidanceException($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {writeLockTakenByTid} that holds the write lock");
-                    }
-                }
-            }
-            else
-            {                
-                //Check for readers
-                if(readers.Count == 0)
-                {
-                    writers.Add(tid);
-                    await writeSemaphore.WaitAsync(); // This should never block but required to make subsequent writers block
-                    await readSemaphore.WaitAsync(); //This should never block but required to make subsequent readers block                    
-                    writeLockTaken = true;
-                    writeLockTakenByTid = tid;
-                } else
-                {
-                    if(tid < readers.Max)
-                    {
-                        //Wait for readers to release the lock
-                        writers.Add(tid);
-                        await writeSemaphore.WaitAsync();                        
-                        writeLockTaken = true;
-                        writeLockTakenByTid = tid;                        
-                    } else
-                    {
-                        aborters.Add(tid);
-                        throw new DeadlockAvoidanceException($"Writer txn {tid} is aborted to avoid deadlock since its tid is larger than txn {readers.Max} that holds the read lock");
-                    }
-                }
+                var mylock = new TaskCompletionSource<bool>();
+                mylock.SetResult(true);
+                waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(false, mylock));
                 activeState = (TState)committedState.GetState().Clone();
+                return activeState;
             }
-            return activeState;
-        }
-                
-        public Task<bool> Prepare(int tid)
-        {            
-            if(aborters.Contains(tid))
+            if (waitinglist.ContainsKey(tid))
             {
-                Debug.Assert(!writers.Contains(tid) && !readers.Contains(tid));
-                return Task.FromResult(false);
-            } else if(writeLockTaken && writeLockTakenByTid == tid && writers.Contains(tid))
-            {
-                Debug.Assert(!readers.Contains(tid));
-                return Task.FromResult(true);
-            } else if(readers.Contains(tid))
-            {
-                Debug.Assert(!writers.Contains(tid));
-                return Task.FromResult(true);
-            } else
-            {
-                //This code path must not be triggered
-                Debug.Assert(false);
-                return Task.FromResult(false);
+                Debug.Assert(waitinglist[tid].Item2.Task.IsCompleted);  // tid must be reading or writing the grain right now
+                if (waitinglist[tid].Item1)    // if tid has been added as a reader before
+                {
+                    Debug.Assert(concurrentReaders.Count > 0);     // right now there must be readers working
+                    throw new DeadlockAvoidanceException($"txn {tid} is aborted because lock upgrade is not allowed. ");
+                }
+                return activeState;  // if tid has been added as a writer before, this writer must be working now
             }
+            if (concurrentReaders.Count > 0)  // right now there are multiple readers reading
+            {
+                if (tid < concurrentReaders.Min)
+                {
+                    var mylock = new TaskCompletionSource<bool>();
+                    waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(false, mylock));
+                    maxWaitWriter = Math.Max(maxWaitWriter, tid);
+                    await mylock.Task;
+                    activeState = (TState)committedState.GetState().Clone();
+                    return activeState;
+                }
+                throw new DeadlockAvoidanceException($"txn {tid} is aborted to avoid deadlock. ");
+            }
+            // otherwise, if there is a writer working
+            if (tid < waitinglist.First().Key) 
+            {
+                var mylock = new TaskCompletionSource<bool>();
+                waitinglist.Add(tid, new Tuple<bool, TaskCompletionSource<bool>>(false, mylock));
+                await mylock.Task;
+                activeState = (TState)committedState.GetState().Clone();
+                return activeState;
+            }
+            throw new DeadlockAvoidanceException($"txn {tid} is aborted because txn {waitinglist.First().Key} is writing now. ");
         }
 
-        private void CleanUpAndSignal(int tid)
+        public Task<bool> Prepare(int tid)
         {
-            if(aborters.Contains(tid))
+            Debug.Assert(waitinglist.ContainsKey(tid));
+            return Task.FromResult(true);
+        }
+
+        void CleanUpAndSignal(int tid)
+        {
+            if (!waitinglist.ContainsKey(tid)) return;   // which means tis has been aborted before do any read write on this grain
+            var isReader = waitinglist[tid].Item1;
+            waitinglist.Remove(tid);
+            if (isReader)
             {
-                aborters.Remove(tid);
+                concurrentReaders.Remove(tid);
+                if (concurrentReaders.Count == 0) Debug.Assert(waitinglist.Count == 0 || !waitinglist.First().Value.Item1);
             }
-            else if (writeLockTaken && writeLockTakenByTid == tid && writers.Contains(tid))
+            if (concurrentReaders.Count == 0)
             {
-                writeLockTaken = false;
-                writeLockTakenByTid = -1;
-                writers.Remove(tid);
-                //Privilege readers over writers (XXX: Not fair queuing, can cause starvation)
-                if (readers.Count > 0)
+                maxWaitWriter = -1;
+                if (waitinglist.Count == 0) return;
+                if (waitinglist.First().Value.Item1)   // if next waiting transaction is a reader
                 {
-                    //Release all readers
-                    //Assumes one transaction can only have one outstanding call to Read/ReadWrite
-                    readSemaphore.Release(readers.Count);
-                    //Console.WriteLine($"writer releases sem, readers count = {readers.Count}, read sem value = {result}");
+                    Debug.Assert(!isReader);   // tid must be a writer
+                    var tasks = new List<TaskCompletionSource<bool>>();
+                    foreach (var txn in waitinglist)   // there may be multiple readers waiting
+                    {
+                        if (!txn.Value.Item1) break;
+                        else
+                        {
+                            concurrentReaders.Add(txn.Key);
+                            tasks.Add(txn.Value.Item2);
+                        }
+                    }
+                    for (int i = 0; i < tasks.Count; i++) tasks[i].SetResult(true);
                 }
-                else
-                {
-                    readSemaphore.Release();
-                    writeSemaphore.Release();
-                    //Console.WriteLine($"writer releases sem, readers count = {readers.Count}, write sem value = {result}");
-                }
-            }
-            else if (readers.Contains(tid))
-            {
-                readers.Remove(tid);
-                if (readers.Count == 0)
-                {
-                    //Release one writer                    
-                    writeSemaphore.Release();
-                    //Console.WriteLine($"reader releases sem, readers count = {readers.Count}, write sem value = {result}");
-                }
-            } else
-            {
-                Debug.Assert(false);
+                else waitinglist.First().Value.Item2.SetResult(true);
             }
         }
 
         public void Commit(int tid, CommittedState<TState> committedState)
-        {            
-            var reader = readers.Contains(tid);
-            if(!reader)
-                committedState.SetState(activeState);
-            CleanUpAndSignal(tid);      
+        {
+            var isReader = waitinglist[tid].Item1;
+            if (!isReader) committedState.SetState(activeState);  // tid is a RW transaction, need to update the state
+            CleanUpAndSignal(tid);
         }
 
         public void Abort(int tid)
         {
+            // if tid is a RW transaction, just discard its activeState
             CleanUpAndSignal(tid);
         }
 

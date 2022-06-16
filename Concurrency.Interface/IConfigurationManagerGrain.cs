@@ -1,74 +1,27 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Concurrency.Interface.Logging;
-using Concurrency.Interface.Nondeterministic;
+﻿using Orleans;
+using System;
 using System.Threading.Tasks;
-using Orleans;
 
 namespace Concurrency.Interface
 {
-    public class LoggingConfiguration
+    public interface IConfigurationManagerGrain : IGrainWithIntegerKey
     {
-        public Boolean isLoggingEnabled;
-        public StorageWrapperType loggingStorageWrapper;
+        /// <summary>
+        /// Use this interface to initiate silo.
+        /// </summary>
+        Task<string> Initialize(bool isSnapper, int numCPUPerSilo, bool loggingEnabled);
 
-        public LoggingConfiguration()
-        {
-            this.isLoggingEnabled = false;
-        }
+        /// <summary>
+        /// Use this interface to initiate TPCC configuration.
+        /// </summary>
+        Task InitializeTPCCManager(int NUM_OrderGrain_PER_D);
 
-        public LoggingConfiguration(StorageWrapperType loggingStorageWrapper)
-        {
-            this.isLoggingEnabled = true;
-            this.loggingStorageWrapper = loggingStorageWrapper;
-        }
-    }
+        /// <summary>
+        /// Use this interface to get silo configuration.
+        /// </summary>
+        Task<Tuple<int, bool>> GetSiloConfig();
 
-    public class ConcurrencyConfiguration
-    {
-        public ConcurrencyType nonDetConcurrencyManager;
-
-        public ConcurrencyConfiguration(ConcurrencyType nonDetConcurrencyManager)
-        {
-            this.nonDetConcurrencyManager = nonDetConcurrencyManager;
-        }
-    }
-
-    public class ExecutionGrainConfiguration
-    {
-        public LoggingConfiguration logConfiguration;
-        public ConcurrencyConfiguration nonDetCCConfiguration;
-        public int maxNonDetWaitingLatencyInMs;
-
-        public ExecutionGrainConfiguration(LoggingConfiguration logConfiguration, ConcurrencyConfiguration nonDetCCConfiguration, int latency)
-        {
-            this.logConfiguration = logConfiguration;
-            this.nonDetCCConfiguration = nonDetCCConfiguration;
-            maxNonDetWaitingLatencyInMs = latency;
-        }
-    }
-
-    public class CoordinatorGrainConfiguration
-    {
-        public int batchIntervalMSecs;
-        public int backoffIntervalMSecs;
-        public int idleIntervalTillBackOffSecs;
-        public uint numCoordinators;
-
-        public CoordinatorGrainConfiguration(int batchIntervalMSecs, int backoffIntervalMSecs, int idleIntervalTillBackOffSecs, uint numCoordinators)
-        {
-            this.batchIntervalMSecs = batchIntervalMSecs;
-            this.backoffIntervalMSecs = backoffIntervalMSecs;
-            this.idleIntervalTillBackOffSecs = idleIntervalTillBackOffSecs;
-            this.numCoordinators = numCoordinators;
-        }
-    }
-    public interface IConfigurationManagerGrain : IGrainWithGuidKey
-    {
-        Task<Tuple<ExecutionGrainConfiguration, uint>> GetConfiguration(String grainClassName, Guid grainId);        
-        Task UpdateNewConfiguration(CoordinatorGrainConfiguration config);
-        Task UpdateNewConfiguration(ExecutionGrainConfiguration config);
-        Task UpdateNewConfiguration(Dictionary<Tuple<String, Guid>, ExecutionGrainConfiguration> grainSpecificConfigs);
+        Task SetIOCount();
+        Task<long> GetIOCount();
     }
 }

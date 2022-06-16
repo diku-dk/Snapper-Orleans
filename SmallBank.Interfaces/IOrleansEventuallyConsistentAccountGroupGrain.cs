@@ -1,15 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Utilities;
+﻿using Orleans.Transactions;
 using Orleans.Concurrency;
 using System.Threading.Tasks;
+using Utilities;
 
 namespace SmallBank.Interfaces
-{    
-    public interface IOrleansEventuallyConsistentAccountGroupGrain : Orleans.IGrainWithIntegerKey, Orleans.IGrainWithGuidKey
+{
+    public interface IOrleansEventuallyConsistentAccountGroupGrain : Orleans.IGrainWithIntegerKey
     {
         [AlwaysInterleave]
-        Task<FunctionResult> StartTransaction(String startFunction, FunctionInput inputs);
+        Task<TransactionResult> StartTransaction(string startFunc, object funcInput);
     }
 }

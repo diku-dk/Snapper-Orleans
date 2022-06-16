@@ -1,383 +1,378 @@
 ﻿using System;
-using System.Collections.Generic;
+using Utilities;
+using System.Diagnostics;
+using Persist.Interfaces;
+using Orleans.Concurrency;
 using SmallBank.Interfaces;
 using System.Threading.Tasks;
-using Utilities;
-using Orleans.Runtime;
-using Orleans;
-using Orleans.Core;
-using Orleans.Transactions;
+using System.Collections.Generic;
 using Orleans.Transactions.Abstractions;
-
+using Orleans.Transactions;
+using Utilities;
 
 namespace SmallBank.Grains
 {
-    using AmalgamateInput = Tuple<UInt32, UInt32>;
-    using WriteCheckInput = Tuple<String, float>;
-    using TransactSavingInput = Tuple<String, float>;
-    using DepositCheckingInput = Tuple<Tuple<String, UInt32>, float>;
-    using BalanceInput = String;
-    //Source AccountID, Destination AccountID, Destination Grain ID, Amount
-    using TransferInput = Tuple<Tuple<String, UInt32>, Tuple<String, UInt32>, float>;
-    //Source AccountID, Amount, List<Tuple<Account Name, Account ID, Grain ID>>
-    using MultiTransferInput = Tuple<Tuple<String, UInt32>, float, List<Tuple<String, UInt32>>>;
-    using InitAccountInput = Tuple<UInt32, UInt32>;
+    using InitAccountInput = Tuple<int, int>;
 
+    using DepositInput = Tuple<Tuple<string, int>, float>;
+    using MultiTransferInput = Tuple<Tuple<string, int>, float, List<Tuple<string, int>>>;  //Source AccountID, Amount, List<Tuple<Account Name, Account ID, Grain ID>>
+
+    using NewDepositInput = Tuple<Tuple<string, int>, float, bool>;
+    using NewMultiTransferInput = Tuple<Tuple<string, int>, float, List<Tuple<string, int>>, int>;
+
+    [Reentrant]
     class OrleansTransactionalAccountGroupGrain : Orleans.Grain, IOrleansTransactionalAccountGroupGrain
-    {   
-        public uint numAccountPerGroup = 1;
+    {
+        private readonly IPersistSingletonGroup persistSingletonGroup;
+        public int numAccountPerGroup = 1;
         private readonly ITransactionalState<CustomerAccountGroup> state;
 
-        public OrleansTransactionalAccountGroupGrain([TransactionalState("state")]ITransactionalState<CustomerAccountGroup> state)
+        public OrleansTransactionalAccountGroupGrain(IPersistSingletonGroup persistSingletonGroup, [TransactionalState("state")] ITransactionalState<CustomerAccountGroup> state)
         {
+            this.persistSingletonGroup = persistSingletonGroup;
             this.state = state ?? throw new ArgumentNullException(nameof(state));
         }
 
-        private UInt32 MapCustomerIdToGroup(UInt32 accountID)
+        private int MapCustomerIdToGroup(int accountID)
         {
-            return accountID / numAccountPerGroup; //You can can also range/hash partition
+            return accountID / numAccountPerGroup;  // You can can also range/hash partition
         }
 
-        private async Task<FunctionResult> Balance(FunctionInput fin)
+        public async Task SetIOCount()
         {
-            Utilities.TransactionContext context = fin.context;
-            FunctionResult ret = new FunctionResult(-1);
+            persistSingletonGroup.SetIOCount();
+        }
 
+        public async Task<long> GetIOCount()
+        {
+            return persistSingletonGroup.GetIOCount();
+        }
+
+        async Task<TransactionResult> Init(object funcInput)
+        {
+            var ret = new TransactionResult();
             try
             {
-                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
-                var custName = (BalanceInput)fin.inputObject;
+                var tuple = (InitAccountInput)funcInput;
+                numAccountPerGroup = tuple.Item1;
+                var groupId = tuple.Item2;
+                await state.PerformUpdate<CustomerAccountGroup>(s => s.GroupID = groupId);
+                var minAccountID = groupId * numAccountPerGroup;
+                for (int i = 0; i < numAccountPerGroup; i++)
+                {
+                    int accountId = minAccountID + i;
+                    await state.PerformUpdate(s => s.account.Add(accountId.ToString(), accountId));
+                    await state.PerformUpdate(s => s.savingAccount.Add(accountId, int.MaxValue));
+                    await state.PerformUpdate(s => s.checkingAccount.Add(accountId, int.MaxValue));
+                }
+            }
+            catch (Exception)
+            {
+                ret.exception = true;
+            }
+            return ret;
+        }
+
+        async Task<TransactionResult> GetBalance(object funcInput)
+        {
+            var ret = new TransactionResult();
+            try
+            {
+                var myState = await state.PerformRead(s => s);
+                var custName = (string)funcInput;
                 if (myState.account.ContainsKey(custName))
                 {
                     var id = myState.account[custName];
                     if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
                     {
-                        ret.setException();
+                        ret.exception = true;
                         return ret;
                     }
-                    ret.setResult(myState.savingAccount[id] + myState.checkingAccount[id]);
+                    ret.resultObject = myState.savingAccount[id] + myState.checkingAccount[id];
                 }
                 else
                 {
-                    ret.setException();
+                    ret.exception = true;
                     return ret;
                 }
             }
             catch (Exception)
             {
-                ret.setException();
+                ret.exception = true;
             }
             return ret;
         }
 
-        private async Task<FunctionResult> DepositChecking(FunctionInput fin)
+        async Task<TransactionResult> MultiTransfer(object funcInput)
         {
-            Utilities.TransactionContext context = fin.context;
-            FunctionResult ret = new FunctionResult();
+            var ret = new TransactionResult();
             try
             {
-                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
-                var inputTuple = (DepositCheckingInput)fin.inputObject;
-                var custName = inputTuple.Item1.Item1;
-                var id = inputTuple.Item1.Item2;
-                if (!String.IsNullOrEmpty(custName))
-                {
-                    id = myState.account[custName];
-                }
-                if (!myState.checkingAccount.ContainsKey(id))
-                {
-                    ret.setException();
-                    return ret;
-                }
-                await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] += inputTuple.Item2);
-                //myState.checkingAccount[id] += inputTuple.Item2; //Can also be negative for checking account                
-            }
-            catch (Exception)
-            {
-                ret.setException();
-            }
-            return ret;
-        }
-
-        public async Task<FunctionResult> TransactSaving(FunctionInput fin)
-        {
-            Utilities.TransactionContext context = fin.context;
-            FunctionResult ret = new FunctionResult();
-            try
-            {
-                var myState = await state.PerformUpdate<CustomerAccountGroup>(s => s);
-                var inputTuple = (TransactSavingInput)fin.inputObject;
-                if (myState.account.ContainsKey(inputTuple.Item1))
-                {
-                    var id = myState.account[inputTuple.Item1];
-                    if (!myState.savingAccount.ContainsKey(id))
-                    {
-                        ret.setException();
-                        return ret;
-                    }
-                    if (myState.savingAccount[id] < inputTuple.Item2)
-                    {
-                        ret.setException();
-                        return ret;
-                    }
-                    await state.PerformUpdate<CustomerAccountGroup>(s => s.savingAccount[id] -= inputTuple.Item2);
-                    //myState.savingAccount[id] -= inputTuple.Item2;
-                }
-                else
-                {
-                    ret.setException();
-                    return ret;
-                }
-            }
-            catch (Exception)
-            {
-                ret.setException();
-            }
-            return ret;
-        }
-
-        private async Task<FunctionResult> Transfer(FunctionInput fin)
-        {
-            Utilities.TransactionContext context = fin.context;
-            FunctionResult ret = new FunctionResult();
-            try
-            {
-                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
-                var inputTuple = (TransferInput)fin.inputObject;
+                var success = false;
+                var myGroupID = -1;
+                var inputTuple = (MultiTransferInput)funcInput;
                 var custName = inputTuple.Item1.Item1;
                 var id = inputTuple.Item1.Item2;
 
-                if (!String.IsNullOrEmpty(custName))
+                await state.PerformUpdate(myState =>
                 {
-                    id = myState.account[custName];
-                }
-                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item3)
-                {
-                    ret.setException();
-                    return ret;
-                }
-                var gID = this.MapCustomerIdToGroup(inputTuple.Item2.Item2);
-                FunctionInput funcInput = new FunctionInput(fin, new DepositCheckingInput(inputTuple.Item2, inputTuple.Item3));
-                Task<FunctionResult> task;
-                if (gID == myState.GroupID)
-                {
-                    task = DepositChecking(funcInput);
-                }
-                else
-                {
-                    var destination = this.GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
-                    FunctionCall funcCall = new FunctionCall(typeof(CustomerAccountGroupGrain), "DepositChecking", funcInput);
-                    task = destination.StartTransaction("DepositChecking", funcInput);
-                }
-
-                await task;
-                if (task.Result.hasException() == true)
-                {
-                    ret.setException();
-                    return ret;
-                }
-                ret.mergeWithFunctionResult(task.Result);
-                await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] -= inputTuple.Item3);
-                //myState.checkingAccount[id] -= inputTuple.Item3;
-            }
-            catch (Exception)
-            {
-                ret.setException();
-            }
-            return ret;
-        }
-
-        public async Task<FunctionResult> WriteCheck(FunctionInput fin)
-        {
-            Utilities.TransactionContext context = fin.context;
-            FunctionResult ret = new FunctionResult();
-            try
-            {
-                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
-                var inputTuple = (WriteCheckInput)fin.inputObject;
-                if (myState.account.ContainsKey(inputTuple.Item1))
-                {
-                    var id = myState.account[inputTuple.Item1];
-                    if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
+                    myGroupID = myState.GroupID;
+                    if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                    if (myState.checkingAccount.ContainsKey(id) && myState.checkingAccount[id] >= inputTuple.Item2 * inputTuple.Item3.Count)
                     {
-                        ret.setException();
-                        return ret;
+                        myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                        success = true;
                     }
-                    if (myState.savingAccount[id] + myState.checkingAccount[id] < inputTuple.Item2)
-                    {
-                        await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] -= (inputTuple.Item2 + 1));
-                        //myState.checkingAccount[id] -= (inputTuple.Item2 + 1); //Pay a penalty                        
-                    }
-                    else
-                    {
-                        await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] -= (inputTuple.Item2));
-                        //myState.checkingAccount[id] -= inputTuple.Item2;
-                    }
-                }
-                else
-                {
-                    ret.setException();
-                    return ret;
-                }
-            }
-            catch (Exception)
-            {
-                ret.setException();
-            }
-            return ret;
-        }
+                });
 
-        public async Task<FunctionResult> MultiTransfer(FunctionInput fin)
-        {
-            Utilities.TransactionContext context = fin.context;
-            FunctionResult ret = new FunctionResult();
-            try
-            {
-                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
-                var inputTuple = (MultiTransferInput)fin.inputObject;
-                var custName = inputTuple.Item1.Item1;
-                var id = inputTuple.Item1.Item2;
-                if (!String.IsNullOrEmpty(custName))
+                if (!success)
                 {
-                    id = myState.account[custName];
-                }
-
-                if (!myState.checkingAccount.ContainsKey(id) || myState.checkingAccount[id] < inputTuple.Item2 * inputTuple.Item3.Count)
-                {
-                    ret.setException();
+                    ret.exception = true;
                     return ret;
                 }
                 else
                 {
-                    List<Tuple<String, UInt32>> destinations = inputTuple.Item3;
-                    List<Task<FunctionResult>> tasks = new List<Task<FunctionResult>>();
+                    Debug.Assert(myGroupID >= 0);
+                    var destinations = inputTuple.Item3;
+                    var tasks = new List<Task>();
                     foreach (var tuple in destinations)
                     {
                         var gID = MapCustomerIdToGroup(tuple.Item2);
-                        FunctionInput funcInput = new FunctionInput(fin, new DepositCheckingInput(new Tuple<String, UInt32>(tuple.Item1, tuple.Item2), inputTuple.Item2));
-                        if (gID == myState.GroupID)
-                        {
-                            Task<FunctionResult> localCall = DepositChecking(funcInput);
-                            tasks.Add(localCall);
-                        }
+                        var input = new DepositInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2);
+                        if (gID == myGroupID) tasks.Add(Deposit(input));
                         else
                         {
-                            var destination = this.GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(Helper.convertUInt32ToGuid(gID));
-                            var task = destination.StartTransaction("DepositChecking", funcInput);
-                            tasks.Add(task);
+                            var destination = GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(gID);
+                            tasks.Add(destination.StartTransaction("Deposit", input));
                         }
                     }
                     await Task.WhenAll(tasks);
-                    foreach (Task<FunctionResult> task in tasks)
+                }
+            }
+            catch (Exception)
+            {
+                ret.exception = true;
+            }
+            return ret;
+        }
+
+        async Task<TransactionResult> Deposit(object funcInput)
+        {
+            var ret = new TransactionResult();
+            try
+            {
+                var success = false;
+                var inputTuple = (DepositInput)funcInput;
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+
+                await state.PerformUpdate(myState =>
+                {
+                    if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                    if (myState.checkingAccount.ContainsKey(id))
                     {
-                        ret.mergeWithFunctionResult(task.Result);
+                        myState.checkingAccount[id] += inputTuple.Item2;
+                        success = true;
                     }
-                    await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count);
-                    //myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                });
+
+                if (!success)
+                {
+                    ret.exception = true;
+                    return ret;
                 }
             }
             catch (Exception)
             {
-                ret.setException();
+                ret.exception = true;
             }
             return ret;
         }
 
-        public async Task<FunctionResult> InitBankAccounts(FunctionInput fin)
+        public async Task<TransactionResult> MultiTransferNoDeadlock(object funcInput)
         {
-            Utilities.TransactionContext context = fin.context;
-            FunctionResult ret = new FunctionResult();
+            var ret = new TransactionResult();
             try
             {
-                //var myState = state;
-                var tuple = (InitAccountInput)fin.inputObject;
-                numAccountPerGroup = tuple.Item1;
-                var groupId = tuple.Item2;
-                await state.PerformUpdate<CustomerAccountGroup>(s => s.GroupID = groupId);
-                uint minAccountID = groupId * numAccountPerGroup;
-                for (uint i = 0; i < numAccountPerGroup; i++)
+                var success = false;
+                var myGroupID = -1;
+                var inputTuple = (MultiTransferInput)funcInput;
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+
+                await state.PerformUpdate(myState =>
                 {
-                    uint accountId = minAccountID + i;
-                    await state.PerformUpdate<CustomerAccountGroup>(s => s.account.Add(accountId.ToString(), accountId));
-                    await state.PerformUpdate<CustomerAccountGroup>(s => s.savingAccount.Add(accountId, uint.MaxValue));
-                    await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount.Add(accountId, uint.MaxValue));
-                    //myState.account.Add(accountId.ToString(), accountId);
-                    //myState.savingAccount.Add(accountId, uint.MaxValue);
-                    //myState.checkingAccount.Add(accountId, uint.MaxValue);
-                }
-            }
-            catch (Exception)
-            {
-                ret.setException();
-            }
-            return ret;
-        }
+                    myGroupID = myState.GroupID;
+                    if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                    if (myState.checkingAccount.ContainsKey(id) && myState.checkingAccount[id] >= inputTuple.Item2 * inputTuple.Item3.Count)
+                    {
+                        myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                        success = true;
+                    }
+                });
 
-
-        public async Task<FunctionResult> Amalgamate(FunctionInput fin)
-        {
-            Utilities.TransactionContext context = fin.context;
-            FunctionResult ret = new FunctionResult();
-            try
-            {
-                var myState = await state.PerformRead<CustomerAccountGroup>(s => s);
-                var tuple = (AmalgamateInput)fin.inputObject;
-                var id = tuple.Item1;
-                float balance = 0;
-
-                if (!myState.savingAccount.ContainsKey(id) || !myState.checkingAccount.ContainsKey(id))
+                if (!success)
                 {
-                    ret.setException();
+                    ret.exception = true;
+                    return ret;
                 }
                 else
                 {
-                    balance = myState.savingAccount[id] + myState.checkingAccount[id];
-                }
-
-                //By invoking with 0 amount and no state mutation, we make the execution deterministic
-                var destGrain = this.GrainFactory.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(MapCustomerIdToGroup(tuple.Item2));
-                var result = await destGrain.StartTransaction("DepositChecking", new FunctionInput(fin, new Tuple<Tuple<String, UInt32>, float>(new Tuple<String, UInt32>(String.Empty, id), balance)));
-                ret.mergeWithFunctionResult(result);
-                if (!ret.hasException())
-                {
-                    //By ensuring state mutation on no exception, we make it deterministic
-                    await state.PerformUpdate<CustomerAccountGroup>(s => s.savingAccount[id] = 0);
-                    await state.PerformUpdate<CustomerAccountGroup>(s => s.checkingAccount[id] = 0);
-                    //myState.savingAccount[id] = 0;
-                    //myState.checkingAccount[id] = 0;
+                    Debug.Assert(myGroupID >= 0);
+                    var destinations = inputTuple.Item3;
+                    foreach (var tuple in destinations)
+                    {
+                        var gID = MapCustomerIdToGroup(tuple.Item2);
+                        var input = new DepositInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2);
+                        if (gID == myGroupID)
+                        {
+                            var task = Deposit(input);
+                            await task;
+                        }
+                        else
+                        {
+                            var destination = GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(gID);
+                            var task = destination.StartTransaction("Deposit", input);
+                            await task;
+                        }
+                    }
                 }
             }
             catch (Exception)
             {
-                ret.setException();
+                ret.exception = true;
             }
             return ret;
         }
-        Task<FunctionResult> IOrleansTransactionalAccountGroupGrain.StartTransaction(string startFunction, FunctionInput inputs)
+
+        async Task<TransactionResult> MultiTransferWithNOOP(object funcInput, DateTime time)
         {
-            AllTxnTypes fnType;
-            if (!Enum.TryParse<AllTxnTypes>(startFunction.Trim(), out fnType))
+            var ret = new TransactionResult();
+            ret.beforeExeTime = time;
+            try
             {
-                throw new FormatException($"Unknown function {startFunction}");
+                var myGroupID = -1;
+                var inputTuple = (NewMultiTransferInput)funcInput;   // <Source AccountID>, Amount, List<Dest AccountID>
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+
+                var v = await state.PerformUpdate(myState =>
+                {
+                    var t1 = DateTime.Now;
+                    myGroupID = myState.GroupID;
+                    if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                    if (myState.checkingAccount.ContainsKey(id) && myState.checkingAccount[id] >= inputTuple.Item2 * inputTuple.Item3.Count)
+                    {
+                        myState.checkingAccount[id] -= inputTuple.Item2 * inputTuple.Item3.Count;
+                        return new Tuple<bool, DateTime>(true, t1);
+                    }
+                    else return new Tuple<bool, DateTime>(false, t1);
+                });
+                var success = v.Item1;
+                ret.beforeUpdate1Time = v.Item2;
+
+                if (!success)
+                {
+                    ret.exception = true;
+                    return ret;
+                }
+                else
+                {
+                    Debug.Assert(myGroupID >= 0);
+                    var destinations = inputTuple.Item3;
+                    var count = 0;
+                    var write = true;
+                    var numWriter = inputTuple.Item4;
+                    ret.callGrainTime = DateTime.Now;
+                    foreach (var tuple in destinations)
+                    {
+                        count++;
+                        if (count == numWriter) write = false;
+                        var gID = MapCustomerIdToGroup(tuple.Item2);
+                        var input = new NewDepositInput(new Tuple<string, int>(tuple.Item1, tuple.Item2), inputTuple.Item2, write);
+                        if (gID == myGroupID)
+                        {
+                            var task = DepositWithNOOP(input);
+                            await task;
+                        }
+                        else
+                        {
+                            var destination = GrainFactory.GetGrain<IOrleansTransactionalAccountGroupGrain>(gID);
+                            var task = destination.StartTransaction("DepositWithNOOP", input);
+                            await task;
+                        }
+                    }
+                }
             }
+            catch (Exception e)
+            {
+                ret.exception = true;
+            }
+            ret.afterExeTime = DateTime.Now;
+            return ret;
+        }
+
+        async Task<TransactionResult> DepositWithNOOP(object funcInput)
+        {
+            var ret = new TransactionResult();
+            try
+            {
+                var inputTuple = (NewDepositInput)funcInput;
+                var custName = inputTuple.Item1.Item1;
+                var id = inputTuple.Item1.Item2;
+
+                var write = inputTuple.Item3;
+                var success = false;
+                if (write == false) success = true;
+                else
+                {
+                    success = await state.PerformUpdate(myState =>
+                    {
+                        if (!string.IsNullOrEmpty(custName)) id = myState.account[custName];
+                        if (myState.checkingAccount.ContainsKey(id))
+                        {
+                            myState.checkingAccount[id] += inputTuple.Item2;
+                            return true;
+                        }
+                        else return false;
+                    });
+                }
+
+                if (!success)
+                {
+                    ret.exception = true;
+                    return ret;
+                }
+            }
+            catch (Exception e)
+            {
+                ret.exception = true;
+            }
+            return ret;
+        }
+
+        public Task<TransactionResult> StartTransaction(string startFunc, object funcInput)
+        {
+            var time = DateTime.Now;
+            AllTxnTypes fnType;
+            if (!Enum.TryParse(startFunc.Trim(), out fnType)) throw new FormatException($"Unknown function {startFunc}");
             switch (fnType)
             {
-                case AllTxnTypes.Balance:
-                    return Balance(inputs);
-                case AllTxnTypes.DepositChecking:
-                    return DepositChecking(inputs);
-                case AllTxnTypes.TransactSaving:
-                    return TransactSaving(inputs);
-                case AllTxnTypes.WriteCheck:
-                    return WriteCheck(inputs);
-                case AllTxnTypes.Transfer:
-                    return Transfer(inputs);
+                case AllTxnTypes.Init:
+                    return Init(funcInput);
+                case AllTxnTypes.GetBalance:
+                    return GetBalance(funcInput);
                 case AllTxnTypes.MultiTransfer:
-                    return MultiTransfer(inputs);
-                case AllTxnTypes.Amalgamate:
-                    return Amalgamate(inputs);
-                case AllTxnTypes.InitBankAccounts:
-                    return InitBankAccounts(inputs);
+                    return MultiTransfer(funcInput);
+                case AllTxnTypes.Deposit:
+                    return Deposit(funcInput);
+                case AllTxnTypes.MultiTransferNoDeadlock:
+                    return MultiTransferNoDeadlock(funcInput);
+                case AllTxnTypes.MultiTransferWithNOOP:
+                    return MultiTransferWithNOOP(funcInput, time);
+                case AllTxnTypes.DepositWithNOOP:
+                    return DepositWithNOOP(funcInput);
+
                 default:
                     throw new Exception($"Unknown function {fnType}");
             }

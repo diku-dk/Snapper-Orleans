@@ -1,27 +1,16 @@
-﻿using System;
+﻿using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Text;
-using Concurrency.Interface;
-using Orleans.Concurrency;
-using System.Threading.Tasks;
 
 namespace Concurrency.Interface.Logging
 {
-    public enum StorageWrapperType { FILESYSTEM, DYNAMODB };
     public interface ILoggingProtocol<TState>
     {
-        Task HandleBeforePrepareIn2PC(int tid, Guid coordinatorKey, HashSet<Guid> grains);
-
-        Task HandleOnPrepareIn2PC(ITransactionalState<TState> state, int tid, Guid coordinatorKey);
-
-        Task HandleOnCommitIn2PC(ITransactionalState<TState> state, int tid, Guid coordinatorKey);
-
-        Task HandleOnAbortIn2PC(ITransactionalState<TState> state, int tid, Guid coordinatorKey);
-
-        Task HandleOnCompleteInDeterministicProtocol(ITransactionalState<TState> state, int tid, Guid coordinatorKey);
-
-        Task HandleOnPrepareInDeterministicProtocol(int bid, HashSet<Guid> grains);
-
+        Task HandleBeforePrepareIn2PC(int tid, int coordID, HashSet<int> grains);
+        Task HandleOnPrepareIn2PC(ITransactionalState<TState> state, int tid, int coordID);
+        Task HandleOnCommitIn2PC(int tid, int coordID);
+        Task HandleOnAbortIn2PC(int tid, int coordID);
+        Task HandleOnCompleteInDeterministicProtocol(ITransactionalState<TState> state, int tid, int coordID);
+        Task HandleOnPrepareInDeterministicProtocol(int bid, HashSet<int> grains);
         Task HandleOnCommitInDeterministicProtocol(int bid);
     }
 }

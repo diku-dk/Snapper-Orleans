@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<root>
+	<pactPercent> 100, 99, 90, 75, 50, 25, 0 </pactPercent>
+
+	<txnSize>   4 </txnSize>
+	<numWriter> 4 </numWriter>
+
+	<distribution>    UNIFORM, ZIPFIAN, ZIPFIAN, ZIPFIAN, ZIPFIAN </distribution>
+	<zipfianConstant> 0,       0.9,     1.0,     1.25,    1.5     </zipfianConstant>
+	<actPipeSize>     64,      16,      8,       4,       4       </actPipeSize>
+	<pactPipeSize>    64,      64,      64,      64,      64      </pactPipeSize>
+</root>

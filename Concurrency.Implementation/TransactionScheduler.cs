@@ -1,258 +1,188 @@
-﻿using Utilities;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
-using Concurrency.Interface;
-using Orleans;
+﻿using System;
+using Utilities;
 using System.Diagnostics;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace Concurrency.Implementation
 {
-
-
     class TransactionScheduler
-    {        
-        private Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
-        private ScheduleInfo scheduleInfo;
-        //private int lastScheduledBatchId; //Includes deterministic and not-deterministic batches
-        //private TaskCompletionSource<Boolean> nonDetCompletion;
-        private Dictionary<int, Dictionary<int, List<TaskCompletionSource<Boolean>>>> inBatchTransactionCompletionMap;
-        private int maxNonDetWaitingLatencyInMs;
-        IGrainFactory grainFactory;
+    {
+        public ScheduleInfo scheduleInfo;
+        Dictionary<int, DeterministicBatchSchedule> batchScheduleMap;
+        public Dictionary<int, Dictionary<int, List<TaskCompletionSource<bool>>>> inBatchTransactionCompletionMap; // <bid, <tid, List<Task>>>
 
-        public TransactionScheduler(Dictionary<int, DeterministicBatchSchedule> batchScheduleMap, int latency, IGrainFactory grainFactory)
+        public TransactionScheduler(Dictionary<int, DeterministicBatchSchedule> batchScheduleMap)
         {
-            this.batchScheduleMap = batchScheduleMap;            
+            this.batchScheduleMap = batchScheduleMap;
             inBatchTransactionCompletionMap = new Dictionary<int, Dictionary<int, List<TaskCompletionSource<bool>>>>();
             scheduleInfo = new ScheduleInfo();
-            maxNonDetWaitingLatencyInMs = latency;
-            this.grainFactory = grainFactory;
         }
 
-        public async Task waitForBatchCommit(int batchId)
+        public async void RegisterDeterministicBatchSchedule(int bid)
         {
-            
-            if (scheduleInfo.nodes.ContainsKey(batchId))
-            {
-                var task = scheduleInfo.nodes[batchId].commitmentPromise.Task;
-                if (task.IsCompleted)
-                    return;
-                else
-                {
-                    await Task.WhenAny(Task.Delay(maxNonDetWaitingLatencyInMs), task);
-                }
-                if (task.IsCompleted)
-                    return;
-                else
-                {
-                    Debug.Assert(batchScheduleMap.ContainsKey(batchId));
-                    var coordinatorID = batchScheduleMap[batchId].globalCoordinator;
-                    IGlobalTransactionCoordinatorGrain coordinator = grainFactory.GetGrain<IGlobalTransactionCoordinatorGrain>(coordinatorID);
-                    await coordinator.checkBatchCompletion(batchId);
-                }
-                    
-                return;
-
-            }
-        }
-
-        public async void RegisterDeterministicBatchSchedule(int batchID) 
-        {
-            var schedule = batchScheduleMap[batchID];
-            //Create the promise of the previous batch if not present
-
+            var schedule = batchScheduleMap[bid];
             scheduleInfo.insertDetBatch(schedule);
-            //Create the in batch promise map if not present
-            if (this.inBatchTransactionCompletionMap.ContainsKey(schedule.batchID) == false)
-                this.inBatchTransactionCompletionMap.Add(schedule.batchID, new Dictionary<int, List<TaskCompletionSource<bool>>>());
 
-            //Check if this batch can be executed: 
-            //(1) check the promise status of its previous batch
-            //(2) check the promise for nonDeterministic batch
-            await scheduleInfo.getDependingPromise(schedule.batchID).Task;
+            if (!inBatchTransactionCompletionMap.ContainsKey(bid))
+                inBatchTransactionCompletionMap.Add(bid, new Dictionary<int, List<TaskCompletionSource<bool>>>());
+
+            var dep = scheduleInfo.getDependingNode(bid, true);  // wait for the completion of prev node
+            if (dep.id > -1 && !dep.executionPromise.Task.IsCompleted) await dep.executionPromise.Task;
 
             //Check if there is a buffered function call for this batch, if present, execute it
             int tid = schedule.curExecTransaction();
-            //Console.WriteLine($"\n{this.GetType()}: next transaction to be executed is {tid}.\n");
-            if (inBatchTransactionCompletionMap[schedule.batchID].ContainsKey(tid) && inBatchTransactionCompletionMap[schedule.batchID][tid].Count != 0)
+            if (inBatchTransactionCompletionMap[bid].ContainsKey(tid))
             {
-                if (inBatchTransactionCompletionMap[schedule.batchID][tid][0].Task.IsCompleted == false)
-                       inBatchTransactionCompletionMap[schedule.batchID][tid][0].SetResult(true);
+                Debug.Assert(inBatchTransactionCompletionMap[bid][tid].Count > 1);
+                if (!inBatchTransactionCompletionMap[bid][tid][0].Task.IsCompleted)
+                    inBatchTransactionCompletionMap[bid][tid][0].SetResult(true);
             }
+            // else, the first function call of tid hasn't arrived yet
         }
 
-        //for deterministic transactions
-        public async Task<int> waitForTurn(int bid, int tid)
+        public async Task<int> waitForTurn(int bid, int tid)  // for det txn
         {
-            //Check if the list of promises for this transaction exsists, if not, add it.
-            if (inBatchTransactionCompletionMap.ContainsKey(bid) == false)
-            {
+            if (!inBatchTransactionCompletionMap.ContainsKey(bid))
                 inBatchTransactionCompletionMap.Add(bid, new Dictionary<int, List<TaskCompletionSource<bool>>>());
-            }
-            if (inBatchTransactionCompletionMap[bid].ContainsKey(tid) == false)
+            if (!inBatchTransactionCompletionMap[bid].ContainsKey(tid))
             {
                 inBatchTransactionCompletionMap[bid].Add(tid, new List<TaskCompletionSource<bool>>());
-                //This promise is for the "-1" function call in this transaction
+                // when this promise is set true, tid can start executing its first access
                 inBatchTransactionCompletionMap[bid][tid].Add(new TaskCompletionSource<bool>());
             }
 
-            //This function call waits for the last promise in the list
-            int count = inBatchTransactionCompletionMap[bid][tid].Count;
+            // if this is the first access of tid, wait for 0th promise, which is set true when:
+            //    (1) find that curExecTransaction() is tid
+            //    (2) when the completion of a function call triggers switching to txn tid
+            //    (3) when the function call is waiting for the batch and then receives the batch schedule
+            // if not, wait for the last promise in the list, then add a promise for itself
+            var count = inBatchTransactionCompletionMap[bid][tid].Count;
             var lastPromise = inBatchTransactionCompletionMap[bid][tid][count - 1];
-            //Console.WriteLine($"Transaction {bid}:{tid} is waiting for turn {count - 1}");
 
-            //Promise created for the current execution, which is waited by the next function call
-            var myPromise = new TaskCompletionSource<Boolean>();
+            // this promise is created for the current execution, which is waited by the next function call
+            var myPromise = new TaskCompletionSource<bool>();
             inBatchTransactionCompletionMap[bid][tid].Add(myPromise);
 
-            //Check if this call can be executed;
             if (batchScheduleMap.ContainsKey(bid))
             {
-                DeterministicBatchSchedule schedule = batchScheduleMap[bid];
-                //TODO: XXX: Assumption right now is that all non-deterministic transactions will execute as one big batch
-                if(scheduleInfo.getDependingPromise(schedule.batchID).Task.IsCompleted == false)
-                {
-                    //If it is not the trun for this batch, then await or its turn
-                    //Console.WriteLine($"Transaction {bid}:{tid}, waiting for batch {schedule.lastBatchID}.");
-                    await scheduleInfo.getDependingPromise(schedule.batchID).Task;
-                    //Console.WriteLine($"Transaction {bid}:{tid} passed point A");
-                }
-                //Check if this transaction cen be executed
-                int nextTid = batchScheduleMap[bid].curExecTransaction();
+                var schedule = batchScheduleMap[bid];
+                var dep = scheduleInfo.getDependingNode(schedule.bid, true);
+                if (dep.id > -1 && !dep.executionPromise.Task.IsCompleted) await dep.executionPromise.Task;    // check if this batch can be executed
+                
+                int nextTid = schedule.curExecTransaction();  // check if this txn can be executed
                 if (tid == nextTid)
                 {
-                    //Console.WriteLine($"\n\n{this.GetType()}: Set Promise for Tx: {tid} in batch {bid} within Execute(). \n\n");
-                    //Set the promise for the first function call of this Transaction if it is not
-                    if (inBatchTransactionCompletionMap[bid][tid][0].Task.IsCompleted == false) { 
+                    if (!inBatchTransactionCompletionMap[bid][tid][0].Task.IsCompleted)
                         inBatchTransactionCompletionMap[bid][tid][0].SetResult(true);
-                        //Console.WriteLine($"Transaction {bid}:{tid} set turn {0} as true.");
-                    }
                 }
             }
-
-            if (lastPromise.Task.IsCompleted == false)
-                await lastPromise.Task;
-            //Console.WriteLine($"Transaction {bid}:{tid} passed point B");
-            //count identifies the location of the promise for this turn
-            return count;
+            // else, the batch schedule hasn't arrived this grain
+            if (!lastPromise.Task.IsCompleted) await lastPromise.Task;
+            return count;  // the count th promise is waited by next access of this txn
         }
 
-        //For nonDeterninistic Transactions
         public async Task waitForTurn(int tid)
         {
-            await scheduleInfo.InsertNonDetTransaction(tid).executionPromise.Task;
+            await scheduleInfo.insertNonDetTransaction(tid).executionPromise.Task;
         }
 
-        //For deterministic transaction
-        public bool ackComplete(int bid, int tid, int turnIndex)
+        public bool ackComplete(int bid, int tid, int turnIndex)   // when complete a det txn
         {
-            DeterministicBatchSchedule schedule = batchScheduleMap[bid];
+            var schedule = batchScheduleMap[bid];
             schedule.AccessIncrement(tid);
-            bool switchingBatches = false;
+            var switchingBatches = false;
+            var nextTid = schedule.curExecTransaction();   // find the next transaction to be executed in this batch
 
-            //Find the next transaction to be executed in this batch;
-            int nextTid = schedule.curExecTransaction();
-            if(tid == nextTid)
+            // txn tid will need to access this grain again
+            if (tid == nextTid) inBatchTransactionCompletionMap[bid][tid][turnIndex].SetResult(true);  // tid's next access can be executed
+            else if (nextTid != -1)   // within the same batch but switching to next transaction
             {
-                //Within the same batch same transaction
-
-                inBatchTransactionCompletionMap[bid][tid][turnIndex].SetResult(true);
-                //Console.WriteLine($"Transaction {bid}:{tid} sets turn {turnIndex} as true.");
-            }
-            else if (nextTid != -1)
-            {
-                //Within the same batch but switching to another transaction
                 if (!inBatchTransactionCompletionMap[bid].ContainsKey(nextTid))
                 {
-                    //Console.WriteLine($"\n\n{this.GetType()}: Set promise result for Tx {nextTid} \n\n");
                     inBatchTransactionCompletionMap[bid].Add(nextTid, new List<TaskCompletionSource<bool>>());
-                    inBatchTransactionCompletionMap[bid][nextTid].Add(new TaskCompletionSource<bool>(false));
+                    inBatchTransactionCompletionMap[bid][nextTid].Add(new TaskCompletionSource<bool>());
                 }
-                //Console.WriteLine($"Transaction {bid}:{nextTid} sets turn {0} as true.");
-                inBatchTransactionCompletionMap[bid][nextTid][0].SetResult(true);
+                if (!inBatchTransactionCompletionMap[bid][nextTid][0].Task.IsCompleted)
+                    inBatchTransactionCompletionMap[bid][nextTid][0].SetResult(true);  // nextTid's first access can be executed
             }
-            else
+            else  // nextTid = -1, current batch is completed
             {
-                //Finished the batch, need to switch to another batch or non-deterministic transaction                
                 switchingBatches = true;
-                //Log the state now                                
-                //The schedule for this batch {$bid} has been completely executed. Check if any promise for next batch can be set.
-                this.scheduleInfo.completeDeterministicBatch(bid);
-                //TODO: XXX Remember to garbage collect promises
+                scheduleInfo.completeDeterministicBatch(bid);  // set this batch node's execution promise as true
             }
             return switchingBatches;
         }
 
-        //Called to notify the completion of non-deterministic transaction
-        public void ackComplete(int tid)
+        public void ackComplete(int tid)   // when commit/abort a non-det txn
         {
             scheduleInfo.completeTransaction(tid);
         }
 
-
+        // this function is only used to do grabage collection
+        // bid: current highest committed batch among all coordinators
         public void ackBatchCommit(int bid)
         {
             try
             {
-                //When called by the coordinator of a non-det transaction, batch $bid may not access this grain.
-                bool found = scheduleInfo.nodes.ContainsKey(bid);
-                if (!scheduleInfo.nodes.ContainsKey(bid))
+                if (bid == -1) return;
+                var head = scheduleInfo.nodes[-1];
+                var node = head.next;
+                if (node == null) return;
+                while (node != null)
                 {
-                    var node = scheduleInfo.tail;
-                    while (node.id != -1)
+                    if (node.isDet)
                     {
-                        if (node.isDet == false || node.id > bid)
+                        if (node.id <= bid)
                         {
-                            node = node.prev;
+                            scheduleInfo.nodes.Remove(node.id);
+                            batchScheduleMap.Remove(node.id);
+                            inBatchTransactionCompletionMap.Remove(node.id);
                         }
-                        else
+                        else break;   // meet a det node whose id > bid
+                    }
+                    else
+                    {
+                        if (node.next != null)
                         {
-                            if (node.commitmentPromise.Task.IsCompleted == false)
+                            Debug.Assert(node.next.isDet);  // next node must be a det node
+                            if (node.next.id <= bid)
                             {
-                                bid = node.id;
-                                found = true;
-                                break;
+                                scheduleInfo.nodes.Remove(node.id);
+                                scheduleInfo.nonDetBatchScheduleMap.Remove(node.id);
                             }
-                            else
-                            {
-                                return;
-                            }
+                            else break;
                         }
                     }
+                    if (node.next == null) break;
+                    node = node.next;
                 }
-                if (!found || bid == -1 || scheduleInfo.nodes[bid].commitmentPromise.Task.IsCompleted)
+
+                // case 1: node.isDet = true && node.id <= bid && node.next = null
+                if (node.isDet && node.id <= bid)    // node should be removed
                 {
-                    return;
+                    Debug.Assert(node.next == null);
+                    head.next = null;
                 }
-                scheduleInfo.nodes[bid].commitmentPromise.SetResult(true);
-                scheduleInfo.removePreviousNodes(bid);
-                var lastBid = batchScheduleMap[bid].lastBatchID;
-                while (lastBid != -1 && batchScheduleMap.ContainsKey(lastBid))
+                else  // node.isDet = false || node.id > bid
                 {
-                    DeterministicBatchSchedule schedule = batchScheduleMap[lastBid];
-                    inBatchTransactionCompletionMap.Remove(lastBid);
-                    batchScheduleMap.Remove(lastBid);
-                    lastBid = schedule.lastBatchID;
+                    // case 2: node.isDet = true && node.id > bid
+                    // case 3: node.isDet = false && node.next = null
+                    // case 4: node.isDet = false && node.next.id > bid
+                    Debug.Assert((node.isDet && node.id > bid) || (!node.isDet && (node.next == null || node.next.id > bid)));
+                    head.next = node;
+                    node.prev = head;
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
-                Console.WriteLine($"\n Exception(ackBatchCommit):: exception {e.Message}");
+                Console.WriteLine($"\n Exception(ackBatchCommit):: exception {e.Message}, {e.StackTrace}");
             }
-
         }
 
-        public HashSet<int> getBeforeSet(int tid, out int maxBeforeBid)
+        public Tuple<int, int, bool> getBeforeAfter(int tid)
         {
-            return scheduleInfo.getBeforeSet(tid, out maxBeforeBid);
-        }
-
-        public HashSet<int> getAfterSet(int tid, out int minAfterBid)
-        {
-            return scheduleInfo.getAfterSet(tid, out minAfterBid);
+            return scheduleInfo.getBeforeAfter(tid);
         }
     }
-
-
 }

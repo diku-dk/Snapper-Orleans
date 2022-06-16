@@ -1,21 +1,20 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.3.101.42" />
-    <PackageReference Include="Microsoft.Orleans.Core" Version="2.3.6" />
-    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator" Version="2.3.6" />
-    <PackageReference Include="Microsoft.Orleans.OrleansCodeGenerator.Build" Version="2.3.6">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.0.48" />
+    <PackageReference Include="Microsoft.Orleans.CodeGenerator" Version="3.4.3" />
+    <PackageReference Include="Microsoft.Orleans.Core" Version="3.4.3" />
+	  <PackageReference Include="Microsoft.Orleans.CodeGenerator.MSBuild" Version="3.4.3" />
+    <PackageReference Include="MsgPack.Cli" Version="1.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Concurrency.Interface\Concurrency.Interface.csproj" />
+    <ProjectReference Include="..\Persist.Interfaces\Persist.Interfaces.csproj" />
   </ItemGroup>
 
 </Project>
