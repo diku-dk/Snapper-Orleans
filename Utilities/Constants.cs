@@ -44,11 +44,11 @@ namespace Utilities
         public const string TPCC_namespace = "TPCC.Grain.";
         public const string SmallBank_namespace = "SmallBank.Grain.";
 
-        public const string dataPath = @"..\Snapper-Sigmod-2022\data\";
+        public const string dataPath = @"..\Snapper-Orleans\data\";
         public const string logPath = dataPath + @"log\";
         public const string resultPath = dataPath + "result.txt";
         public const string latencyPath = dataPath + "breakdown_latency.txt";
-        public const string credentialFile = @"..\Snapper-Sigmod-2022\AWS_credential.txt";
+        public const string credentialFile = @"..\Snapper-Orleans\AWS_credential.txt";
 
         public const bool LocalCluster = true;
         public const string LocalSilo = "dev";
