@@ -20,6 +20,8 @@ The source code of Snapper can be downloaded here: [Snapper source code](https:/
 
 `SnapperSiloHost` is used to configure and start the server process. `SnapperExperimentProcess` contains the client program that sends transaction requests to the server.
 
+**Contributors to the source code:** Li Su (lisu.sl@alibaba-inc.com), Vivek Shah (bonii.vivek@gmail.com), Yijian Liu (liu@di.ku.dk).
+
 ### Software Dependency
 - SDK: Snapper is developed with **C#** on **.NET** platform. To compile and run the source code, **.NET Core SDK 3.1.301** should be installed.
 - NuGet packages: The NuGet packages and corresponding versions are listed in each `*.csproj` file. **Orleans 3.4.3** is the one we used for running experiments.
