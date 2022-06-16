@@ -1,0 +1,1 @@
+Start-Process "dotnet" -ArgumentList "run --project SnapperExperimentController"

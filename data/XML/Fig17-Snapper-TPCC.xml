@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
-<root>
-	<pactPercent> 100, 90, 0 </pactPercent>
-	
-	<actPipeSize>     1       </actPipeSize>
-	<pactPipeSize>    128     </pactPipeSize>
-</root>

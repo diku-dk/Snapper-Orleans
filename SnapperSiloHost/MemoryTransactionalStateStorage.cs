@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 using Orleans.Transactions.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace OrleansSnapperSiloHost
+namespace SnapperSiloHost
 {
     public class MemoryTransactionalStateStorageFactory : ITransactionalStateStorageFactory, ILifecycleParticipant<ISiloLifecycle>
     {
@@ -54,14 +54,14 @@ namespace OrleansSnapperSiloHost
         {
         }
 
-        public async Task<TransactionalStorageLoadResponse<TState>> Load()
+        public Task<TransactionalStorageLoadResponse<TState>> Load()
         {
             try
             {
                 if (key == null) key = new KeyEntity("default");
                 if (states == null) states = new List<KeyValuePair<long, StateEntity>>();
 
-                if (string.IsNullOrEmpty(key.ETag)) return new TransactionalStorageLoadResponse<TState>();
+                if (string.IsNullOrEmpty(key.ETag)) return Task.FromResult(new TransactionalStorageLoadResponse<TState>());
                 else
                 {
                     TState committedState;
@@ -103,7 +103,7 @@ namespace OrleansSnapperSiloHost
                     for (int i = 0; i < states.Count; i++) states[i].Value.StateJson = null;
 
                     var metadata = JsonConvert.DeserializeObject<TransactionalStateMetaData>(key.Metadata);
-                    return new TransactionalStorageLoadResponse<TState>(key.ETag, committedState, key.CommittedSequenceId, metadata, PrepareRecordsToRecover);
+                    return Task.FromResult(new TransactionalStorageLoadResponse<TState>(key.ETag, committedState, key.CommittedSequenceId, metadata, PrepareRecordsToRecover));
                 }
             }
             catch (Exception)
@@ -115,6 +115,8 @@ namespace OrleansSnapperSiloHost
 
         public async Task<string> Store(string expectedETag, TransactionalStateMetaData metadata, List<PendingTransactionState<TState>> statesToPrepare, long? commitUpTo, long? abortAfter)
         {
+            /*
+            //Console.WriteLine($"MemoryStorage: Store()");
             if (key.ETag != expectedETag) throw new ArgumentException(nameof(expectedETag), "Etag does not match");
 
             // first, clean up aborted records
@@ -158,7 +160,8 @@ namespace OrleansSnapperSiloHost
                 states.RemoveRange(0, pos);
             }
 
-            return key.ETag;
+            return key.ETag;*/
+            return "";
         }
 
         // find the StateEntity who's Key == sequenceId

@@ -1,32 +1,38 @@
-﻿using System;
+﻿using MessagePack;
 
 namespace Concurrency.Implementation.Logging
 {
     public enum LogType { PREPARE, COMMIT, ABORT, DET_PREPARE, DET_COMPLETE, DET_COMMIT };
-    
-    [Serializable]
-    public class LogFormat<TState>
+
+    [MessagePackObject]
+    public class LogFormat
     {
-        public int sequenceNumber;
-        public LogType logRecordType;
-        public int coordinatorKey;
-        public int txn_id;
-        public TState state;
-        public LogFormat(int sequenceNumber, LogType logRecordType, int coordinatorKey, int txn_id, TState state)
+        [Key(0)]
+        public long sequenceNumber;
+        [Key(1)]
+        public readonly LogType logRecordType;
+        [Key(2)]
+        public readonly int coordinatorKey;
+        [Key(3)]
+        public readonly long tid;
+        [Key(4)]
+        public readonly byte[] state;     // this one may not be able to serialized by MsgPack!!!!!!!!!!!!!!
+
+        public LogFormat(long sequenceNumber, LogType logRecordType, int coordinatorKey, long tid, byte[] state)
         {
             this.sequenceNumber = sequenceNumber;
             this.logRecordType = logRecordType;
             this.coordinatorKey = coordinatorKey;
-            this.txn_id = txn_id;
+            this.tid = tid;
             this.state = state;
         }
 
-        public LogFormat(int sequenceNumber, LogType logRecordType, int coordinatorKey, int txn_id)
+        public LogFormat(long sequenceNumber, LogType logRecordType, int coordinatorKey, long tid)
         {
             this.sequenceNumber = sequenceNumber;
             this.logRecordType = logRecordType;
             this.coordinatorKey = coordinatorKey;
-            this.txn_id = txn_id;
+            this.tid = tid;
         }
     }
 }

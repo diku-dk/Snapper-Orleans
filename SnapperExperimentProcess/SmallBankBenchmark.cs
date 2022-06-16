@@ -5,42 +5,37 @@ using SmallBank.Interfaces;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using MathNet.Numerics.Distributions;
-using System.Diagnostics;
-using Orleans.Transactions;
+using System.Linq;
 
 namespace SnapperExperimentProcess
 {
     public class SmallBankBenchmark : IBenchmark
     {
         bool isDet;
-        bool noDeadlock;
-        string grain_namespace;
-        ImplementationType implementationType;
+        string grainNameSpace;
         IDiscreteDistribution transferAmountDistribution;
 
-        public void GenerateBenchmark(ImplementationType implementationType, bool isDet, bool noDeadlock = false)
+        public void GenerateBenchmark(WorkloadConfiguration _, bool isDet)
         {
             this.isDet = isDet;
-            this.noDeadlock = noDeadlock;
-            this.implementationType = implementationType;
-            if (implementationType == ImplementationType.SNAPPER) grain_namespace = "SmallBank.Grains.CustomerAccountGroupGrain";
-            else grain_namespace = "";
+            if (Constants.implementationType == ImplementationType.SNAPPER) grainNameSpace = "SmallBank.Grains.SnapperTransactionalAccountGrain";
+            else grainNameSpace = "";
             transferAmountDistribution = new DiscreteUniform(0, 10, new Random());
         }
 
-        Task<TransactionResult> Execute(IClusterClient client, int grainId, string startFunc, object funcInput, Dictionary<int, Tuple<string, int>> grainAccessInfo)
+        private Task<TransactionResult> Execute(IClusterClient client, int grainId, string startFunc, object funcInput, List<int> grainIDList, List<string> grainNameList)
         {
-            switch (implementationType)
+            switch (Constants.implementationType)
             {
                 case ImplementationType.SNAPPER:
-                    var grain = client.GetGrain<ICustomerAccountGroupGrain>(grainId);
-                    if (isDet) return grain.StartTransaction(startFunc, funcInput, grainAccessInfo);
+                    var grain = client.GetGrain<ISnapperTransactionalAccountGrain>(grainId);
+                    if (isDet) return grain.StartTransaction(startFunc, funcInput, grainIDList, grainNameList);
                     else return grain.StartTransaction(startFunc, funcInput);
-                case ImplementationType.NONTXN:
-                    var eventuallyConsistentGrain = client.GetGrain<IOrleansEventuallyConsistentAccountGroupGrain>(grainId);
+                case ImplementationType.ORLEANSEVENTUAL:
+                    var eventuallyConsistentGrain = client.GetGrain<INonTransactionalAccountGrain>(grainId);
                     return eventuallyConsistentGrain.StartTransaction(startFunc, funcInput);
                 case ImplementationType.ORLEANSTXN:
-                    var txnGrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(grainId);
+                    var txnGrain = client.GetGrain<IOrleansTransactionalAccountGrain>(grainId);
                     return txnGrain.StartTransaction(startFunc, funcInput);
                 default:
                     return null;
@@ -50,75 +45,18 @@ namespace SnapperExperimentProcess
         public Task<TransactionResult> NewTransaction(IClusterClient client, RequestData data)
         {
             var accountGrains = data.grains;
-            var grainAccessInfo = new Dictionary<int, Tuple<string, int>>();
+            //accountGrains.Sort();
 
-            int groupId = 0;
-            Tuple<string, int> item1 = null;
-            float item2 = transferAmountDistribution.Sample();
-            var item3 = new List<Tuple<string, int>>();
-            bool first = true;
-            foreach (var item in accountGrains)
-            {
-                if (first)
-                {
-                    first = false;
-                    groupId = item;
-                    grainAccessInfo.Add(item, new Tuple<string, int>(grain_namespace, 1));
-                    item1 = new Tuple<string, int>(item.ToString(), item);
-                    continue;
-                }
-                item3.Add(new Tuple<string, int>(item.ToString(), item));
-                grainAccessInfo.Add(item, new Tuple<string, int>(grain_namespace, 1));
-            }
-            var args = new Tuple<Tuple<string, int>, float, List<Tuple<string, int>>>(item1, item2, item3);
-            var startFunc = "MultiTransfer";
-            if (noDeadlock) startFunc = "MultiTransferNoDeadlock";
-            var task = Execute(client, groupId, startFunc, args, grainAccessInfo);
+            var grainIDList = new List<int>(accountGrains);
+            var grainNameList = Enumerable.Repeat(grainNameSpace, grainIDList.Count).ToList();
+
+            var firstGrainID = accountGrains.First();
+            accountGrains.RemoveAt(0);
+
+            var money = transferAmountDistribution.Sample();
+            var args = new Tuple<int, List<int>>(money, accountGrains);
+            var task = Execute(client, firstGrainID, "MultiTransfer", args, grainIDList, grainNameList);
             return task;
-        }
-
-        public Task<TransactionResult> NewTransactionWithNOOP(IClusterClient client, RequestData data, int numWriter)
-        {
-            var accountGrains = data.grains;
-            var grainAccessInfo = new Dictionary<int, Tuple<string, int>>();
-
-            int groupId = 0;
-            Tuple<string, int> item1 = null;
-            float item2 = transferAmountDistribution.Sample();
-            var item3 = new List<Tuple<string, int>>();
-            bool first = true;
-            foreach (var item in accountGrains)
-            {
-                if (first)
-                {
-                    first = false;
-                    groupId = item;
-                    grainAccessInfo.Add(item, new Tuple<string, int>(grain_namespace, 1));
-                    item1 = new Tuple<string, int>(item.ToString(), item);
-                    continue;
-                }
-                item3.Add(new Tuple<string, int>(item.ToString(), item));
-                grainAccessInfo.Add(item, new Tuple<string, int>(grain_namespace, 1));
-            }
-            var args = new Tuple<Tuple<string, int>, float, List<Tuple<string, int>>, int>(item1, item2, item3, numWriter);
-            var task = ExecuteWithNOOP(client, groupId, "MultiTransferWithNOOP", args, grainAccessInfo);
-            return task;
-        }
-
-        Task<TransactionResult> ExecuteWithNOOP(IClusterClient client, int grainId, string startFunc, object funcInput, Dictionary<int, Tuple<string, int>> grainAccessInfo)
-        {
-            switch (implementationType)
-            {
-                case ImplementationType.SNAPPER:
-                    Debug.Assert(isDet == false);
-                    var grain = client.GetGrain<ICustomerAccountGroupGrain>(grainId);
-                    return grain.StartTransactionAndGetTime(startFunc, funcInput);
-                case ImplementationType.ORLEANSTXN:
-                    var txnGrain = client.GetGrain<IOrleansTransactionalAccountGroupGrain>(grainId);
-                    return txnGrain.StartTransaction(startFunc, funcInput);
-                default:
-                    throw new Exception($"Exception: unsupported implementation type {implementationType} for ExecuteWithNOOP.");
-            }
         }
     }
 }

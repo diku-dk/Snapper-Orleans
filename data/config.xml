@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<root>
+	<txnSize> 4 </txnSize>
+
+	<grainSkewness> 100 </grainSkewness>
+	<actPipeSize>   1,  2,  1,   1   </actPipeSize>
+	<pactPipeSize>  64,  64, 64,  64  </pactPipeSize>
+	
+	<pactPercent> 0 </pactPercent>
+	
+	<distPercent> 0 </distPercent>
+</root>

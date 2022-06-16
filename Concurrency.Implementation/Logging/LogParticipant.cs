@@ -1,17 +1,21 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using MessagePack;
 
 namespace Concurrency.Implementation.Logging
 {
-    [Serializable]
+    [MessagePackObject]
     public class LogParticipant
     {
-        public int tid;
+        [Key(0)]
+        public long tid;
+        [Key(1)]
         public int coordID;
-        public int sequenceNumber;
+        [Key(2)]
+        public long sequenceNumber;
+        [Key(3)]
         public HashSet<int> grains;
 
-        public LogParticipant(int sequenceNumber, int coordID, int tid, HashSet<int> grains)
+        public LogParticipant(long tid, int coordID, long sequenceNumber, HashSet<int> grains)
         {
             this.sequenceNumber = sequenceNumber;
             this.coordID = coordID;

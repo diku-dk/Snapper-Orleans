@@ -1,11 +1,18 @@
 ﻿using Newtonsoft.Json;
 using Orleans.Transactions.Abstractions;
+using MessagePack;
 
-namespace OrleansSnapperSiloHost
+namespace SnapperSiloHost
 {
+    [MessagePackObject]
     public class KeyEntity
     {
+        [Key(0)]
         public string ETag;
+        [Key(1)]
+        public long CommittedSequenceId { get; set; }
+        [Key(2)]
+        public string Metadata { get; set; }
 
         public KeyEntity(string partitionKey)
         {
@@ -13,8 +20,5 @@ namespace OrleansSnapperSiloHost
             CommittedSequenceId = 0;
             Metadata = JsonConvert.SerializeObject(new TransactionalStateMetaData());
         }
-
-        public long CommittedSequenceId { get; set; }
-        public string Metadata { get; set; }
     }
 }

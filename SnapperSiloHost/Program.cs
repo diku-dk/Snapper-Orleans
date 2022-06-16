@@ -1,176 +1,181 @@
 ﻿using System;
-using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using Orleans;
-using Orleans.Configuration;
-using Orleans.Hosting;
-using Persist.Grains;
-using Persist.Interfaces;
 using Utilities;
-using System.Diagnostics;
 using System.Net;
-using NetMQ.Sockets;
-using NetMQ;
-using Microsoft.Extensions.Logging;
+using Orleans.Hosting;
+using Orleans.Runtime;
+using System.Net.Sockets;
+using Orleans.Configuration;
+using System.Threading.Tasks;
+using Orleans.Runtime.Placement;
+using Microsoft.Extensions.DependencyInjection;
+using Concurrency.Implementation.GrainPlacement;
+using Concurrency.Interface.Logging;
+using Concurrency.Implementation.Logging;
+using Concurrency.Interface.Coordinator;
+using Concurrency.Implementation.Coordinator;
 using System.IO;
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 
-namespace OrleansSnapperSiloHost
+namespace SnapperSiloHost
 {
     public class Program
     {
-        static int siloPort = 11111;      // silo-to-silo endpoint
-        static int gatewayPort = 30000;   // client-to-silo endpoint
-        static int numCPUPerSilo;
-        static ImplementationType implementationType;
-        static bool enableOrleansTxn;
-        static bool loggingEnabled;
+        static int siloID = 0;
+        static bool isGlobalSilo = false;
+        static private int siloPort = 11111;    // silo-to-silo endpoint
+        static private int gatewayPort = 30000; // client-to-silo endpoint
+        static readonly bool enableOrleansTxn = Constants.implementationType == ImplementationType.ORLEANSTXN ? true : false;
 
-        static int Main(string[] args)
+        public static int Main(string[] args)
         {
-            numCPUPerSilo = int.Parse(args[0]);
-            implementationType = Enum.Parse<ImplementationType>(args[1]);
-            loggingEnabled = bool.Parse(args[2]);
-            enableOrleansTxn = implementationType == ImplementationType.ORLEANSTXN;
+            if (Constants.multiSilo)
+            {
+                if (Constants.RealScaleOut == false)
+                {
+                    siloID = int.Parse(args[0]);
+                    siloPort += siloID;
+                    gatewayPort += siloID;
+                    isGlobalSilo = siloID == Constants.numSilo;
+                }
+                else isGlobalSilo = bool.Parse(args[0]);
+            }
             return RunMainAsync().Result;
         }
 
         static async Task<int> RunMainAsync()
         {
-            try
+            var builder = new SiloHostBuilder();
+
+            if (Constants.LocalCluster == false)
             {
-                var builder = new SiloHostBuilder();
-                if (Constants.LocalCluster == false)
+                string ServiceRegion;
+                string AccessKey;
+                string SecretKey;
+
+                using (var file = new StreamReader(Constants.credentialFile))
                 {
-                    string ServiceRegion;
-                    string AccessKey;
-                    string SecretKey;
-
-                    using (var file = new StreamReader(Constants.credentialFile))
-                    {
-                        ServiceRegion = file.ReadLine();
-                        AccessKey = file.ReadLine();
-                        SecretKey = file.ReadLine();
-                    }
-
-                    Action<DynamoDBClusteringOptions> dynamoDBOptions = options =>
-                    {
-                        options.AccessKey = AccessKey;
-                        options.SecretKey = SecretKey;
-                        options.TableName = Constants.SiloMembershipTable;
-                        options.Service = ServiceRegion;
-                        options.WriteCapacityUnits = 10;
-                        options.ReadCapacityUnits = 10;
-                    };
-
-                    builder.UseDynamoDBClustering(dynamoDBOptions);
+                    ServiceRegion = file.ReadLine();
+                    AccessKey = file.ReadLine();
+                    SecretKey = file.ReadLine();
                 }
-                else builder.UseLocalhostClustering();
+
+                Action<DynamoDBClusteringOptions> dynamoDBOptions = options =>
+                {
+                    options.AccessKey = AccessKey;
+                    options.SecretKey = SecretKey;
+                    options.TableName = Constants.SiloMembershipTable;
+                    options.Service = ServiceRegion;
+                    options.WriteCapacityUnits = 10;
+                    options.ReadCapacityUnits = 10;
+                };
 
                 builder
-                    .Configure<ClusterOptions>(options =>
-                    {
-                        options.ClusterId = Constants.ClusterSilo;
-                        options.ServiceId = Constants.ServiceID;
-                    })
-                    .Configure<EndpointOptions>(options =>
-                    {
-                        options.SiloPort = siloPort;
-                        options.GatewayPort = gatewayPort;
-                        if (Constants.LocalCluster == false)
-                            options.AdvertisedIPAddress = IPAddress.Parse(Helper.GetLocalIPAddress());
-                    })
-                    .ConfigureServices(ConfigureServices);
-                    //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
-
-                if (enableOrleansTxn)
+                    .UseDynamoDBClustering(dynamoDBOptions)
+                    .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Parse(GetLocalIPAddress()));
+            }
+            else
+            {
+                if (Constants.multiSilo)
                 {
-                    builder.UseTransactions();
-
-                    if (loggingEnabled)
-                    {
-                        builder.AddFileTransactionalStateStorageAsDefault(opts =>
-                        {
-                            opts.InitStage = ServiceLifecycleStage.ApplicationServices;
-                            opts.numCPUPerSilo = numCPUPerSilo;
-                        });
-
-                        builder
-                            .Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(200))
-                            .Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromMilliseconds(200));
-                            //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20));
-                    }
-                    else
-                    {
-                        builder.AddMemoryTransactionalStateStorageAsDefault(opts => 
-                        { 
-                            opts.InitStage = ServiceLifecycleStage.ApplicationServices;
-                            opts.numCPUPerSilo = numCPUPerSilo;
-                        });
-                    }
+                    var primarySiloEndpoint = new IPEndPoint(IPAddress.Loopback, 11111);
+                    builder.UseDevelopmentClustering(primarySiloEndpoint)
+                        // The IP address used for clustering / to be advertised in membership tables
+                        .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback);
                 }
-                else builder.AddMemoryGrainStorageAsDefault();
+                else builder.UseLocalhostClustering();
+            }
 
-                var host = builder.Build();
-                await host.StartAsync();
-                Console.WriteLine("Silo is started...");
-
-                // ===================================================================================================
-                Console.WriteLine("Set processor affinity for SnapperSiloHost...");
-                var processes = Process.GetProcessesByName("SnapperSiloHost");
-                Debug.Assert(processes.Length == 1);   // there is only one process called "SnapperExperimentProcess"
-
-                var str = Helper.GetSiloProcessorAffinity(numCPUPerSilo);
-                var serverProcessorAffinity = Convert.ToInt64(str, 2);     // server uses the lowest n bits
-                processes[0].ProcessorAffinity = (IntPtr)serverProcessorAffinity;
-
-                // ===================================================================================================
-                var serializer = new MsgPackSerializer();
-                string inputSocketAddress;
-                string outputSocketAddress;
-                if (Constants.LocalCluster)
+            builder
+                .Configure<ClusterOptions>(options =>
                 {
-                    inputSocketAddress = Constants.Silo_LocalCluster_InputSocket;
-                    outputSocketAddress = Constants.Silo_LocalCluster_OutputSocket;
+                    options.ClusterId = Constants.ClusterSilo;
+                    options.ServiceId = Constants.ServiceID;
+                })
+                .Configure<EndpointOptions>(options =>
+                {
+                    options.SiloPort = siloPort;
+                    options.GatewayPort = gatewayPort;
+                })
+                .ConfigureServices(ConfigureServices);
+                //.ConfigureLogging(logging => logging.AddConsole().AddFilter("Orleans", LogLevel.Information));
+
+            if (enableOrleansTxn)
+            {
+                builder.UseTransactions();
+
+                if (Constants.loggingType == LoggingType.NOLOGGING)
+                    builder.AddMemoryTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; });
+                else
+                {
+                    builder.AddFileTransactionalStateStorageAsDefault(opts => { opts.InitStage = ServiceLifecycleStage.ApplicationServices; opts.siloID = siloID; });
+
+                    builder
+                        .Configure<TransactionalStateOptions>(o => o.LockTimeout = TimeSpan.FromMilliseconds(200))
+                        .Configure<TransactionalStateOptions>(o => o.LockAcquireTimeout = TimeSpan.FromMilliseconds(200));
+                        //.Configure<TransactionalStateOptions>(o => o.PrepareTimeout = TimeSpan.FromSeconds(20));
+                }
+            }
+            else builder.AddMemoryGrainStorageAsDefault();
+
+            var siloHost = builder.Build();
+            await siloHost.StartAsync();
+            Console.WriteLine("Silo is started...");
+
+            if (Constants.LocalCluster == false && Constants.LocalTest == false)
+            {
+                if (isGlobalSilo == false)
+                {
+                    if (Constants.RealScaleOut == false) Debug.Assert(Environment.ProcessorCount >= Constants.numSilo * Constants.numCPUPerSilo);
+                    else Debug.Assert(Environment.ProcessorCount >= Constants.numCPUPerSilo);
+                    Helper.SetCPU(siloID, "SnapperSiloHost", Constants.numCPUPerSilo);
                 }
                 else
                 {
-                    inputSocketAddress = "@tcp://" + Helper.GetLocalIPAddress() + ":" + Constants.siloInPort;
-                    outputSocketAddress = "@tcp://*:" + Constants.siloOutPort;
+                    // this is the global coordinator silo
+                    if (Constants.RealScaleOut == false) Debug.Assert(siloID == Constants.numSilo && Environment.ProcessorCount >= Constants.numCPUForGlobal);
+                    else Debug.Assert(Environment.ProcessorCount >= Constants.numCPUForGlobal);
+                    Helper.SetCPU(0, "SnapperSiloHost", Constants.numCPUForGlobal);
                 }
-
-                var inputSocket = new PullSocket(inputSocketAddress);
-                var outputSocket = new PublisherSocket(outputSocketAddress);
-
-                Console.WriteLine("Wait for ExperimentProcess to connect... ");
-                var msg = serializer.deserialize<NetworkMessage>(inputSocket.ReceiveFrameBytes());
-                Trace.Assert(msg == NetworkMessage.CONNECTED);
-
-                outputSocket.SendFrame(serializer.serialize(NetworkMessage.CONFIRMED));
-                Console.WriteLine("Send the confirmation message back to ExperimentProcess. ");
-
-                Console.WriteLine("Wait for ExperimentProcess to finish the experiment... ");
-                msg = serializer.deserialize<NetworkMessage>(inputSocket.ReceiveFrameBytes());
-                Trace.Assert(msg == NetworkMessage.SIGNAL);
-                Console.WriteLine("Receive messgae from ExperimentProcess. Shutting down silo...");
-                await host.StopAsync();
-
-                outputSocket.SendFrame(serializer.serialize(NetworkMessage.CONFIRMED));
-                Console.WriteLine("Send the confirmation message back to ExperimentProcess. ");
-
-                return 0;
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-                return 1;
-            }
+            
+            Console.WriteLine("Press Enter to terminate...");
+            Console.ReadLine();
+            await siloHost.StopAsync();
+            return 0;
         }
 
         static void ConfigureServices(IServiceCollection services)
         {
+            // all the singletons have one instance per silo host??
+
             // dependency injection
-            services.AddSingleton<IPersistSingletonGroup, PersistSingletonGroup>();
-            services.AddSingleton<ITPCCManager, TPCCManager>();
+            services.AddSingleton<ILoggerGroup, LoggerGroup>();
+            services.AddSingleton<ICoordMap, CoordMap>();
+
+            services.AddSingletonNamedService<PlacementStrategy, GlobalConfigGrainPlacementStrategy>(nameof(GlobalConfigGrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, GlobalConfigGrainPlacement>(typeof(GlobalConfigGrainPlacementStrategy));
+
+            services.AddSingletonNamedService<PlacementStrategy, LocalConfigGrainPlacementStrategy>(nameof(LocalConfigGrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, LocalConfigGrainPlacement>(typeof(LocalConfigGrainPlacementStrategy));
+
+            services.AddSingletonNamedService<PlacementStrategy, GlobalCoordGrainPlacementStrategy>(nameof(GlobalCoordGrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, GlobalCoordGrainPlacement>(typeof(GlobalCoordGrainPlacementStrategy));
+
+            services.AddSingletonNamedService<PlacementStrategy, LocalCoordGrainPlacementStrategy>(nameof(LocalCoordGrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, LocalCoordGrainPlacement>(typeof(LocalCoordGrainPlacementStrategy));
+
+            services.AddSingletonNamedService<PlacementStrategy, TransactionExecutionGrainPlacementStrategy>(nameof(TransactionExecutionGrainPlacementStrategy));
+            services.AddSingletonKeyedService<Type, IPlacementDirector, TransactionExecutionGrainPlacement>(typeof(TransactionExecutionGrainPlacementStrategy));
+
+        }
+
+        static string GetLocalIPAddress()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (var ip in host.AddressList) if (ip.AddressFamily == AddressFamily.InterNetwork) return ip.ToString();
+            throw new Exception("No network adapters with an IPv4 address in the system!");
         }
     }
 }

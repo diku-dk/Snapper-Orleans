@@ -39,7 +39,7 @@
         {
 
             if (!Contains(node)) return false;
-            size --;
+            size--;
             if (head == node) head = node.next;
             if (tail == node) tail = node.prev;
             if (node.prev != null) node.prev.next = node.next;

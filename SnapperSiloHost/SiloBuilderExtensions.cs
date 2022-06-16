@@ -8,7 +8,7 @@ using Orleans.Transactions.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace OrleansSnapperSiloHost
+namespace SnapperSiloHost
 {
     public static class SiloBuilderExtensions
     {
@@ -60,6 +60,6 @@ namespace OrleansSnapperSiloHost
     public class MyTransactionalStateOptions
     {
         public int InitStage { get; set; }
-        public int numCPUPerSilo { get; set; }
-    }
+        public int siloID { get; set; }
+    } 
 }

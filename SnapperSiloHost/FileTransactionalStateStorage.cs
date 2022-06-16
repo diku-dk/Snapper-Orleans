@@ -4,36 +4,36 @@ using Utilities;
 using Newtonsoft.Json;
 using Orleans.Runtime;
 using System.Threading;
-using Persist.Interfaces;
 using Orleans.Transactions;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Microsoft.Extensions.Options;
 using Orleans.Transactions.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
+using Concurrency.Interface.Logging;
+using MessagePack;
 
-namespace OrleansSnapperSiloHost
+namespace SnapperSiloHost
 {
     public class FileTransactionalStateStorageFactory : ITransactionalStateStorageFactory, ILifecycleParticipant<ISiloLifecycle>
     {
-        readonly int numCPUPerSilo;
-        readonly string name;
-        readonly IPersistSingletonGroup persistSingletonGroup;
-        readonly MyTransactionalStateOptions options;
+        private readonly string name;
+        private readonly ILoggerGroup loggerGroup;
+        private readonly MyTransactionalStateOptions options;
 
         public static ITransactionalStateStorageFactory Create(IServiceProvider services, string name)
         {
+            Console.WriteLine($"Create FileStorageFactory");
             var optionsMonitor = services.GetRequiredService<IOptionsMonitor<MyTransactionalStateOptions>>();
             return ActivatorUtilities.CreateInstance<FileTransactionalStateStorageFactory>(services, name, optionsMonitor.Get(name));
         }
 
-        public FileTransactionalStateStorageFactory(IPersistSingletonGroup persistSingletonGroup, string name, MyTransactionalStateOptions options)
+        public FileTransactionalStateStorageFactory(ILoggerGroup loggerGroup, string name, MyTransactionalStateOptions options)
         {
             this.name = name;
             this.options = options;
-            this.persistSingletonGroup = persistSingletonGroup;
-            persistSingletonGroup.Init(options.numCPUPerSilo);
-            numCPUPerSilo = options.numCPUPerSilo;
+            this.loggerGroup = loggerGroup;
+            loggerGroup.Init(Constants.numLoggerPerSilo, $"Silo{options.siloID}_OrleansTransactionLog");
         }
 
         public ITransactionalStateStorage<TState> Create<TState>(string stateName, IGrainActivationContext context) where TState : class, new()
@@ -42,9 +42,9 @@ namespace OrleansSnapperSiloHost
             var strs = str.Split('/', StringSplitOptions.RemoveEmptyEntries);
             var partitionKey = strs[strs.Length - 1];    // use grainID (long) as partitionKey
             var grainID = int.Parse(partitionKey);
-            var numPersistItemPerSilo = Helper.GetNumPersistItemPerSilo(numCPUPerSilo);
-            var persistWorker = persistSingletonGroup.GetSingleton(Helper.MapGrainIDToPersistItemID(numPersistItemPerSilo, grainID));
-            return ActivatorUtilities.CreateInstance<FileTransactionalStateStorage<TState>>(context.ActivationServices, persistWorker, partitionKey);
+            var loggerID = Helper.MapGrainIDToServiceID(grainID, loggerGroup.GetNumLogger());
+            var logger = loggerGroup.GetLogger(loggerID);
+            return ActivatorUtilities.CreateInstance<FileTransactionalStateStorage<TState>>(context.ActivationServices, logger, partitionKey);
         }
 
         public void Participate(ISiloLifecycle lifecycle)
@@ -64,14 +64,12 @@ namespace OrleansSnapperSiloHost
         private readonly string partitionKey;
         private List<KeyValuePair<long, StateEntity>> states;
 
-        private ISerializer serializer;
-        private readonly IPersistWorker persistWorker;
+        private readonly ILogger logger;
 
-        public FileTransactionalStateStorage(IPersistWorker persistWorker, string partitionKey)
+        public FileTransactionalStateStorage(ILogger logger, string partitionKey)
         {
             this.partitionKey = partitionKey;
-            this.persistWorker = persistWorker;
-            serializer = new MsgPackSerializer();
+            this.logger = logger;
         }
 
         public async Task<TransactionalStorageLoadResponse<TState>> Load()
@@ -181,8 +179,8 @@ namespace OrleansSnapperSiloHost
             }
 
             // persist KeyEntity and StateEntity
-            await persistWorker.Write(serializer.serialize(key));
-            await persistWorker.Write(serializer.serialize(states));
+            await logger.Write(MessagePackSerializer.Serialize(key));
+            await logger.Write(MessagePackSerializer.Serialize(states));
             return key.ETag;
         }
 

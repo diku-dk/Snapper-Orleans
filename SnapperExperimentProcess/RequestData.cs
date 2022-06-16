@@ -8,16 +8,17 @@ namespace SnapperExperimentProcess
     public class RequestData
     {
         // for SmallBank
-        public List<int> grains; 
-
+        public bool isDistTxn;
+        public List<int> grains;
 
         // for TPCC
         public int firstGrainID;
         public NewOrderInput tpcc_input;
-        public Dictionary<int, string> grains_in_namespace; 
+        public Dictionary<int, string> grains_in_namespace;
 
-        public RequestData(List<int> grains)
+        public RequestData(bool isDistTxn, List<int> grains)
         {
+            this.isDistTxn = isDistTxn;
             this.grains = grains;
         }
 

@@ -7,75 +7,41 @@ namespace Utilities
 {
     public static class Helper
     {
-        static string UseHighestProcessors(int numCPUPerSilo)
+        // 1 ItemGrain + 1 WarehouseGrain + 10 DistrictGrain + 10 CustomerGrain + xx StockGrain + yy OrderGrain
+
+        public static int GetItemGrain(int W_ID)
         {
-            var str = "";
-            var numCPU = Environment.ProcessorCount;
-            for (int i = 0; i < numCPU; i++)
-            {
-                if (i < numCPUPerSilo) str += "1";    // use the highest n bits
-                else str += "0";
-            }
-            return str;
+            return W_ID * Constants.NUM_GRAIN_PER_W;
         }
 
-        static string UseLowestProcessors(int numCPUPerSilo)
+        public static int GetWarehouseGrain(int W_ID)
         {
-            var str = "";
-            var numCPU = Environment.ProcessorCount;
-            for (int i = 0; i < numCPU; i++)
-            {
-                if (i >= numCPU - numCPUPerSilo) str += "1";    // use the lowest n bits
-                else str += "0";
-            }
-            return str;
+            return W_ID * Constants.NUM_GRAIN_PER_W + 1;
         }
 
-        public static string GetWorkerProcessorAffinity(int numCPUPerSilo)
+        public static int GetDistrictGrain(int W_ID, int D_ID)
         {
-            if (Constants.LocalCluster)
-            {
-                Debug.Assert(Environment.ProcessorCount >= 2 * numCPUPerSilo);
-                return UseLowestProcessors(numCPUPerSilo);
-            }
-            else
-            {
-                Debug.Assert(Environment.ProcessorCount >= numCPUPerSilo);
-                return UseHighestProcessors(numCPUPerSilo);
-            } 
+            return W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + D_ID;
         }
 
-        public static string GetSiloProcessorAffinity(int numCPUPerSilo)
+        public static int GetCustomerGrain(int W_ID, int D_ID)
         {
-            if (Constants.LocalCluster) Debug.Assert(Environment.ProcessorCount >= 2 * numCPUPerSilo);
-            else Debug.Assert(Environment.ProcessorCount >= numCPUPerSilo);
-
-            return UseHighestProcessors(numCPUPerSilo);
+            return W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + 10 + D_ID;
         }
 
-        public static int GetNumCoordPerSilo(int numCPUPerSilo)
+        public static int GetStockGrain(int W_ID, int I_ID)
         {
-            return numCPUPerSilo / Constants.numCPUBasic * 8;
+            return W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + 2 * Constants.NUM_D_PER_W + I_ID / (Constants.NUM_I / Constants.NUM_StockGrain_PER_W);
         }
 
-        public static int GetNumPersistItemPerSilo(int numCPUPerSilo)
+        public static int GetOrderGrain(int W_ID, int D_ID, int C_ID)
         {
-            return numCPUPerSilo / Constants.numCPUBasic * 8;
+            return W_ID * Constants.NUM_GRAIN_PER_W + 1 + 1 + 2 * Constants.NUM_D_PER_W + Constants.NUM_StockGrain_PER_W + D_ID * Constants.NUM_OrderGrain_PER_D + C_ID / (Constants.NUM_C_PER_D / Constants.NUM_OrderGrain_PER_D);
         }
 
-        public static int GetNumGrainPerSilo(int numCPUPerSilo)
+        public static int MapGrainIDToServiceID(int grainID, int numService)
         {
-            return 10000 * numCPUPerSilo / Constants.numCPUBasic;
-        }
-
-        public static int GetNumWarehousePerSilo(int numCPUPerSilo)
-        {
-            return 2 * numCPUPerSilo / Constants.numCPUBasic;
-        }
-
-        public static int MapGrainIDToPersistItemID(int numPersistItem, int grainID)
-        {
-            return grainID % numPersistItem;
+            return grainID % numService;
         }
 
         public static int NURand(int A, int x, int y, int C)
@@ -86,18 +52,52 @@ namespace Utilities
             return (((part1 | part2) + C) % (y - x + 1)) + x;
         }
 
+        public static void SetCPU(int processID, string processName, int numCPU)
+        {
+            Console.WriteLine($"Set processor affinity for {processName}...");
+            var processes = Process.GetProcessesByName(processName);
+
+            var str = GetSiloProcessorAffinity(processID, numCPU);
+            var serverProcessorAffinity = Convert.ToInt64(str, 2);     // server uses the highest n bits
+
+            processes[processID].ProcessorAffinity = (IntPtr)serverProcessorAffinity;
+            Console.WriteLine($"Process affinity is set up for {processName}[{processID}]");
+        }
+
+        static string GetSiloProcessorAffinity(int processID, int numCPU)
+        {
+            var str = "";
+            var firstCPUIndex = processID * Constants.numCPUPerSilo;
+            for (int i = 0; i < Environment.ProcessorCount; i++)
+            {
+                if (i == firstCPUIndex)
+                {
+                    for (int j = 0; j < numCPU; j++) str += "1";
+                    i += numCPU - 1;
+                }
+                else str += "0";
+            }
+            return str;
+        }
+
         public static string GetLocalIPAddress()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
             foreach (var ip in host.AddressList)
                 if (ip.AddressFamily == AddressFamily.InterNetwork) return ip.ToString();
-            
+
             throw new Exception("No network adapters with an IPv4 address in the system!");
         }
 
         public static string GetPublicIPAddress()
         {
             return new WebClient().DownloadString("https://ipv4.icanhazip.com/").TrimEnd();
+        }
+
+        public static string ChangeFormat(double n, int num)
+        {
+            if (n != double.NaN) return Math.Round(n, num).ToString().Replace(',', '.');
+            else return "x";
         }
     }
 }

@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.2.32314.265
+VisualStudioVersion = 17.2.32210.308
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Concurrency.Interface", "Concurrency.Interface\Concurrency.Interface.csproj", "{07953DC2-B94E-4AD5-8455-4556B56993FB}"
 EndProject
@@ -18,6 +18,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TPCC.Grains", "TPCC.Grains\
 		{5E31DAD0-3493-4D6A-81B1-A0A03483305C} = {5E31DAD0-3493-4D6A-81B1-A0A03483305C}
 	EndProjectSection
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SnapperExperimentController", "SnapperExperimentController\SnapperExperimentController.csproj", "{010025A7-EF4E-4B8D-8ECA-5A222A91D020}"
+	ProjectSection(ProjectDependencies) = postProject
+		{5E31DAD0-3493-4D6A-81B1-A0A03483305C} = {5E31DAD0-3493-4D6A-81B1-A0A03483305C}
+	EndProjectSection
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmallBank.Interfaces", "SmallBank.Interfaces\SmallBank.Interfaces.csproj", "{2B92FF54-0FD5-405F-BA9B-127D6242FF3A}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmallBank.Grains", "SmallBank.Grains\SmallBank.Grains.csproj", "{A5B30F91-BFF5-4191-9030-EB44AA85F540}"
@@ -25,10 +30,6 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SnapperExperimentProcess", "SnapperExperimentProcess\SnapperExperimentProcess.csproj", "{B5C648C5-B9D4-45C4-A0AE-58C4AF917D1E}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmallBank.DataGenerator", "SmallBank.DataGenerator\SmallBank.DataGenerator.csproj", "{645246FC-F03F-45EA-BEAE-2966E4B3C41E}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Persist.Grains", "Persist.Grains\Persist.Grains.csproj", "{555EE5F8-96D0-4E44-A44A-5319BDA58B30}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Persist.Interfaces", "Persist.Interfaces\Persist.Interfaces.csproj", "{A28DB895-94E6-41CB-82BB-7F2D32174F2E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -60,6 +61,10 @@ Global
 		{4FF2DBAD-6461-46E1-A1F1-93EACAB979C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4FF2DBAD-6461-46E1-A1F1-93EACAB979C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4FF2DBAD-6461-46E1-A1F1-93EACAB979C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{010025A7-EF4E-4B8D-8ECA-5A222A91D020}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{010025A7-EF4E-4B8D-8ECA-5A222A91D020}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{010025A7-EF4E-4B8D-8ECA-5A222A91D020}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{010025A7-EF4E-4B8D-8ECA-5A222A91D020}.Release|Any CPU.Build.0 = Release|Any CPU
 		{2B92FF54-0FD5-405F-BA9B-127D6242FF3A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{2B92FF54-0FD5-405F-BA9B-127D6242FF3A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2B92FF54-0FD5-405F-BA9B-127D6242FF3A}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -76,14 +81,6 @@ Global
 		{645246FC-F03F-45EA-BEAE-2966E4B3C41E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{645246FC-F03F-45EA-BEAE-2966E4B3C41E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{645246FC-F03F-45EA-BEAE-2966E4B3C41E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{555EE5F8-96D0-4E44-A44A-5319BDA58B30}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{555EE5F8-96D0-4E44-A44A-5319BDA58B30}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{555EE5F8-96D0-4E44-A44A-5319BDA58B30}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{555EE5F8-96D0-4E44-A44A-5319BDA58B30}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A28DB895-94E6-41CB-82BB-7F2D32174F2E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A28DB895-94E6-41CB-82BB-7F2D32174F2E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A28DB895-94E6-41CB-82BB-7F2D32174F2E}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A28DB895-94E6-41CB-82BB-7F2D32174F2E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
