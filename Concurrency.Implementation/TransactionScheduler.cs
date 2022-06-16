@@ -36,7 +36,10 @@ namespace Concurrency.Implementation
             {
                 Debug.Assert(inBatchTransactionCompletionMap[bid][tid].Count > 1);
                 if (!inBatchTransactionCompletionMap[bid][tid][0].Task.IsCompleted)
+                {
                     inBatchTransactionCompletionMap[bid][tid][0].SetResult(true);
+                    //Console.WriteLine($"grain {myPrimaryKey}: registerBatch {bid}, set txn {tid} 0 promise true");
+                }
             }
             // else, the first function call of tid hasn't arrived yet
         }

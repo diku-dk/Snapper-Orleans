@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 namespace Utilities
 {
+    /*
     [Serializable]
     public class TransactionResult
     {
@@ -32,7 +33,7 @@ namespace Utilities
             resultObject = res;
             exception = exp;
         }
-    }
+    }*/
 
     [Serializable]
     public class FunctionResult
@@ -46,7 +47,7 @@ namespace Utilities
         public bool isReadOnlyOnGrain;
         public bool isBeforeAfterConsecutive;
         public Tuple<int, string> grainWithHighestBeforeBid;
-        public Dictionary<int, Tuple<string, bool>> grainsInNestedFunctions;   // <grainID, namespace, isReadonly>
+        public Dictionary<int, Tuple<string, bool, bool>> grainsInNestedFunctions;   // <grainID, namespace, isReadonly, isNoOp>
 
         public DateTime beforeExeTime = DateTime.MaxValue;
         public DateTime beforeUpdate1Time = DateTime.MaxValue;
@@ -58,12 +59,13 @@ namespace Utilities
             minAfterBid = -1;
             maxBeforeBid = -1;
             exception = false;
+            isNoOpOnGrain = true;
             Exp_Deadlock = false;
-            isReadOnlyOnGrain = false;
+            isReadOnlyOnGrain = true;
             isBeforeAfterConsecutive = true;
             this.resultObject = resultObject;
             grainWithHighestBeforeBid = new Tuple<int, string>(-1, "");
-            grainsInNestedFunctions = new Dictionary<int, Tuple<string, bool>>();
+            grainsInNestedFunctions = new Dictionary<int, Tuple<string, bool, bool>>();
         }
 
         public void mergeWithFunctionResult(FunctionResult r)
@@ -78,7 +80,8 @@ namespace Utilities
                 {
                     var grainClassName = item.Value.Item1;
                     var isReadOnly = grainsInNestedFunctions[item.Key].Item2 && item.Value.Item2;
-                    grainsInNestedFunctions[item.Key] = new Tuple<string, bool>(grainClassName, isReadOnly);
+                    var isNoOp = grainsInNestedFunctions[item.Key].Item3 && item.Value.Item3;
+                    grainsInNestedFunctions[item.Key] = new Tuple<string, bool, bool>(grainClassName, isReadOnly, isNoOp);
                 }
             }
 

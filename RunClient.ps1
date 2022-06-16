@@ -23,7 +23,7 @@ function HasNugetSource ($url)
     return [bool](dotnet nuget source | ? { $_ -like "*$url"})
 }
 
-$flag = $true
+$flag = $false
 if ($flag)
 {
     RunFirstExperiment 12 4 "NONTXN" "SMALLBANK" "false" 0

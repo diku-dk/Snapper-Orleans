@@ -22,6 +22,7 @@ namespace Concurrency.Implementation.Logging
         public Task Write(byte[] key, byte[] value)
         {
             log.Add(new Tuple<byte[], byte[]>(key, value));
+            //Console.WriteLine("write log...");
             return Task.CompletedTask;
         }
     }

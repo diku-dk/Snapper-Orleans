@@ -9,9 +9,9 @@ namespace Concurrency.Implementation
 {
     public class HybridState<TState> : ITransactionalState<TState> where TState : ICloneable, new()
     {
-        private IDetTransactionalState<TState> detStateManager;
-        private INonDetTransactionalState<TState> nonDetStateManager;
-        private CommittedState<TState> myState;
+        IDetTransactionalState<TState> detStateManager;
+        INonDetTransactionalState<TState> nonDetStateManager;
+        CommittedState<TState> myState;
 
         // when execution grain is initialized, its hybrid state is initialized
         public HybridState(CCType type = CCType.S2PL) : this(new TState(), type)
@@ -72,9 +72,9 @@ namespace Concurrency.Implementation
             return nonDetStateManager.GetPreparedState(tid);
         }
 
-        Task<bool> ITransactionalState<TState>.Prepare(int tid)
+        Task<bool> ITransactionalState<TState>.Prepare(int tid, bool isWriter)
         {
-            return nonDetStateManager.Prepare(tid);
+            return nonDetStateManager.Prepare(tid, isWriter);
         }
 
         Task<TState> ITransactionalState<TState>.Read(MyTransactionContext ctx)

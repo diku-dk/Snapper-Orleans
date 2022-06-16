@@ -3,7 +3,7 @@ using Orleans.Concurrency;
 using System.Threading.Tasks;
 
 namespace Concurrency.Interface
-{
+{    
     public interface ITransactionalState<TState>
     {
         [AlwaysInterleave]
@@ -13,7 +13,7 @@ namespace Concurrency.Interface
         Task<TState> ReadWrite(MyTransactionContext ctx);
 
         [AlwaysInterleave]
-        Task<bool> Prepare(int tid);
+        Task<bool> Prepare(int tid, bool isWriter);
 
         [AlwaysInterleave]
         Task Commit(int tid);

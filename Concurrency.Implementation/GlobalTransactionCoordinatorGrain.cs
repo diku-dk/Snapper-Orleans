@@ -37,10 +37,10 @@ namespace Concurrency.Implementation
         Dictionary<int, TaskCompletionSource<bool>> batchesWaitingForCommit;
         Dictionary<int, TaskCompletionSource<bool>> detEmitPromiseMap, nonDetEmitPromiseMap;
         Dictionary<int, Dictionary<int, DeterministicBatchSchedule>> batchSchedulePerGrain;  // <bid, GrainID, batch schedule>
-        
+
         // List buffering the incoming deterministic transaction requests
         Dictionary<int, List<MyTransactionContext>> deterministicTransactionRequests;
-        
+
         public override Task OnActivateAsync()
         {
             detEmitSeq = 0;
@@ -87,11 +87,6 @@ namespace Concurrency.Implementation
             return context;
         }
 
-        public async Task<Tuple<MyTransactionContext, DateTime, DateTime>> NewTransactionAndGetTime()
-        {
-            throw new NotImplementedException();
-        }
-
         public async Task<MyTransactionContext> NewTransaction()
         {
             if (numtidsReserved-- > 0)
@@ -131,6 +126,47 @@ namespace Concurrency.Implementation
             }
             context.highestCommittedBid = highestCommittedBid;
             return context;
+        }
+
+        public async Task<Tuple<MyTransactionContext, DateTime, DateTime>> NewTransactionAndGetTime()
+        {
+            var t1 = DateTime.Now;
+            if (numtidsReserved-- > 0)
+            {
+                var ctx = new MyTransactionContext(tidToAllocate++);
+                ctx.highestCommittedBid = highestCommittedBid;
+                return new Tuple<MyTransactionContext, DateTime, DateTime>(ctx, t1, DateTime.Now);
+            }
+            MyTransactionContext context = null;
+            try
+            {
+                TaskCompletionSource<bool> emitting;
+                var myEmitSeq = nonDetEmitSeq;
+                if (!nonDetEmitPromiseMap.ContainsKey(myEmitSeq))
+                {
+                    nonDetEmitPromiseMap.Add(myEmitSeq, new TaskCompletionSource<bool>());
+                    nonDeterministicEmitSize.Add(myEmitSeq, 0);
+                }
+                emitting = nonDetEmitPromiseMap[myEmitSeq];
+                nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] + 1;
+
+                if (emitting.Task.IsCompleted != true) await emitting.Task;
+                var tid = nonDetEmitID[myEmitSeq]++;
+                context = new MyTransactionContext(tid);
+
+                nonDeterministicEmitSize[myEmitSeq] = nonDeterministicEmitSize[myEmitSeq] - 1;
+                if (nonDeterministicEmitSize[myEmitSeq] == 0)
+                {
+                    nonDeterministicEmitSize.Remove(myEmitSeq);
+                    nonDetEmitID.Remove(myEmitSeq);
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Exception: {e.Message}, {e.StackTrace}");
+            }
+            context.highestCommittedBid = highestCommittedBid;
+            return new Tuple<MyTransactionContext, DateTime, DateTime>(context, t1, DateTime.Now);
         }
 
         public async Task PassToken(BatchToken token)
@@ -239,6 +275,7 @@ namespace Concurrency.Implementation
             }
             foreach (var item in curScheduleMap)
             {
+                //Console.WriteLine($"batch {curBatchID}: {grainClassName[item.Key]} {item.Key}");
                 var dest = GrainFactory.GetGrain<ITransactionExecutionGrain>(item.Key, grainClassName[item.Key]);
                 var schedule = item.Value;
                 schedule.coordID = myID;

@@ -121,9 +121,10 @@ namespace Concurrency.Implementation.Nondeterministic
             throw new DeadlockAvoidanceException($"txn {tid} is aborted because txn {waitinglist.First().Key} is writing now. ");
         }
 
-        public Task<bool> Prepare(int tid)
+        public Task<bool> Prepare(int tid, bool isWriter)
         {
-            Debug.Assert(waitinglist.ContainsKey(tid));
+            Debug.Assert(waitinglist.ContainsKey(tid) && isWriter == !waitinglist[tid].Item1);
+            if (isWriter == false) CleanUpAndSignal(tid);   // commit read-only transaction directly
             return Task.FromResult(true);
         }
 

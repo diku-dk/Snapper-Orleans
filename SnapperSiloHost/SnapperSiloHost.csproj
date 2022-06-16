@@ -20,13 +20,13 @@
     <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.20.1" />
     <PackageReference Include="Microsoft.Azure.Cosmos.Table" Version="1.0.8" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Orleans.Clustering.AzureStorage" Version="3.4.3" />
-    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.4.3" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.AzureStorage" Version="3.0.0-dev-202204271427" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.DynamoDB" Version="3.0.0-dev-202204271427" />
     <PackageReference Include="Microsoft.Orleans.OrleansAWSUtils" Version="2.4.5" />
-    <PackageReference Include="Microsoft.Orleans.OrleansProviders" Version="3.4.3" />
-    <PackageReference Include="Microsoft.Orleans.OrleansRuntime" Version="3.4.3" />
-    <PackageReference Include="Microsoft.Orleans.Persistence.DynamoDB" Version="3.4.3" />
-    <PackageReference Include="Microsoft.Orleans.Transactions.AzureStorage" Version="3.4.3" />
+    <PackageReference Include="Microsoft.Orleans.OrleansProviders" Version="3.0.0-dev-202204271427" />
+    <PackageReference Include="Microsoft.Orleans.OrleansRuntime" Version="3.0.0-dev-202204271427" />
+    <PackageReference Include="Microsoft.Orleans.Persistence.DynamoDB" Version="3.0.0-dev-202204271427" />
+    <PackageReference Include="Microsoft.Orleans.Transactions.AzureStorage" Version="3.0.0-dev-202204271427" />
     <PackageReference Include="NetMQ" Version="4.0.1.8" />
   </ItemGroup>
   <ItemGroup>
