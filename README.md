@@ -59,7 +59,7 @@ Follow the steps below to re-produce all the experimental results presented in t
    - `git clone -b main https://github.com/diku-dk/Snapper-Orleans.git`.
 2. Create the file `AWS_credential.txt`, which should contain 3 lines: **ServiceRegion** (eg. us-east-2), **AccessKey**, **SecretKey**.
 3. Put the `AWS_credential.txt` file into the `Snapper-Orleans` folder on both VMs.
-4. Run the data generator
+4. Run the data generator on the Client VM:
    - `dotnet run --project SmallBank.DataGenerator\SmallBank.DataGenerator.csproj`.
    - It will take around 5min to complete.
 

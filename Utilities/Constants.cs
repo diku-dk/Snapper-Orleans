@@ -50,7 +50,7 @@ namespace Utilities
         public const string latencyPath = dataPath + "breakdown_latency.txt";
         public const string credentialFile = @"..\Snapper-Orleans\AWS_credential.txt";
 
-        public const bool LocalCluster = true;
+        public const bool LocalCluster = false;
         public const string LocalSilo = "dev";
         public const string ClusterSilo = "ec2";
         public const string ServiceID = "Snapper";
