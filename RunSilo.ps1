@@ -7,6 +7,7 @@ function RunFirstExperiment
     Start-Sleep 150
     Wait-Process -Name "SnapperSiloHost"
     Start-Sleep 5
+    Write-Output "Finish Experiment: $experimentID $numCPU $implementation $benchmark $loggingEnabled $numOrderGrainPerDistrict"
 }
 
 function RunExperiment 
@@ -16,6 +17,7 @@ function RunExperiment
     Start-Sleep 30
     Wait-Process -Name "SnapperSiloHost"
     Start-Sleep 5
+    Write-Output "Finish Experiment: $experimentID $numCPU $implementation $benchmark $loggingEnabled $numOrderGrainPerDistrict"
 }
 
 function HasNugetSource ($url)

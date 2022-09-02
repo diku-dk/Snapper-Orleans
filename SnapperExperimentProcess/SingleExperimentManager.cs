@@ -113,7 +113,7 @@ namespace SnapperExperimentProcess
                 // print result header in the breakdown_latency.txt file
                 using (var file = new StreamWriter(Constants.latencyPath, true))
                 {
-                    file.WriteLine("Fig    Silo_vCPU   implementation   txnSize numWriter   distribution    50th-latency(ms)    breakdown_latency(I1-I9)");
+                    file.WriteLine("Fig    Silo_vCPU   implementation   txnSize numWriter   distribution    latency_50th_ms    breakdown_latency_I1_I9");
                 }
             }
 
@@ -506,7 +506,7 @@ namespace SnapperExperimentProcess
 
         static string ChangeFormat(double n)
         {
-            return Math.Round(n, 2).ToString().Replace(',', '.');
+            return Math.Round(n, 4).ToString().Replace(',', '.');
         }
 
         void PrintResults(WorkloadResult[] aggResults)
