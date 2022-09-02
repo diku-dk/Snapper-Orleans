@@ -1,0 +1,14 @@
+# ignore all build files
+*/bin/
+*/obj/
+
+# ignore all files in the log folder
+data/log/
+data/result.txt
+data/breakdown_latency.txt
+
+# ignore visual studio cache
+.vs
+
+# ignore the credential file
+AWS_credential.txt

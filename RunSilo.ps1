@@ -1,12 +1,14 @@
-#Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+# Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 function RunFirstExperiment 
 {
     param ( [int] $experimentID, [int] $numCPU, [string] $implementation, [string] $benchmark, [string] $loggingEnabled, [int] $numOrderGrainPerDistrict)
     Start-Process "dotnet" -ArgumentList "run --project SnapperSiloHost $numCPU $implementation $loggingEnabled"
-    Start-Sleep 150
+    Start-Sleep 30
     Wait-Process -Name "SnapperSiloHost"
     Start-Sleep 5
+
+    Write-Output "Finish Experiment: $experimentID $numCPU $implementation $benchmark $loggingEnabled $numOrderGrainPerDistrict"
 }
 
 function RunExperiment 
@@ -16,6 +18,8 @@ function RunExperiment
     Start-Sleep 30
     Wait-Process -Name "SnapperSiloHost"
     Start-Sleep 5
+
+    Write-Output "Finish Experiment: $experimentID $numCPU $implementation $benchmark $loggingEnabled $numOrderGrainPerDistrict"
 }
 
 function HasNugetSource ($url)

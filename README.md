@@ -20,11 +20,10 @@ The source code of Snapper can be downloaded here: [Snapper source code](https:/
 
 `SnapperSiloHost` is used to configure and start the server process. `SnapperExperimentProcess` contains the client program that sends transaction requests to the server.
 
-**Contributors to the source code:** Li Su (lisu.sl@alibaba-inc.com), Vivek Shah (bonii.vivek@gmail.com), Yijian Liu (liu@di.ku.dk).
-
 ### Software Dependency
 - SDK: Snapper is developed with **C#** on **.NET** platform. To compile and run the source code, **.NET Core SDK 3.1.301** should be installed.
 - NuGet packages: The NuGet packages and corresponding versions are listed in each `*.csproj` file. **Orleans 3.4.3** is the one we used for running experiments.
+- Matlab: used for generating figures with given experimental data.
 
 ### Cloud Deployment
 - Server: The server side is an **Orleans Cluster** which contains 1 silo. The server is deployed on an **AWS EC2 instance**.
@@ -57,23 +56,29 @@ Follow the steps below to re-produce all the experimental results presented in t
 
 ##### Prepare the source code and dataset
 1. Download the [Snapper source code (main branch)](https://github.com/diku-dk/Snapper-Orleans) to both Server machine and Client machine.
-   - `git clone https://github.com/diku-dk/Snapper-Orleans.git`.
+   - `git clone -b main https://github.com/diku-dk/Snapper-Orleans.git`.
 2. Create the file `AWS_credential.txt`, which should contain 3 lines: **ServiceRegion** (eg. us-east-2), **AccessKey**, **SecretKey**.
 3. Put the `AWS_credential.txt` file into the `Snapper-Orleans` folder on both VMs.
-4. Run the data generator
+4. Run the data generator on the Client VM:
    - `dotnet run --project SmallBank.DataGenerator\SmallBank.DataGenerator.csproj`.
    - It will take around 5min to complete.
 
-##### Run the experiments (Fig.12, 13, 14, 16, 17)
+##### Run the experiments and print figures (Fig.12, 13, 14, 16, 17)
 1. Run the powershell script on the Server VM to start the server: `.\RunSilo.ps1`.
 2. Run the powershell script on the Client VM to start the client: `.\RunClient.ps1`.
    - Both powershell scripts are included in the source code folder.
    - The client should be started without waiting for the server side script to complete.
 3. It will take around 4 hours to complete.
 4. Check all the results in `data\result.txt` stored on the Client machine.
+5. To print the same figures as presentecd in the paper, you need to do the following steps in order:
+   - Run the project to prepare data: `dotnet run --project SnapperPrepareDataForFigures\SnapperPrepareDataForFigures.csproj`.
+   - Run the matlab script `data\LoadDataForFigures.m` to load data to matlab workspace.
+   - Run the matlab script `data\PrintFigures.m` to print figures.
+   - The data we used for figures in the paper can be found in `data\LoadDataInPaper.m`.
 
-##### Run the experiments (Fig.15)
-0. Switch the source code on both VMs to another git branch: `git checkout -b InvOrleansTxn`.
+##### Run the experiments and print figures (Fig.15)
+0. Download the [Snapper source code (InvOrleansTxn branch)](https://github.com/diku-dk/Snapper-Orleans) to both Server machine and Client machine.
+   - `git clone -b InvOrleansTxn https://github.com/diku-dk/Snapper-Orleans.git`.
    - The difference between the **main** and **InvOrleansTxn** branches is that, in **InvOrleansTxn** branch, we made some changes to the Orleans source code so to collect some time intervals while executing an Orleans transaction.
 1. Run the powershell script on the Server VM to start the server: `.\RunSilo.ps1`.
 2. Run the powershell script on the Client VM to start the client: `.\RunClient.ps1`.
@@ -81,6 +86,11 @@ Follow the steps below to re-produce all the experimental results presented in t
    - The client should be started without waiting for the server side script to complete.
 3. It will take around 10min to complete.
 4. Check all the results in `data\breakdown_latency.txt` stored on the Client machine.
-5. In the result file, each row contains the breakdown latency of a single transaction. Each row has 9 values that represent 9 time intervals as described in the paper (Fig.15). To get the results shown in Fig.15, we need to first filter out abnormal data points (outliers) such that, for each time interval, `standard_deviation < 20% * average`. Then we should calculate the average value for each of the time intervals.
+   - In the result file, each row contains the breakdown latency of a single transaction. Each row has 9 values that represent 9 time intervals as described in the paper (Fig.15). To get the results shown in Fig.15, we need to first filter out abnormal data points (outliers) such that, for each time interval, `standard_deviation < 25% * average`. Then we should calculate the average value for each of the time intervals.
+5. To print the same figures as presentecd in the paper, you need to do the following steps in order:
+   - Run the project to prepare data: `dotnet run --project SnapperPrepareDataForFigures\SnapperPrepareDataForFigures.csproj`.
+   - Run the matlab script `data\LoadDataForFigures.m` to load data to matlab workspace.
+   - Run the matlab script `data\PrintFigures.m` to print figures.
+   - The data we used for figures in the paper can be found in `data\LoadDataInPaper.m`.
 
 ===================================================================
