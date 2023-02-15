@@ -59,15 +59,35 @@ if ($flag)
     RunExperiment 17 16 "NONTXN" "TPCC" "false" 1
     RunExperiment 17 32 "NONTXN" "TPCC" "false" 1
 
-    RunExperiment 17 4 "SNAPPER" "TPCC" "true" 2
-    RunExperiment 17 8 "SNAPPER" "TPCC" "true" 2
-    RunExperiment 17 16 "SNAPPER" "TPCC" "true" 2
-    RunExperiment 17 32 "SNAPPER" "TPCC" "true" 2
+    RunExperiment 171 4 "SNAPPER" "TPCC" "true" 2
+    RunExperiment 171 8 "SNAPPER" "TPCC" "true" 2
+    RunExperiment 171 16 "SNAPPER" "TPCC" "true" 2
+    RunExperiment 171 32 "SNAPPER" "TPCC" "true" 2
 
-    RunExperiment 17 4 "SNAPPER" "TPCC" "true" 1
-    RunExperiment 17 8 "SNAPPER" "TPCC" "true" 1
-    RunExperiment 17 16 "SNAPPER" "TPCC" "true" 1
-    RunExperiment 17 32 "SNAPPER" "TPCC" "true" 1
+    RunExperiment 171 4 "SNAPPER" "TPCC" "true" 1
+    RunExperiment 171 8 "SNAPPER" "TPCC" "true" 1
+    RunExperiment 171 16 "SNAPPER" "TPCC" "true" 1
+    RunExperiment 171 32 "SNAPPER" "TPCC" "true" 1
+
+    RunExperiment 172 4 "SNAPPER" "TPCC" "true" 2
+    RunExperiment 172 8 "SNAPPER" "TPCC" "true" 2
+    RunExperiment 172 16 "SNAPPER" "TPCC" "true" 2
+    RunExperiment 172 32 "SNAPPER" "TPCC" "true" 2
+
+    RunExperiment 172 4 "SNAPPER" "TPCC" "true" 1
+    RunExperiment 172 8 "SNAPPER" "TPCC" "true" 1
+    RunExperiment 172 16 "SNAPPER" "TPCC" "true" 1
+    RunExperiment 172 32 "SNAPPER" "TPCC" "true" 1
+
+    RunExperiment 173 4 "SNAPPER" "TPCC" "true" 2
+    RunExperiment 173 8 "SNAPPER" "TPCC" "true" 2
+    RunExperiment 173 16 "SNAPPER" "TPCC" "true" 2
+    RunExperiment 173 32 "SNAPPER" "TPCC" "true" 2
+
+    RunExperiment 173 4 "SNAPPER" "TPCC" "true" 1
+    RunExperiment 173 8 "SNAPPER" "TPCC" "true" 1
+    RunExperiment 173 16 "SNAPPER" "TPCC" "true" 1
+    RunExperiment 173 32 "SNAPPER" "TPCC" "true" 1
 }
 else
 {

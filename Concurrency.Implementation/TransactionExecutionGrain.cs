@@ -377,8 +377,8 @@ namespace Concurrency.Implementation
         {
             if (state == null) return;
 
-            Debug.Assert(maxBeforeBidOnGrain <= maxBeforeBid);
-            maxBeforeBidOnGrain = maxBeforeBid;
+            //Debug.Assert(maxBeforeBidOnGrain <= maxBeforeBid);
+            if (maxBeforeBidOnGrain < maxBeforeBid) maxBeforeBidOnGrain = maxBeforeBid;
 
             var tasks = new List<Task>();
             tasks.Add(state.Commit(tid));

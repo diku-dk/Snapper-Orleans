@@ -3,7 +3,7 @@
 	<txnSize>   4 </txnSize>
 	<numWriter> 4 </numWriter>
 	
-	<noDeadlock> true </noDeadlock>
+	<noDeadlock> false, true </noDeadlock>
 
 	<distribution>    UNIFORM, ZIPFIAN, ZIPFIAN, ZIPFIAN, ZIPFIAN </distribution>
 	<zipfianConstant> 0,       0.9,     1.0,     1.25,    1.5     </zipfianConstant>

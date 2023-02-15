@@ -88,6 +88,15 @@ namespace SnapperPrepareDataForFigures
                             case "Fig.17":
                                 PreProcessFig17Data(strs);
                                 break;
+                            case "Fig.171":
+                                PreProcessFig17Data(strs);
+                                break;
+                            case "Fig.172":
+                                PreProcessFig17Data(strs);
+                                break;
+                            case "Fig.173":
+                                PreProcessFig17Data(strs);
+                                break;
                             default:
                                 break;     // header line
                         }
@@ -194,10 +203,11 @@ namespace SnapperPrepareDataForFigures
             file.Write($"{name} = [");
             for (int i = 0; i < data.Length; i++)
             {
-                if (i < data.Length - 1) file.Write($"{data[i]}, ");
+                var str = double.IsNaN(data[i]) ? "NaN" : Math.Round(data[i], 4).ToString().Replace(',', '.');
+                if (i < data.Length - 1) file.Write($"{str}, ");
                 else
                 {
-                    file.Write($"{data[i]}];     {comment}");
+                    file.Write($"{str}];     {comment}");
                     file.WriteLine();
                 }
             }
@@ -221,7 +231,7 @@ namespace SnapperPrepareDataForFigures
                         else if (strs[(int)ColumnName.pactPercent] == "0%")
                         {
                             f12_act_tp[index] = double.Parse(strs[(int)ColumnName.act_tp]);
-                            f12_abort[index] = double.Parse(strs[(int)ColumnName.total_abort_rate]);
+                            f12_abort[index] = double.Parse(strs[(int)ColumnName.total_abort_rate].Trim('%')) / 100.0;
                         }
                     }
                     else
@@ -257,8 +267,7 @@ namespace SnapperPrepareDataForFigures
 
         static void PreProcessFig14Data(string[] strs)
         {
-            var zipfianConstant = double.Parse(strs[(int)ColumnName.zipfianConstant]);
-            var index = GetIndexOfZipf(zipfianConstant);
+            var index = GetIndexOfZipf(strs[(int)ColumnName.zipfianConstant]);
 
             switch (strs[(int)ColumnName.implementation])
             {
@@ -268,7 +277,7 @@ namespace SnapperPrepareDataForFigures
                     else if (strs[(int)ColumnName.pactPercent] == "0%")
                     {
                         f14_tp_act[index] = int.Parse(strs[(int)ColumnName.act_tp]);
-                        f14_act_abort[index] = double.Parse(strs[(int)ColumnName.total_abort_rate]);
+                        f14_act_abort[index] = double.Parse(strs[(int)ColumnName.total_abort_rate].Trim('%')) / 100.0;
                     }
                     break;
                 case "ORLEANSTXN":
@@ -277,7 +286,7 @@ namespace SnapperPrepareDataForFigures
                     else
                     {
                         f14_tp_orleans[index] = int.Parse(strs[(int)ColumnName.act_tp]);
-                        f14_orleans_abort[index] = double.Parse(strs[(int)ColumnName.total_abort_rate]);
+                        f14_orleans_abort[index] = double.Parse(strs[(int)ColumnName.total_abort_rate].Trim('%')) / 100.0;
                     }
                     break;
                 default:
@@ -287,8 +296,7 @@ namespace SnapperPrepareDataForFigures
 
         static void PreProcessFig16Data(string[] strs)
         {
-            var zipfianConstant = double.Parse(strs[(int)ColumnName.zipfianConstant]);
-            var group_index = GetIndexOfZipf(zipfianConstant);
+            var group_index = GetIndexOfZipf(strs[(int)ColumnName.zipfianConstant]);
             var stack_index = GetIndexOfPactPercent(strs[(int)ColumnName.pactPercent]);
 
             var index1 = group_index * 7 + stack_index;
@@ -301,10 +309,25 @@ namespace SnapperPrepareDataForFigures
             f16b_pact_50[index2] = double.Parse(strs[(int)ColumnName.pact_50th_latency_ms]);
             f16b_pact_90[index2] = double.Parse(strs[(int)ColumnName.pact_90th_latency_ms]);
 
-            f16c_act_RW[index2] = double.Parse(strs[(int)ColumnName.abortRWConflict]);
-            f16c_act_DL[index2] = double.Parse(strs[(int)ColumnName.abortDeadlock]);
-            f16c_act_SE_not[index2] = double.Parse(strs[(int)ColumnName.abortNotSureSerializable]);
-            f16c_act_SE_sure[index2] = double.Parse(strs[(int)ColumnName.abortNotSerializable]);
+            var total_abort = double.Parse(strs[(int)ColumnName.total_abort_rate].Trim('%')) / 100.0;
+            Debug.Assert(double.IsNaN(total_abort) || (total_abort >= 0 && total_abort <= 1));
+
+            var total_act_tp = f16a_act[index1] * 1.0 / (1 - total_abort);
+            var total_tp = total_act_tp + f16a_pact[index1];
+
+            var rw = double.Parse(strs[(int)ColumnName.abortRWConflict].Trim('%')) / 100.0;
+            Debug.Assert(double.IsNaN(rw) || (rw >= 0 && rw <= 1));
+            var dl = double.Parse(strs[(int)ColumnName.abortDeadlock].Trim('%')) / 100.0;
+            Debug.Assert(double.IsNaN(dl) || (dl >= 0 && dl <= 1));
+            var se_not = double.Parse(strs[(int)ColumnName.abortNotSureSerializable].Trim('%')) / 100.0;
+            Debug.Assert(double.IsNaN(se_not) || (se_not >= 0 && se_not <= 1));
+            var se_sure = double.Parse(strs[(int)ColumnName.abortNotSerializable].Trim('%')) / 100.0;
+            Debug.Assert(double.IsNaN(se_sure) || (se_sure >= 0 && se_sure <= 1));
+
+            f16c_act_RW[index2] = total_abort * rw * total_act_tp / total_tp;
+            f16c_act_DL[index2] = total_abort * dl * total_act_tp / total_tp;
+            f16c_act_SE_not[index2] = total_abort * se_not * total_act_tp / total_tp;
+            f16c_act_SE_sure[index2] = total_abort * se_sure * total_act_tp / total_tp;
         }
 
         static void PreProcessFig17Data(string[] strs)
@@ -467,19 +490,19 @@ namespace SnapperPrepareDataForFigures
             }
         }
 
-        static int GetIndexOfZipf(double zipfianConstant)
+        static int GetIndexOfZipf(string zipfianConstant)
         {
             switch (zipfianConstant)
             {
-                case 0:
+                case "0":
                     return 0;
-                case 0.9:
+                case "0.9":
                     return 1;
-                case 1:
+                case "1":
                     return 2;
-                case 1.25:
+                case "1.25":
                     return 3;
-                case 1.5:
+                case "1.5":
                     return 4;
                 default:
                     throw new Exception($"Exception: Unsupported zipfianConstant {zipfianConstant}");

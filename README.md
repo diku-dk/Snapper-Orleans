@@ -68,7 +68,11 @@ Follow the steps below to re-produce all the experimental results presented in t
 2. Run the powershell script on the Client VM to start the client: `.\RunClient.ps1`.
    - Both powershell scripts are included in the source code folder.
    - The client should be started without waiting for the server side script to complete.
-3. It will take around 4 hours to complete.
+   - How to run only one experiment
+     * Select which experiment to run, eg. `RunExperiment 12 4 "SNAPPER" "SMALLBANK" "true" 0`.
+     * Comment out all other lines in both `RunSilo.ps1` and `RunClient.ps1` files.
+     * Run the scripts as usual.
+3. It will take around 4 hours to complete all experiments.
 4. Check all the results in `data\result.txt` stored on the Client machine.
 5. To print the same figures as presentecd in the paper, you need to do the following steps in order:
    - Run the project to prepare data: `dotnet run --project SnapperPrepareDataForFigures\SnapperPrepareDataForFigures.csproj`.
